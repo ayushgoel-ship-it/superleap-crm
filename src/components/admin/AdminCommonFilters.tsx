@@ -16,7 +16,8 @@ import { useState, useMemo } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { useFilterScope, type FilterScope } from '../../contexts/FilterContext';
 import { TimePeriod } from '../../lib/domain/constants';
-import { getTLsByRegions, MOCK_TL_DATA, type Region } from '../../data/adminOrgMock';
+import { getTLsByRegions, type Region } from '../../data/adminOrgMock';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
 
 interface AdminCommonFiltersProps {
   scope: FilterScope;
@@ -57,10 +58,17 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
   // Available regions
   const regions: Region[] = ['NCR', 'West', 'South', 'East'];
 
-  // Available TLs (filtered by region if selected)
+  // Available TLs — from real Supabase data via getRuntimeDBSync
   const availableTLs = useMemo(() => {
-    if (!currentRegion) return MOCK_TL_DATA;
-    return getTLsByRegions([currentRegion]);
+    const db = getRuntimeDBSync();
+    // Get unique KAMs from dealers (these are the people who appear in dashboards)
+    const kamMap = new Map<string, { tlId: string; tlName: string; region: string }>();
+    db.dealers.forEach(d => {
+      if (d.kamId && d.kamId !== 'unassigned' && !kamMap.has(d.kamId)) {
+        kamMap.set(d.kamId, { tlId: d.kamId, tlName: d.kamName || 'KAM', region: d.region || 'NCR' });
+      }
+    });
+    return Array.from(kamMap.values());
   }, [currentRegion]);
 
   // Labels
@@ -104,9 +112,8 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
                       setFilter({ time_period: period });
                       setShowTimePicker(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${
-                      currentTime === period ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                    }`}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${currentTime === period ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                      }`}
                   >
                     {TIME_LABELS[period]}
                   </button>
@@ -135,9 +142,8 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
                     setFilter({ region_id: null });
                     setShowRegionPicker(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${
-                    !currentRegion ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                  }`}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${!currentRegion ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                    }`}
                 >
                   All
                 </button>
@@ -148,9 +154,8 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
                       setFilter({ region_id: region, tl_id: null }); // Reset TL when region changes
                       setShowRegionPicker(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${
-                      currentRegion === region ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                    }`}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${currentRegion === region ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                      }`}
                   >
                     {region}
                   </button>
@@ -179,9 +184,8 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
                     setFilter({ tl_id: null });
                     setShowTLPicker(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${
-                    !currentTL ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                  }`}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${!currentTL ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                    }`}
                 >
                   TL: All
                 </button>
@@ -192,9 +196,8 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
                       setFilter({ tl_id: tl.tlId });
                       setShowTLPicker(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
-                      currentTL === tl.tlId ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                    }`}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${currentTL === tl.tlId ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                      }`}
                   >
                     <div className="whitespace-nowrap overflow-hidden text-ellipsis">{tl.tlName}</div>
                     <div className="text-xs text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis">{tl.region}</div>

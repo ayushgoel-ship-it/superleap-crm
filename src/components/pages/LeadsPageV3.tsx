@@ -227,6 +227,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
   const allLeads = useMemo(() => getAllLeads(), []);
   const allVMs = useMemo(() => toLeadListVM(allLeads), [allLeads]);
 
+
   // CEP Pending count (cross-channel, always computed)
   const cepPendingCount = useMemo(
     () => allVMs.filter(l => l.cep === null).length,
@@ -330,7 +331,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
     return { total, active };
   }, [filteredVMs]);
 
-  const hasActiveFilters = pendingMode || searchQuery.length > 0 || selectedChannel !== 'all' || selectedStage !== null || timeFilter !== 'mtd';
+  const hasActiveFilters = pendingMode || searchQuery.length > 0 || selectedChannel !== 'all' || selectedStage !== null || timeFilter !== TimePeriod.MTD;
 
   // ── Handlers ──
 
@@ -418,7 +419,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
     setPendingMode(false);
     setSelectedChannel('all');
     setSelectedStage(null);
-    setTimeFilter('mtd');
+    setTimeFilter(TimePeriod.MTD);
   };
 
   // ── Sub-pages ──
@@ -706,7 +707,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
           <div className="mx-4 mt-3 flex items-center justify-between px-3.5 py-2 bg-slate-100/70 rounded-xl">
             <span className="text-[11px] font-medium text-slate-500">
               {filteredVMs.length} result{filteredVMs.length !== 1 ? 's' : ''}
-              {timeFilter !== 'mtd' && ` \u00b7 ${TIME_FILTERS.find(t => t.key === timeFilter)?.label}`}
+              {timeFilter !== TimePeriod.MTD && ` \u00b7 ${TIME_FILTERS.find(t => t.key === timeFilter)?.label}`}
               {selectedChannel !== 'all' && ` \u00b7 ${selectedChannel}`}
               {selectedStage && activeStages && ` \u00b7 ${activeStages.find(s => s.key === selectedStage)?.label}`}
               {searchQuery && ` \u00b7 "${searchQuery}"`}
@@ -756,7 +757,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
                       [
                         selectedChannel !== 'all' ? selectedChannel : '',
                         selectedStage && activeStages ? activeStages.find(s => s.key === selectedStage)?.label : '',
-                        timeFilter !== 'mtd' ? TIME_FILTERS.find(t => t.key === timeFilter)?.label : '',
+                        timeFilter !== TimePeriod.MTD ? TIME_FILTERS.find(t => t.key === timeFilter)?.label : '',
                       ].filter(Boolean).join(' + ') || 'current filters'
                     }. Try adjusting your filters.`
                   : 'Leads will appear here once they are created or assigned to you.'

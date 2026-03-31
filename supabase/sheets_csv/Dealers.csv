@@ -1,0 +1,26 @@
+dealer_id,dealer_name,phone,city,address,segment_tags,assigned_kam_id,assigned_kam_name,status
+d0000001-0000-0000-0000-000000000001,Sharma Motors,+919811000001,Gurugram,Sector 18 Market,"Premium,SUV",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+d0000001-0000-0000-0000-000000000002,Kapoor Cars,+919811000002,Delhi,Nehru Place,"Economy,Hatchback",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+d0000001-0000-0000-0000-000000000003,Delhi Auto Hub,+919811000003,Delhi,Connaught Place,"Premium,Sedan",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+d0000001-0000-0000-0000-000000000004,Patel Wheels,+919811000004,Noida,Sector 62,"Economy,SUV",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+d0000001-0000-0000-0000-000000000005,Gupta Autos,+919811000005,Gurugram,DLF Phase 3,"Premium,Luxury",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,inactive
+d0000001-0000-0000-0000-000000000006,Singh Auto Palace,+919811000006,Delhi,Rajouri Garden,"Premium,SUV",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+d0000001-0000-0000-0000-000000000007,Agarwal Motors,+919811000007,Faridabad,Sector 21D,"Economy,Sedan",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+d0000001-0000-0000-0000-000000000008,RK Car World,+919811000008,Ghaziabad,Kavi Nagar,"Economy,Hatchback",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+d0000001-0000-0000-0000-000000000009,Verma Auto Sales,+919811000009,Noida,Sector 18,"Premium,Sedan",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+d0000001-0000-0000-0000-000000000010,Jain Car Bazaar,+919811000010,Delhi,Lajpat Nagar,"Luxury,SUV",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,inactive
+9f0411d9-7899-4a2f-aa6d-6a5c6497a7fb,Mehra Car Centre,+919811000011,Gurugram,Sector 14 Market,"Premium,Sedan",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+36b2031f-1d4d-474a-91fc-d10ce99d1859,National Motors,+919811000012,Delhi,Karol Bagh,"Economy,Hatchback",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+4098a8f0-8f0d-47d1-947a-d657f96cdba1,Bharat Auto World,+919811000013,Noida,Sector 62,"Premium,SUV",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+0bf3332e-06a1-4486-b51b-4887f2f114dc,Metro Wheels Hub,+919811000014,Gurugram,MG Road,"Luxury,Sedan",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+253feabb-d815-4f0d-af83-075861d3f9f1,Jai Shree Cars,+919811000015,Faridabad,NIT 3,"Economy,Hatchback",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+02aa1944-49d7-4cf6-a13a-2c253c90f0fc,Royal Auto Gallery,+919811000016,Delhi,Rajouri Garden,"Premium,SUV",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+8e1d777d-6650-42d6-80b9-e6dd017d52aa,Sai Motors,+919811000017,Ghaziabad,Vaishali Sec 4,"Economy,Sedan",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+6869e9aa-f6d4-4ade-900e-ae7a9cc4b23d,Omega Car Sales,+919811000018,Noida,Sector 18,"Premium,Luxury",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+8460489b-2538-4bc2-8c88-632b171ec56d,First Choice Autos,+919811000019,Delhi,Okhla Phase 1,"Economy,Hatchback",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+78eb8d54-87d7-4493-a2fc-ec0529a82468,Tiwari Motor Works,+919811000020,Faridabad,Sector 21C,"Premium,SUV",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+18b1df11-9ad0-4dad-a454-a6516cb80aa3,Shri Ganesh Wheels,+919811000021,Gurugram,Sector 29,"Economy,Sedan",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+d112ce13-4e13-4cc3-87eb-330639121aca,Platinum Auto Zone,+919811000022,Delhi,Lajpat Nagar,"Premium,Sedan",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+1daea19e-5dd1-45ca-8333-ee5668212e23,United Car Emporium,+919811000023,Noida,Sector 44,"Economy,SUV",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active
+ddde0bf1-8177-43cb-a77a-0c3fd18b27cf,Krishna Auto Hub,+919811000024,Ghaziabad,Indirapuram,"Premium,Hatchback",14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,active
+db0cf2f1-0431-4dee-9da2-fdd01ac67720,Sunrise Motors NCR,+919811000025,Gurugram,Cyber City,"Luxury,SUV",3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,active

@@ -1,0 +1,14 @@
+key,value
+org_name,Superleap NCR
+org_region,NCR
+stock_in_target_per_kam,20
+dcf_disbursal_target_per_kam,5
+productive_visit_target,15
+productive_call_target,20
+input_score_gate,70
+i2si_target,15
+incentive_base_payout,500
+incentive_dcf_payout,2000
+report_email,admin@superleap.com
+fiscal_year_start,2026-04-01
+current_period,2026-02

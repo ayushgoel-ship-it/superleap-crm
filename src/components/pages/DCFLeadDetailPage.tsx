@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, Phone, Mail, ChevronDown, ChevronUp, Check, Clock, AlertCircle } from 'lucide-react';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
 
 interface DCFLeadDetailPageProps {
   loanId: string;
@@ -52,142 +53,68 @@ interface DCFLeadData {
   delay_message?: string;
 }
 
-// Mock data - 3 leads with different RAG states
-const DCF_LEADS_MOCK_DATA: Record<string, DCFLeadData> = {
-  'DCF-LN-982341': {
-    loan_id: 'DCF-LN-982341',
-    customer_name: 'Rajesh Verma',
-    customer_phone: '+919876543210',
-    pan: 'AJPVR1234D',
-    city: 'Gurugram',
-    reg_no: 'DL1CAC1234',
-    car: 'Maruti Swift VXI 2020',
-    car_value: 680000,
-    ltv: 75,
-    loan_amount: 510000,
-    roi: 18.5,
-    tenure: 36,
-    emi: 18650,
-    dealer_name: 'Gupta Auto World',
-    dealer_code: 'GGN-001',
-    dealer_city: 'Gurugram',
-    channel: 'Dealer Shared',
-    rag_status: 'green',
-    book_flag: 'Own Book',
-    car_docs_flag: 'Received',
-    conversion_owner: 'Ananya Mehta',
-    conversion_email: 'ananya.mehta@cars24.com',
-    conversion_phone: '+919123456789',
-    kam_name: 'Rajesh Kumar',
-    first_disbursal_for_dealer: 'YES',
-    commission_eligible: true,
-    base_commission: 2550,
-    booster_applied: 'YES',
-    total_commission: 5100,
-    current_funnel: 'DISBURSAL',
-    current_sub_stage: 'DISBURSAL',
-    overall_status: 'DISBURSED',
-    created_at: '2024-12-07 11:05',
-    last_updated_at: '2024-12-09 18:42',
-    utr: 'UTR-HDFC-20241209-7741',
-    disbursal_date: '2024-12-09 18:42',
-    cibil_score: 742,
-    cibil_date: '2024-12-07',
-    employment_type: 'Salaried',
-    monthly_income: 45000,
-    dealer_account: 'HDFC ***4567',
-  },
-  'DCF-LN-982780': {
-    loan_id: 'DCF-LN-982780',
-    customer_name: 'Priya Sharma',
-    customer_phone: '+919812345678',
-    pan: 'BQKPS6789L',
-    city: 'Faridabad',
-    reg_no: 'HR26DK5678',
-    car: 'Hyundai i20 Sportz 2021',
-    car_value: 540000,
-    ltv: null,
-    loan_amount: null,
-    roi: null,
-    tenure: null,
-    emi: null,
-    dealer_name: 'Sharma Motors',
-    dealer_code: 'GGN-002',
-    dealer_city: 'Gurugram',
-    channel: 'Dealer Shared',
-    rag_status: 'amber',
-    book_flag: 'Pmax',
-    car_docs_flag: 'Pending',
-    conversion_owner: 'Ritesh Khanna',
-    conversion_email: 'ritesh.khanna@cars24.com',
-    conversion_phone: '+919988777665',
-    kam_name: 'Priya Sharma',
-    first_disbursal_for_dealer: 'NO',
-    commission_eligible: false,
-    base_commission: 0,
-    booster_applied: 'NO',
-    total_commission: 0,
-    current_funnel: 'CONVERSION',
-    current_sub_stage: 'DOC_UPLOAD',
-    overall_status: 'APPROVAL PENDING',
-    created_at: '2024-12-09 10:10',
-    last_updated_at: '2024-12-10 11:40',
-    cibil_score: 708,
-    cibil_date: '2024-12-09',
-    employment_type: 'Self Employed',
-    monthly_income: 65000,
-    dealer_account: 'ICICI ***8901',
-  },
-  'DCF-LN-983210': {
-    loan_id: 'DCF-LN-983210',
-    customer_name: 'Amit Kumar',
-    customer_phone: '+919800111222',
-    pan: 'DFTPK1122R',
-    city: 'Noida',
-    reg_no: 'UP32AB9012',
-    car: 'Honda City VX 2019',
-    car_value: 720000,
-    ltv: null,
-    loan_amount: null,
-    roi: null,
-    tenure: null,
-    emi: null,
-    dealer_name: 'New City Autos',
-    dealer_code: 'NDA-078',
-    dealer_city: 'Noida',
-    channel: 'Walk-in',
-    rag_status: 'red',
-    book_flag: 'Own Book',
-    car_docs_flag: 'Pending',
-    conversion_owner: 'Not assigned',
-    conversion_email: '',
-    conversion_phone: '',
-    kam_name: 'Akash Singh',
-    first_disbursal_for_dealer: 'YES',
-    commission_eligible: false,
-    base_commission: 0,
-    booster_applied: 'NO',
-    total_commission: 0,
-    current_funnel: 'CREDIT',
-    current_sub_stage: 'UNDERWRITING',
-    overall_status: 'PENDING',
-    created_at: '2024-12-08 13:00',
-    last_updated_at: '2024-12-10 13:00',
-    delay_message: 'Delayed: 2 days in underwriting',
-    cibil_score: 691,
-    cibil_date: '2024-12-08',
-    employment_type: 'Salaried',
-    monthly_income: 38000,
-    dealer_account: 'SBI ***2345',
-  },
-};
+// Build DCF lead data from Supabase
+function getDCFLeadFromDB(loanId: string): DCFLeadData | null {
+  const db = getRuntimeDBSync();
+  const dcfLead = db.dcfLeads.find((d: any) => d.loanId === loanId || d.id === loanId);
+  if (!dcfLead) return null;
+
+  const ragStatus: 'green' | 'amber' | 'red' = dcfLead.status === 'disbursed' ? 'green'
+    : dcfLead.status === 'approved' ? 'amber'
+      : 'red';
+
+  return {
+    loan_id: dcfLead.loanId || dcfLead.id || loanId,
+    customer_name: dcfLead.customerName || 'Unknown Customer',
+    customer_phone: dcfLead.customerPhone || '',
+    pan: dcfLead.pan || 'N/A',
+    city: dcfLead.city || 'NCR',
+    reg_no: dcfLead.regNo || 'N/A',
+    car: dcfLead.carModel || 'Unknown Car',
+    car_value: dcfLead.carValue || 0,
+    ltv: dcfLead.ltv || null,
+    loan_amount: dcfLead.loanAmount || null,
+    roi: dcfLead.roi || null,
+    tenure: dcfLead.tenure || null,
+    emi: dcfLead.emi || null,
+    dealer_name: dcfLead.dealerName || 'Unknown Dealer',
+    dealer_code: dcfLead.dealerCode || 'N/A',
+    dealer_city: dcfLead.dealerCity || dcfLead.city || 'NCR',
+    channel: dcfLead.channel || 'Direct',
+    rag_status: ragStatus,
+    book_flag: dcfLead.bookFlag || 'Own Book',
+    car_docs_flag: dcfLead.carDocsReceived ? 'Received' : 'Pending',
+    conversion_owner: dcfLead.conversionOwner || 'Not assigned',
+    conversion_email: dcfLead.conversionEmail || '',
+    conversion_phone: dcfLead.conversionPhone || '',
+    kam_name: dcfLead.kamName || 'N/A',
+    first_disbursal_for_dealer: dcfLead.firstDisbursal ? 'YES' : 'NO',
+    commission_eligible: dcfLead.status === 'disbursed',
+    base_commission: dcfLead.commission || 0,
+    booster_applied: dcfLead.firstDisbursal ? 'YES' : 'NO',
+    total_commission: dcfLead.commission || 0,
+    current_funnel: dcfLead.currentFunnel || 'SOURCING',
+    current_sub_stage: dcfLead.currentSubStage || 'LEAD_CREATION',
+    overall_status: dcfLead.status?.toUpperCase() || 'PENDING',
+    created_at: dcfLead.createdAt || new Date().toISOString(),
+    last_updated_at: dcfLead.updatedAt || new Date().toISOString(),
+    utr: dcfLead.utr,
+    disbursal_date: dcfLead.disbursalDate,
+    cibil_score: dcfLead.cibilScore || 0,
+    cibil_date: dcfLead.cibilDate || '',
+    employment_type: dcfLead.employmentType,
+    monthly_income: dcfLead.monthlyIncome,
+    dealer_account: dcfLead.dealerAccount,
+    delay_message: dcfLead.delayMessage,
+  };
+}
 
 export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
   const [journeyExpanded, setJourneyExpanded] = useState(false);
   const [expandedFunnels, setExpandedFunnels] = useState<Set<string>>(new Set());
-  
-  const leadData = DCF_LEADS_MOCK_DATA[loanId];
-  
+
+  const leadData = getDCFLeadFromDB(loanId);
+
   if (!leadData) {
     return (
       <div className="flex flex-col h-full items-center justify-center bg-gray-50">
@@ -296,14 +223,14 @@ export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
   const getStageStatus = (funnelName: string, stageId: string): 'completed' | 'current' | 'future' => {
     const currentFunnelIndex = journeyFunnels.findIndex(f => f.name === leadData.current_funnel);
     const thisFunnelIndex = journeyFunnels.findIndex(f => f.name === funnelName);
-    
+
     if (thisFunnelIndex < currentFunnelIndex) return 'completed';
     if (thisFunnelIndex > currentFunnelIndex) return 'future';
-    
+
     // Same funnel - check sub-stage
     const currentStageIndex = journeyFunnels[thisFunnelIndex].stages.findIndex(s => s.id === leadData.current_sub_stage);
     const thisStageIndex = journeyFunnels[thisFunnelIndex].stages.findIndex(s => s.id === stageId);
-    
+
     if (thisStageIndex < currentStageIndex) return 'completed';
     if (thisStageIndex === currentStageIndex) return 'current';
     return 'future';
@@ -312,7 +239,7 @@ export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
   const getFunnelStatus = (funnelName: string): 'completed' | 'current' | 'future' => {
     const currentFunnelIndex = journeyFunnels.findIndex(f => f.name === leadData.current_funnel);
     const thisFunnelIndex = journeyFunnels.findIndex(f => f.name === funnelName);
-    
+
     if (thisFunnelIndex < currentFunnelIndex) return 'completed';
     if (thisFunnelIndex === currentFunnelIndex) return 'current';
     return 'future';
@@ -322,15 +249,15 @@ export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
     const currentFunnelIndex = journeyFunnels.findIndex(f => f.name === leadData.current_funnel);
     const currentFunnel = journeyFunnels[currentFunnelIndex];
     const currentStageIndex = currentFunnel?.stages.findIndex(s => s.id === leadData.current_sub_stage) || 0;
-    
+
     let completedStages = 0;
     for (let i = 0; i < currentFunnelIndex; i++) {
       completedStages += journeyFunnels[i].stages.length;
     }
     completedStages += currentStageIndex;
-    
+
     const totalStages = journeyFunnels.reduce((sum, f) => sum + f.stages.length, 0) + 1; // +1 for car docs
-    
+
     return { completed: completedStages, total: totalStages };
   };
 
@@ -377,7 +304,7 @@ export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
         {/* Current State Summary Card */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <h3 className="text-gray-900 font-medium mb-3">Current State</h3>
-          
+
           {/* Status + Last Updated */}
           <div className="mb-4 pb-4 border-b border-gray-200">
             <div className="text-2xl font-semibold text-gray-900 mb-1">{leadData.overall_status}</div>
@@ -567,20 +494,18 @@ export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
                   return (
                     <div
                       key={funnel.name}
-                      className={`border rounded-lg overflow-hidden ${
-                        isCurrent ? 'border-blue-400 bg-blue-50/30' : 'border-gray-200'
-                      }`}
+                      className={`border rounded-lg overflow-hidden ${isCurrent ? 'border-blue-400 bg-blue-50/30' : 'border-gray-200'
+                        }`}
                     >
                       <button
                         onClick={() => toggleFunnel(funnel.name)}
                         className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50"
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                            funnelStatus === 'completed' ? 'bg-green-600' :
-                            funnelStatus === 'current' ? 'bg-blue-600' :
-                            'bg-gray-300'
-                          }`}>
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${funnelStatus === 'completed' ? 'bg-green-600' :
+                              funnelStatus === 'current' ? 'bg-blue-600' :
+                                'bg-gray-300'
+                            }`}>
                             {funnelStatus === 'completed' ? (
                               <Check className="w-4 h-4 text-white" />
                             ) : funnelStatus === 'current' ? (
@@ -589,15 +514,13 @@ export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
                               <div className="w-2 h-2 bg-white rounded-full" />
                             )}
                           </div>
-                          <span className={`text-sm font-medium ${
-                            isCurrent ? 'text-blue-700' : 'text-gray-900'
-                          }`}>
+                          <span className={`text-sm font-medium ${isCurrent ? 'text-blue-700' : 'text-gray-900'
+                            }`}>
                             {funnelIndex + 1}. {funnel.name}
                           </span>
                         </div>
-                        <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${
-                          isExpanded ? 'rotate-180' : ''
-                        }`} />
+                        <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''
+                          }`} />
                       </button>
 
                       {isExpanded && (
@@ -609,17 +532,15 @@ export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
                             return (
                               <div
                                 key={stage.id}
-                                className={`flex items-start gap-3 p-2 rounded-lg ${
-                                  isCurrentStage ? 'bg-blue-100 border border-blue-300' :
-                                  stageStatus === 'completed' ? 'bg-green-50' :
-                                  'bg-gray-50'
-                                }`}
+                                className={`flex items-start gap-3 p-2 rounded-lg ${isCurrentStage ? 'bg-blue-100 border border-blue-300' :
+                                    stageStatus === 'completed' ? 'bg-green-50' :
+                                      'bg-gray-50'
+                                  }`}
                               >
-                                <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                                  stageStatus === 'completed' ? 'bg-green-600' :
-                                  stageStatus === 'current' ? 'bg-blue-600' :
-                                  'bg-gray-300'
-                                }`}>
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${stageStatus === 'completed' ? 'bg-green-600' :
+                                    stageStatus === 'current' ? 'bg-blue-600' :
+                                      'bg-gray-300'
+                                  }`}>
                                   {stageStatus === 'completed' ? (
                                     <Check className="w-3 h-3 text-white" />
                                   ) : stageStatus === 'current' ? (
@@ -629,9 +550,8 @@ export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
                                   )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <div className={`text-sm font-medium ${
-                                    isCurrentStage ? 'text-blue-900' : 'text-gray-900'
-                                  }`}>
+                                  <div className={`text-sm font-medium ${isCurrentStage ? 'text-blue-900' : 'text-gray-900'
+                                    }`}>
                                     {stage.label}
                                   </div>
                                   {isCurrentStage && leadData.current_funnel === 'CONVERSION' && stage.id === 'DOC_UPLOAD' && (
@@ -665,15 +585,13 @@ export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
                 })}
 
                 {/* Car Docs Stage */}
-                <div className={`border rounded-lg p-4 ${
-                  leadData.car_docs_flag === 'Received' 
-                    ? 'border-green-300 bg-green-50' 
+                <div className={`border rounded-lg p-4 ${leadData.car_docs_flag === 'Received'
+                    ? 'border-green-300 bg-green-50'
                     : 'border-orange-300 bg-orange-50'
-                }`}>
+                  }`}>
                   <div className="flex items-center gap-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                      leadData.car_docs_flag === 'Received' ? 'bg-green-600' : 'bg-orange-500'
-                    }`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${leadData.car_docs_flag === 'Received' ? 'bg-green-600' : 'bg-orange-500'
+                      }`}>
                       {leadData.car_docs_flag === 'Received' ? (
                         <Check className="w-4 h-4 text-white" />
                       ) : (

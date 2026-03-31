@@ -1,0 +1,26 @@
+visit_id,lead_id,dealer_name,kam_id,kam_name,scheduled_at,visit_type,status,outcome_code,notes,geo_lat,geo_lng
+visit-01,a0000001-0000-0000-0000-000000000004,Sharma Motors,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-12 10:00,first_visit,completed,STOCK_IN,Nexon stock-in at Sharma Motors,28.4595,77.0266
+visit-02,a0000001-0000-0000-0000-000000000005,Patel Wheels,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-13 14:00,first_visit,completed,STOCK_IN,Kia Seltos evaluated,28.5355,77.3910
+visit-03,a0000001-0000-0000-0000-000000000006,Kapoor Cars,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-14 10:00,follow_up,completed,STOCK_IN,MG Hector paperwork,28.6519,77.2315
+visit-04,b0000001-0000-0000-0000-000000000004,Verma Auto Sales,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-13 15:00,first_visit,completed,STOCK_IN,Kushaq deal completed,28.5709,77.3260
+visit-05,b0000001-0000-0000-0000-000000000005,Verma Auto Sales,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-14 09:00,follow_up,completed,STOCK_IN,Honda Amaze finalized,28.5709,77.3260
+visit-06,a0000001-0000-0000-0000-000000000003,Delhi Auto Hub,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-11 14:00,first_visit,completed,DOCS_NEEDED,Honda City docs pending,28.6304,77.2177
+visit-07,b0000001-0000-0000-0000-000000000002,Agarwal Motors,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-11 10:00,first_visit,completed,FOLLOW_UP_NEEDED,Venue inspection done,28.4089,77.3178
+visit-08,b0000001-0000-0000-0000-000000000003,RK Car World,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-12 09:00,first_visit,completed,DOCS_NEEDED,Punch evaluation,28.6623,77.4341
+visit-09,a0000001-0000-0000-0000-000000000011,Delhi Auto Hub,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-14 11:00,follow_up,completed,STOCK_IN,Innova closed,28.6304,77.2177
+visit-10,b0000001-0000-0000-0000-000000000006,Agarwal Motors,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-15 15:00,first_visit,completed,STOCK_IN,Kwid stock-in,28.4089,77.3178
+visit-11,new-01,Sharma Motors,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-15 11:00,first_visit,completed,STOCK_IN,Swift test drive and deal,28.4595,77.0266
+visit-12,new-02,Kapoor Cars,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-17 10:00,follow_up,completed,STOCK_IN,i20 paperwork done,28.6519,77.2315
+visit-13,new-03,Bharat Auto World,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-19 09:30,first_visit,completed,STOCK_IN,Honda Amaze evaluation,28.5355,77.3910
+visit-14,new-04,National Motors,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-21 14:00,follow_up,completed,DOCS_NEEDED,Seltos docs pending,28.6280,77.2060
+visit-15,new-06,Metro Wheels Hub,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-25 15:30,first_visit,completed,STOCK_IN,Innova finalized,28.4734,77.0266
+visit-16,new-09,United Car Emporium,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-02-27 14:00,first_visit,completed,STOCK_IN,Honda City done,28.5709,77.3260
+visit-17,new-11,Delhi Auto Hub,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-03-01 15:00,follow_up,completed,STOCK_IN,Aura stock-in,28.6304,77.2177
+visit-18,new-12,Patel Wheels,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,2026-03-02 09:00,first_visit,completed,STOCK_IN,Harrier stocked in,28.5355,77.3910
+visit-19,new-16,Singh Auto Palace,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-14 11:30,first_visit,completed,STOCK_IN,Swift stock-in,28.6139,77.2090
+visit-20,new-17,Agarwal Motors,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-17 10:00,follow_up,completed,STOCK_IN,WagonR finalized,28.4089,77.3178
+visit-21,new-18,RK Car World,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-18 09:00,first_visit,completed,STOCK_IN,Sonet evaluation,28.6623,77.4341
+visit-22,new-19,Royal Auto Gallery,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-20 14:00,follow_up,completed,STOCK_IN,Creta deal complete,28.6437,77.2182
+visit-23,new-25,Verma Auto Sales,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-25 15:00,first_visit,completed,DOCS_NEEDED,Docs pending from Rohit,28.5709,77.3260
+visit-24,new-26,Agarwal Motors,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-02-27 11:00,follow_up,completed,STOCK_IN,Stock-in for Geeta,28.4089,77.3178
+visit-25,new-27,RK Car World,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,2026-03-01 10:00,first_visit,scheduled,,Inspection for Karan,28.6623,77.4341

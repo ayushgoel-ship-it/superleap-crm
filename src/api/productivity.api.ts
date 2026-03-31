@@ -2,10 +2,10 @@
  * PRODUCTIVITY API
  * 
  * Productivity metrics and tracking.
- * Currently uses mock data, ready to swap to real API.
+ * Uses real API via Edge Functions / Supabase REST.
  */
 
-import { ENV, logger } from '../config/env';
+import { logger } from '../config/env';
 import { http, ApiResponse } from './client';
 
 /**
@@ -33,41 +33,12 @@ export async function fetchProductivitySummary(params: {
   groupBy?: 'day' | 'week' | 'month';
 }): Promise<ApiResponse<ProductivitySummary[]>> {
   try {
-    // Mock mode
-    if (ENV.USE_MOCK_DATA) {
-      logger.debug('fetchProductivitySummary (MOCK)', params);
-      
-      await new Promise(resolve => setTimeout(resolve, 400));
-      
-      // Mock data
-      const mockData: ProductivitySummary[] = [
-        {
-          userId: params.userId || 'kam-ncr-01',
-          date: '2024-02-05',
-          totalCalls: 12,
-          productiveCalls: 8,
-          totalVisits: 5,
-          productiveVisits: 4,
-          dealersContacted: 8,
-          leadsGenerated: 3,
-          productivityScore: 75
-        }
-      ];
-      
-      return {
-        success: true,
-        data: mockData
-      };
-    }
-    
-    // Production mode
-    logger.info('fetchProductivitySummary (API)', params);
+    logger.info('fetchProductivitySummary', params);
     const response = await http.get<ApiResponse<ProductivitySummary[]>>(
       '/productivity/summary',
       params
     );
     return response;
-    
   } catch (error) {
     logger.error('fetchProductivitySummary failed', error);
     throw error;
@@ -83,23 +54,9 @@ export async function fetchProductivityTrend(params: {
   days: number;
 }): Promise<ApiResponse<any[]>> {
   try {
-    // Mock mode
-    if (ENV.USE_MOCK_DATA) {
-      logger.debug('fetchProductivityTrend (MOCK)', params);
-      
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      return {
-        success: true,
-        data: []
-      };
-    }
-    
-    // Production mode
-    logger.info('fetchProductivityTrend (API)', params);
+    logger.info('fetchProductivityTrend', params);
     const response = await http.get<ApiResponse<any[]>>('/productivity/trend', params);
     return response;
-    
   } catch (error) {
     logger.error('fetchProductivityTrend failed', error);
     throw error;

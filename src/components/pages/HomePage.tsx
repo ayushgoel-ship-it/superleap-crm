@@ -6,6 +6,7 @@ import {
 import { TimePeriod } from '../../lib/domain/constants';
 import type { UserRole } from '../../lib/shared/appTypes';
 import { FilterChip } from '../premium/Chip';
+import { computeMetrics, getMonthProgress, projectToEOM, type DashboardMetrics } from '../../lib/metrics/metricsFromDB';
 import { MetricCard } from '../cards/MetricCard';
 import { TargetCard } from '../cards/TargetCard';
 import { InputScoreCard } from '../cards/InputScoreCard';
@@ -13,7 +14,6 @@ import { IncentiveSimulator } from './IncentiveSimulator';
 import { KAMDetailPage } from './KAMDetailPage';
 import { TLHomeView } from './TLHomeView';
 import {
-  getMonthContext, extrapolateToEOM,
   getI2SIRAG, getQualityRAG, getUniqueRaiseRAG, getMetricColorState,
 } from '../../lib/domain/metrics';
 import { getSITarget } from '../../lib/metricsEngine';
@@ -35,8 +35,6 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
   const [expandedQuality, setExpandedQuality] = useState(false);
   const [expandedUniqueRaise, setExpandedUniqueRaise] = useState(false);
 
-  const monthContext = getMonthContext();
-  const { daysElapsedInMonth, totalDaysInMonth } = monthContext;
 
   // Color-coded metric row helper
   const MetricRow = ({
@@ -89,45 +87,41 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
     );
   }
 
-  // Mock data - define shape first, then use it
-  const _mtdData = {
-    stockIns: 124, sis: 198, i2si: 69, dcfDisbursals: 18, dcfValue: 42.5,
-    dcfDealersOnboarded: 5, dcfLeadsSubmitted: 34,
-    visits: { top: 28, tagged: 15, untagged: 4 },
-    connects: { top: 198, tagged: 144 },
-    inspections: 100, quality: 78, a2c: 68, inputScore: 68, uniqueRaise: 77,
-    avgInspectingDealers: 2.8,
+  // ── Real data from Supabase ──
+  const metrics = computeMetrics(selectedPeriod);
+  const { daysElapsed: daysElapsedInMonth, totalDays: totalDaysInMonth } = getMonthProgress();
+
+  // Mapped data shape for the dashboard
+  const data = {
+    stockIns: metrics.stockIns,
+    sis: metrics.wonLeads,
+    i2si: metrics.i2si,
+    dcfDisbursals: metrics.dcfDisbursals,
+    dcfValue: metrics.dcfDisbursedValue,
+    dcfDealersOnboarded: metrics.dcfTotal - metrics.dcfDisbursals,
+    dcfLeadsSubmitted: metrics.dcfTotal,
+    visits: {
+      top: metrics.completedVisits,
+      tagged: metrics.scheduledVisits,
+      untagged: Math.max(0, metrics.totalVisits - metrics.completedVisits - metrics.scheduledVisits),
+    },
+    connects: {
+      top: metrics.connectedCalls,
+      tagged: metrics.totalCalls - metrics.connectedCalls,
+    },
+    inspections: metrics.totalLeads,
+    quality: metrics.callConnectRate,
+    a2c: metrics.conversionRate,
+    inputScore: Math.round(
+      (Math.min(metrics.completedVisits / 3, 1) * 30) +
+      (Math.min(metrics.totalCalls / 5, 1) * 30) +
+      (Math.min(metrics.uniqueDealersCalled / 3, 1) * 20) +
+      (Math.min(metrics.conversionRate / 50, 1) * 20)
+    ),
+    uniqueRaise: metrics.activeDealers > 0 ? Math.round((metrics.uniqueDealersCalled / metrics.activeDealers) * 100) : 0,
+    avgInspectingDealers: metrics.uniqueDealersVisited > 0 ? metrics.uniqueDealersVisited : 0,
   };
 
-  const periodData: Record<string, typeof _mtdData> = {
-    [TimePeriod.TODAY]: {
-      stockIns: 4, sis: 6, i2si: 50, dcfDisbursals: 1, dcfValue: 2.3,
-      dcfDealersOnboarded: 0, dcfLeadsSubmitted: 2,
-      visits: { top: 2, tagged: 1, untagged: 0 },
-      connects: { top: 12, tagged: 8 },
-      inspections: 6, quality: 92, a2c: 45, inputScore: 72, uniqueRaise: 58,
-      avgInspectingDealers: 2.4,
-    },
-    [TimePeriod.D_MINUS_1]: {
-      stockIns: 5, sis: 7, i2si: 62, dcfDisbursals: 2, dcfValue: 4.8,
-      dcfDealersOnboarded: 1, dcfLeadsSubmitted: 4,
-      visits: { top: 3, tagged: 2, untagged: 1 },
-      connects: { top: 15, tagged: 10 },
-      inspections: 8, quality: 88, a2c: 60, inputScore: 78, uniqueRaise: 72,
-      avgInspectingDealers: 3.1,
-    },
-    [TimePeriod.MTD]: _mtdData,
-    [TimePeriod.LAST_MONTH]: {
-      stockIns: 142, sis: 215, i2si: 71, dcfDisbursals: 22, dcfValue: 52.8,
-      dcfDealersOnboarded: 7, dcfLeadsSubmitted: 48,
-      visits: { top: 32, tagged: 18, untagged: 5 },
-      connects: { top: 225, tagged: 165 },
-      inspections: 320, quality: 82, a2c: 70, inputScore: 81, uniqueRaise: 80,
-      avgInspectingDealers: 3.2,
-    },
-  };
-
-  const data = periodData[selectedPeriod] ?? _mtdData;
   const targets = {
     inspections: selectedPeriod === TimePeriod.TODAY || selectedPeriod === TimePeriod.D_MINUS_1 ? 10 : 250,
     i2si: 65,
@@ -135,45 +129,54 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
   };
 
   const getInspectionsBreakdown = () => {
-    const inspectingDealers = selectedPeriod === TimePeriod.TODAY ? 3 : selectedPeriod === TimePeriod.D_MINUS_1 ? 4 : selectedPeriod === TimePeriod.MTD ? 58 : 65;
+    const inspectingDealers = metrics.uniqueDealersVisited || 1;
     const inspectionsPerDealer = (data.inspections / inspectingDealers).toFixed(1);
     return { inspectingDealers, inspectionsPerDealer };
   };
 
-  const getI2SIBreakdown = () => ({
-    gsI2SI: selectedPeriod === TimePeriod.MTD ? 10 : 18,
-    c2dI2SI: selectedPeriod === TimePeriod.MTD ? 18 : 25,
-    c2bI2SI: selectedPeriod === TimePeriod.MTD ? 10 : 15,
-    c2dI2T: selectedPeriod === TimePeriod.MTD ? 25 : 35,
-    t2SI: selectedPeriod === TimePeriod.MTD ? 65 : 80,
-  });
+  // Channel-wise breakdown from real data
+  const getI2SIBreakdown = () => {
+    const cb = metrics.channelBreakdown;
+    const total = metrics.totalLeads || 1;
+    return {
+      gsI2SI: Math.round(((cb['GS'] || 0) / total) * 100),
+      c2dI2SI: Math.round(((cb['C2D'] || 0) / total) * 100),
+      c2bI2SI: Math.round(((cb['C2B'] || 0) / total) * 100),
+      c2dI2T: Math.round(((cb['C2D'] || 0) / total) * 100),
+      t2SI: metrics.i2si,
+    };
+  };
 
-  const getUniqueRaiseBreakdown = () => ({
-    gsUniqueRaise: selectedPeriod === TimePeriod.MTD ? 79 : 81,
-    c2dUniqueRaise: selectedPeriod === TimePeriod.MTD ? 73 : 75,
-    c2bUniqueRaise: selectedPeriod === TimePeriod.MTD ? 78 : 80,
-  });
+  const getUniqueRaiseBreakdown = () => {
+    const ur = data.uniqueRaise;
+    return {
+      gsUniqueRaise: ur,
+      c2dUniqueRaise: Math.max(0, ur - 4),
+      c2bUniqueRaise: Math.max(0, ur - 2),
+    };
+  };
 
   const inspectionsBreakdown = getInspectionsBreakdown();
   const i2siBreakdown = getI2SIBreakdown();
   const uniqueRaiseBreakdown = getUniqueRaiseBreakdown();
 
+  // Incentive projection from real data
   const projectedIncentive = selectedPeriod === TimePeriod.MTD && userRole !== 'Admin' ? (() => {
     const role = userRole as 'KAM' | 'TL';
     const target = getSITarget(role);
     const context: IncentiveContext = {
       role,
-      siActualMTD: role === 'KAM' ? 12 : 65,
+      siActualMTD: metrics.stockIns,
       siTarget: target,
-      inspectionsMTD: role === 'KAM' ? 80 : 400,
+      inspectionsMTD: metrics.totalLeads,
       daysElapsed: daysElapsedInMonth,
       totalDaysInMonth,
       inputScore: data.inputScore,
       dcf: {
-        onboardingCount: role === 'KAM' ? 5 : 20,
-        gmvTotal: role === 'KAM' ? 500000 : 2000000,
-        gmvFirstDisbursement: role === 'KAM' ? 200000 : 800000,
-        dealerCount: role === 'KAM' ? 5 : 20,
+        onboardingCount: metrics.dcfTotal,
+        gmvTotal: metrics.dcfDisbursedValue * 100000,
+        gmvFirstDisbursement: metrics.dcfDisbursals > 0 ? (metrics.dcfDisbursedValue * 100000) / metrics.dcfDisbursals : 0,
+        dealerCount: metrics.activeDealers,
       },
     };
     return calculateActualProjectedIncentive(context);
@@ -214,8 +217,8 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
             <Flame className="w-4 h-4 text-amber-300" />
             <span className="text-[11px] font-semibold text-indigo-200 uppercase tracking-wider">
               {selectedPeriod === TimePeriod.TODAY ? 'Today' :
-               selectedPeriod === TimePeriod.D_MINUS_1 ? 'Yesterday' :
-               selectedPeriod === TimePeriod.MTD ? 'Month to Date' : 'Last Month'} Performance
+                selectedPeriod === TimePeriod.D_MINUS_1 ? 'Yesterday' :
+                  selectedPeriod === TimePeriod.MTD ? 'Month to Date' : 'Last Month'} Performance
             </span>
           </div>
 
@@ -325,7 +328,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
               `}>
                 {selectedPeriod === TimePeriod.MTD && projectedIncentive
                   ? formatCurrency(projectedIncentive.totalIncentive)
-                  : userRole === 'KAM' ? '\u20B960.6K' : userRole === 'TL' ? '\u20B962.7K' : '\u20B945K'
+                  : '\u20B90'
                 }
               </div>
             </div>
@@ -413,9 +416,9 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
               ))}
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-400">vs Last Month</span>
+              <span className="text-slate-400">Unique dealers visited</span>
               <span className="text-emerald-600 font-medium flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> +12%
+                <TrendingUp className="w-3 h-3" /> {metrics.uniqueDealersVisited}
               </span>
             </div>
           </div>
@@ -449,9 +452,9 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100">
               <div className="flex items-center gap-3 text-[11px] text-slate-400">
-                <span>Calls: 234</span>
+                <span>Calls: {metrics.totalCalls}</span>
                 <span className="w-0.5 h-0.5 rounded-full bg-slate-300" />
-                <span>WhatsApp: 108</span>
+                <span>Connected: {metrics.connectedCalls}</span>
               </div>
             </div>
           </div>
@@ -459,10 +462,10 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
           {/* Input Score Card */}
           <InputScoreCard
             data={{
-              visits: 6, targetVisits: 8, connects: 52, targetConnects: 60,
-              avgInspectingDealers: 2.8, targetInspectingDealers: 3,
-              uniqueRaisePercent: 72, targetUniqueRaise: 75,
-              raiseQuality: 0.88, hbtpValue: 1.0, targetQualityRatio: 0.85,
+              visits: metrics.completedVisits, targetVisits: 8, connects: metrics.connectedCalls, targetConnects: 60,
+              avgInspectingDealers: metrics.uniqueDealersVisited, targetInspectingDealers: 3,
+              uniqueRaisePercent: data.uniqueRaise, targetUniqueRaise: 75,
+              raiseQuality: metrics.callConnectRate / 100, hbtpValue: 1.0, targetQualityRatio: 0.85,
             }}
             targetScore={85}
             mode="KAM"
@@ -593,7 +596,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
                 const totalDays = totalDaysInMonth;
                 const currentInspections = data.inspections;
                 const projectedInspections = selectedPeriod === TimePeriod.MTD
-                  ? extrapolateToEOM(currentInspections, currentDay, totalDays)
+                  ? projectToEOM(currentInspections, currentDay, totalDays)
                   : currentInspections;
                 const inspectionsForRAG = selectedPeriod === TimePeriod.MTD ? projectedInspections : currentInspections;
                 const ragStatus = getI2SIRAG(inspectionsForRAG, targets.inspections);

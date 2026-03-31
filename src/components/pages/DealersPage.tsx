@@ -38,6 +38,7 @@ import { DealerDetailPageV2 } from './DealerDetailPageV2';
 import { DealerAccountCard, type DealerCardData } from '../dealers/DealerAccountCard';
 import { toast } from 'sonner@2.0.3';
 import { getAllDealers } from '../../data/selectors';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
 
 // ── Filter Types ──
 type QuickFilter = 'all' | 'active' | 'dormant' | 'inactive';
@@ -75,8 +76,22 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 
 // ── Helpers ──
 function mapDBDealerToCard(d: any): DealerCardData {
-  const mtd = d.metrics?.mtd ?? { leads: 0, inspections: 0, sis: 0, dcf: 0 };
-  const productivityPct = mtd.leads > 0 ? Math.min(100, Math.round((mtd.sis / Math.max(mtd.leads, 1)) * 100)) : 0;
+  // Compute real MTD metrics from actual Supabase data
+  const db = getRuntimeDBSync();
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const dealerLeads = db.leads.filter(l => l.dealerId === d.id);
+  const dealerLeadsMTD = dealerLeads.filter(l => new Date(l.createdAt) >= monthStart);
+  const dealerCalls = db.calls.filter(c => c.dealerId === d.id && new Date(c.callDate) >= monthStart);
+  const dealerVisits = db.visits.filter(v => v.dealerId === d.id && new Date(v.visitDate) >= monthStart);
+  const dealerSIs = dealerLeadsMTD.filter(l => l.status === 'won' || l.status === 'Won' || l.stage === 'stock_in');
+
+  const leadsMTD = dealerLeadsMTD.length;
+  const sisMTD = dealerSIs.length;
+  const callsMTD = dealerCalls.length;
+  const visitsMTD = dealerVisits.length;
+  const productivityPct = leadsMTD > 0 ? Math.min(100, Math.round((sisMTD / Math.max(leadsMTD, 1)) * 100)) : 0;
 
   return {
     id: d.id,
@@ -88,10 +103,10 @@ function mapDBDealerToCard(d: any): DealerCardData {
     tags: d.tags ?? [],
     lastActivity: d.lastContact ?? d.lastVisit ?? 'Unknown',
     lastActivityDaysAgo: Math.min(d.lastContactDaysAgo ?? 999, d.lastVisitDaysAgo ?? 999),
-    callsMTD: mtd.inspections || 0,
-    visitsMTD: mtd.sis || 0,
-    leadsMTD: mtd.leads || 0,
-    sisMTD: mtd.sis || 0,
+    callsMTD,
+    visitsMTD,
+    leadsMTD,
+    sisMTD,
     productivityPct,
     hasLocation: !!d.latitude,
     distanceKm: undefined,
@@ -440,12 +455,12 @@ export function DealersPage({
             const count = chip.key === 'all'
               ? dealers.length
               : chip.key === 'dormant'
-              ? dormantCount
-              : chip.key === 'active'
-              ? dealers.filter(d => d.status === 'active' && (d.leadsMTD > 0 || d.sisMTD > 0)).length
-              : chip.key === 'inactive'
-              ? dealers.filter(d => d.status === 'inactive').length
-              : undefined;
+                ? dormantCount
+                : chip.key === 'active'
+                  ? dealers.filter(d => d.status === 'active' && (d.leadsMTD > 0 || d.sisMTD > 0)).length
+                  : chip.key === 'inactive'
+                    ? dealers.filter(d => d.status === 'inactive').length
+                    : undefined;
 
             return (
               <button

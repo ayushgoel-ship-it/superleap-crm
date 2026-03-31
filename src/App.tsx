@@ -61,10 +61,12 @@ import { MobileTopBar } from "./components/MobileTopBar";
 import { BottomNav } from "./components/BottomNav";
 import { LoginPage } from "./components/pages/auth/LoginPage";
 import { ForgotPasswordPage } from "./components/pages/auth/ForgotPasswordPage";
+import { SignupPage } from "./components/pages/auth/SignupPage";
 import { ProfileCompletePage } from "./components/pages/profile/ProfileCompletePage";
 import { ProfilePage } from "./components/pages/profile/ProfilePage";
 import { RequireAuth } from "./components/auth/RequireAuth";
 import { RequireProfileComplete } from "./components/auth/RequireProfileComplete";
+import { AdminApprovalPanel } from "./components/admin/AdminApprovalPanel";
 
 // Initialize feedback retry queue auto-retry listeners
 startAutoRetry();
@@ -387,6 +389,20 @@ function AppContent() {
           onForgotPassword={() =>
             setCurrentPage("auth-forgot-password")
           }
+          onSignup={() =>
+            setCurrentPage("auth-signup" as any)
+          }
+        />
+        <Toaster position="top-center" />
+      </>
+    );
+  }
+
+  if (currentPage === ("auth-signup" as any)) {
+    return (
+      <>
+        <SignupPage
+          onBack={() => setCurrentPage("auth-login")}
         />
         <Toaster position="top-center" />
       </>
@@ -799,6 +815,12 @@ function AppContent() {
                           onNavigate={(page: AdminPage) =>
                             setCurrentPage(page as PageView)
                           }
+                        />
+                      );
+                    case "admin-approvals" as any:
+                      return (
+                        <AdminApprovalPanel
+                          onBack={() => setCurrentPage("admin-home")}
                         />
                       );
                     case "demo-location-update":

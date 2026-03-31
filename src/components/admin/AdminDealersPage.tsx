@@ -117,7 +117,7 @@ export function AdminDealersPage({ onNavigate }: AdminDealersPageProps = {}) {
               status="neutral"
             />
             <MetricCard
-              title="I\u2192T %"
+              title="I→T %"
               value={`${kpis.inspToTransPercent}%`}
               status="neutral"
             />

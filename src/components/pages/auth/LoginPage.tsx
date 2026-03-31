@@ -1,19 +1,19 @@
 import { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../auth/AuthProvider';
-import { SEED_USERS } from '../../../lib/auth/mockUsers';
 import { toast } from 'sonner@2.0.3';
 
 interface LoginPageProps {
   onLoginSuccess: (role: string) => void;
   onForgotPassword: () => void;
+  onSignup?: () => void;
 }
 
-export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) {
+export function LoginPage({ onLoginSuccess, onForgotPassword, onSignup }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showCredentials, setShowCredentials] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -53,10 +53,7 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
     }
   };
 
-  const fillCredentials = (seedEmail: string, seedPassword: string) => {
-    setEmail(seedEmail);
-    setPassword(seedPassword);
-  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -167,62 +164,28 @@ export function LoginPage({ onLoginSuccess, onForgotPassword }: LoginPageProps) 
             </div>
           </form>
 
-          {/* Demo Credentials */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={() => setShowCredentials(!showCredentials)}
-              className="w-full flex items-center justify-between text-sm text-gray-700 hover:text-gray-900"
-            >
-              <span className="font-medium">Demo Credentials</span>
-              {showCredentials ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </button>
-
-            {showCredentials && (
-              <div className="mt-4 space-y-2">
-                <p className="text-xs text-gray-500 mb-3">
-                  Click any credential to auto-fill the form
-                </p>
-                {SEED_USERS.map((user) => (
-                  <button
-                    key={user.userId}
-                    type="button"
-                    onClick={() => fillCredentials(user.email, user.password)}
-                    className="w-full bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg p-3 text-left transition-colors"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-900">{user.name}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        user.role === 'KAM' ? 'bg-blue-100 text-blue-700' :
-                        user.role === 'TL' ? 'bg-purple-100 text-purple-700' :
-                        'bg-green-100 text-green-700'
-                      }`}>
-                        {user.role}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-600">{user.email}</div>
-                    <div className="text-xs text-gray-500 mt-1">Password: {user.password}</div>
-                    {!user.profileComplete && (
-                      <div className="text-xs text-amber-600 mt-1">⚠ Profile incomplete - will require setup</div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Request Access */}
+          {onSignup && (
+            <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+              <p className="text-sm text-gray-600 mb-2">Don't have an account?</p>
+              <button
+                type="button"
+                onClick={onSignup}
+                className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+              >
+                Request Access →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer Note */}
         <div className="mt-6 text-center">
           <p className="text-xs text-gray-500">
-            🔒 This is a prototype. Passwords are stored in localStorage only.
+            🔒 Secured with Supabase Auth
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Not meant for real sensitive data or PII.
+            SuperLeap CRM © 2026
           </p>
         </div>
       </div>
