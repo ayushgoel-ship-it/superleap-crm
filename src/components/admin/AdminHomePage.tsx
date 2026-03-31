@@ -440,7 +440,7 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
         </div>
 
         {/* Bottom spacing for nav */}
-        <div className="h-20"></div>
+        <div className="h-28"></div>
       </div>
     </div>
   );

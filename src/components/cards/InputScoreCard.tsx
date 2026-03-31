@@ -118,7 +118,7 @@ export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputSc
       {isExpanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-slate-100 pt-4 animate-fade-in">
           <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-            4 components \u2022 25 pts each
+            4 components • 25 pts each
           </div>
 
           {mode === 'TL' ? (
@@ -126,7 +126,7 @@ export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputSc
               label="Productivity of KAMs"
               score={firstComponentScore}
               maxScore={25}
-              description={`${data.sis || 0} SIs (target ${data.sisTarget || 20}) \u2022 \u20B9${data.dcfDisbursalsValue || 0}L DCF`}
+              description={`${data.sis || 0} SIs (target ${data.sisTarget || 20}) • ₹${data.dcfDisbursalsValue || 0}L DCF`}
               status={firstComponentScore >= 20 ? 'good' : firstComponentScore >= 15 ? 'warning' : 'poor'}
             />
           ) : (
@@ -134,7 +134,7 @@ export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputSc
               label="Visits / Connects"
               score={firstComponentScore}
               maxScore={25}
-              description={`${data.visits} visits (${data.targetVisits}) \u2022 ${data.connects} connects (${data.targetConnects})`}
+              description={`${data.visits} visits (${data.targetVisits}) • ${data.connects} connects (${data.targetConnects})`}
               status={firstComponentScore >= 20 ? 'good' : firstComponentScore >= 15 ? 'warning' : 'poor'}
             />
           )}
@@ -171,23 +171,23 @@ export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputSc
               <div className="text-[11px] text-indigo-600 space-y-1 leading-relaxed">
                 {firstComponentScore < 20 && mode === 'TL' && (
                   <div>
-                    \u2022 {(data.sis || 0) < (data.sisTarget || 20)
+                    • {(data.sis || 0) < (data.sisTarget || 20)
                       ? `+${((data.sisTarget || 20) - (data.sis || 0)).toFixed(0)} SIs`
-                      : `+\u20B9${((data.dcfDisbursalsTarget || 15) - (data.dcfDisbursalsValue || 0)).toFixed(0)}L DCF`}
+                      : `+₹${((data.dcfDisbursalsTarget || 15) - (data.dcfDisbursalsValue || 0)).toFixed(0)}L DCF`}
                   </div>
                 )}
                 {firstComponentScore < 20 && mode === 'KAM' && (
                   <div>
-                    \u2022 {data.visits < data.targetVisits
+                    • {data.visits < data.targetVisits
                       ? `+${(data.targetVisits - data.visits).toFixed(0)} visits/day`
                       : `+${(data.targetConnects - data.connects).toFixed(0)} connects/day`}
                   </div>
                 )}
                 {inspectingDealersScore < 20 && (
-                  <div>\u2022 +{(data.targetInspectingDealers - data.avgInspectingDealers).toFixed(1)} inspecting dealers/day</div>
+                  <div>• +{(data.targetInspectingDealers - data.avgInspectingDealers).toFixed(1)} inspecting dealers/day</div>
                 )}
                 {uniqueRaiseScore < 20 && (
-                  <div>\u2022 +{(data.targetUniqueRaise - data.uniqueRaisePercent).toFixed(0)}% unique raise</div>
+                  <div>• +{(data.targetUniqueRaise - data.uniqueRaisePercent).toFixed(0)}% unique raise</div>
                 )}
               </div>
             </div>
