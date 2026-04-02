@@ -1,27 +1,15 @@
+import { useMemo } from 'react';
 import { ArrowLeft, IndianRupee, TrendingUp, ChevronRight } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
+import { getDealerById } from '../../data/selectors';
+import { getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { TimePeriod } from '../../lib/domain/constants';
 
 interface DCFDealerDetailPageProps {
   onBack: () => void;
   dealerId: string;
   dateRange: string;
-}
-
-interface DealerDetails {
-  id: string;
-  name: string;
-  code: string;
-  city: string;
-  status: string;
-  leads: number;
-  leadsTarget: number;
-  approvals: number;
-  approvalsTarget: number;
-  disbursals: number;
-  disbursalsTarget: number;
-  disbursalAmount: string;
-  disbursalAmountTarget: string;
 }
 
 interface LeadSummary {
@@ -43,37 +31,63 @@ interface DisbursalSummary {
   date: string;
 }
 
+function statusToStageColor(status: string): string {
+  const s = status.toUpperCase();
+  if (s === 'DISBURSED') return 'green';
+  if (s.includes('PENDING') || s.includes('DELAYED')) return 'amber';
+  if (s === 'IN_PROGRESS') return 'blue';
+  if (s === 'REJECTED') return 'red';
+  return 'gray';
+}
+
 export function DCFDealerDetailPage({ onBack, dealerId, dateRange }: DCFDealerDetailPageProps) {
-  // Mock dealer data
-  const dealer: DealerDetails = {
-    id: dealerId,
-    name: 'Gupta Auto World',
-    code: 'GGN-001',
-    city: 'Gurugram',
-    status: 'Active',
-    leads: 12,
-    leadsTarget: 20,
-    approvals: 8,
-    approvalsTarget: 12,
-    disbursals: 5,
-    disbursalsTarget: 8,
-    disbursalAmount: '₹21.2L',
-    disbursalAmountTarget: '₹35L',
-  };
+  // Derive dealer + DCF data from canonical sources
+  const { dealer, recentLeads, recentDisbursals } = useMemo(() => {
+    const period = (Object.values(TimePeriod).includes(dateRange as TimePeriod)
+      ? dateRange as TimePeriod
+      : TimePeriod.MTD);
+    const rawDealer = getDealerById(dealerId);
+    const dcfLeads = getFilteredDCFLeads({ period }).filter(l => l.dealerId === dealerId);
+    const disbursed = dcfLeads.filter(l => l.overallStatus === 'DISBURSED');
+    const totalDisbursalAmount = disbursed.reduce((s, l) => s + (l.loanAmount ?? 0), 0);
 
-  const recentLeads: LeadSummary[] = [
-    { id: '1', appId: 'DL1CAC1234', customerName: 'Rajesh Verma', car: 'Maruti Swift VXI 2020', stage: 'Documentation', stageColor: 'blue', date: '2024-12-09' },
-    { id: '2', appId: 'DL1CAC0123', customerName: 'Manoj Singh', car: 'Honda City VX 2020', stage: 'Approved', stageColor: 'green', date: '2024-12-03' },
-    { id: '3', appId: 'DCF24110013', customerName: 'Sanjay Sharma', car: 'Maruti Baleno Delta 2020', stage: 'Disbursed', stageColor: 'green', date: '2024-11-13' },
-  ];
+    const dealerData = {
+      id: dealerId,
+      name: rawDealer?.name ?? 'Unknown Dealer',
+      code: rawDealer?.code ?? '–',
+      city: rawDealer?.city ?? '–',
+      status: rawDealer?.status === 'active' ? 'Active' : rawDealer?.status === 'dormant' ? 'Dormant' : 'Inactive',
+      leads: dcfLeads.length,
+      leadsTarget: 20,
+      approvals: dcfLeads.filter(l => !['REJECTED', 'DELAYED'].includes(l.overallStatus.toUpperCase())).length,
+      approvalsTarget: 12,
+      disbursals: disbursed.length,
+      disbursalsTarget: 8,
+      disbursalAmount: `₹${(totalDisbursalAmount / 100000).toFixed(1)}L`,
+      disbursalAmountTarget: '₹35L',
+    };
 
-  const recentDisbursals: DisbursalSummary[] = [
-    { id: '1', loanId: 'DCF24110004', customerName: 'Rajesh Kumar', car: 'Honda City VX 2019', amount: '₹4.5L', date: '2024-11-29' },
-    { id: '2', loanId: 'DCF24110013', customerName: 'Sanjay Sharma', car: 'Maruti Baleno Delta 2020', amount: '₹3.3L', date: '2024-11-13' },
-    { id: '3', loanId: 'DCF24100018', customerName: 'Vikram Gupta', car: 'Hyundai Creta SX 2020', amount: '₹4.1L', date: '2024-10-25' },
-    { id: '4', loanId: 'DCF24100022', customerName: 'Amit Verma', car: 'Maruti Swift VXI 2021', amount: '₹3.2L', date: '2024-10-18' },
-    { id: '5', loanId: 'DCF24100025', customerName: 'Priya Sharma', car: 'Honda Amaze VX 2020', amount: '₹2.8L', date: '2024-10-12' },
-  ];
+    const leads: LeadSummary[] = dcfLeads.slice(0, 3).map(l => ({
+      id: l.id,
+      appId: l.id,
+      customerName: l.customerName,
+      car: l.car,
+      stage: l.overallStatus,
+      stageColor: statusToStageColor(l.overallStatus),
+      date: l.createdAt,
+    }));
+
+    const disbs: DisbursalSummary[] = disbursed.map(l => ({
+      id: l.id,
+      loanId: l.id,
+      customerName: l.customerName,
+      car: l.car,
+      amount: `₹${((l.loanAmount ?? 0) / 100000).toFixed(1)}L`,
+      date: (l as any).disbursalDate ?? l.createdAt,
+    }));
+
+    return { dealer: dealerData, recentLeads: leads, recentDisbursals: disbs };
+  }, [dealerId]);
 
   const filterChips = [
     { label: 'Channel', value: 'DCF' },

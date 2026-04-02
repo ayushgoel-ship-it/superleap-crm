@@ -79,6 +79,8 @@ export interface Dealer {
   tags: string[];
   segment: DealerSegment;
   status: 'active' | 'inactive' | 'churned';
+  /** KAM-set flag: true if KAM has marked this dealer as a Top Dealer */
+  isTopDealer?: boolean;
 }
 
 // ============================================================================

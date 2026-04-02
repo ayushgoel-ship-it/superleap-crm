@@ -424,7 +424,10 @@ export function getLeadsByTL(tlId: string): Lead[] {
   return LEADS.filter(l => l.tlId === normalizedTLId);
 }
 
-export function getLeadsByChannel(channel: 'C2B' | 'C2D' | 'GS'): Lead[] {
+export function getLeadsByChannel(channel: 'C2B' | 'C2D' | 'GS' | 'NGS' | 'DCF'): Lead[] {
+  if (channel === 'NGS') {
+    return LEADS.filter(l => l.channel === 'C2B' || l.channel === 'C2D');
+  }
   return LEADS.filter(l => l.channel === channel);
 }
 
@@ -455,6 +458,18 @@ export function searchLeads(query: string): Lead[] {
 
 export function getDCFLeadById(id: string): DCFLead | undefined {
   return DCF_LEADS.find(l => l.id === id);
+}
+
+/**
+ * Unified lead lookup — searches both LEADS and DCF_LEADS.
+ * Returns the lead and its source type so callers can route correctly.
+ */
+export function getAnyLeadById(id: string): { lead: Lead | DCFLead; source: 'stock' | 'dcf' } | undefined {
+  const stockLead = LEADS.find(l => l.id === id);
+  if (stockLead) return { lead: stockLead, source: 'stock' };
+  const dcfLead = DCF_LEADS.find(l => l.id === id);
+  if (dcfLead) return { lead: dcfLead, source: 'dcf' };
+  return undefined;
 }
 
 export function getAllDCFLeads(): DCFLead[] {

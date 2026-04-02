@@ -35,6 +35,7 @@ export interface DealerCardData {
   productivityPct: number;
   hasLocation: boolean;
   distanceKm?: number;
+  category?: 'Top Dealer' | 'Tagged Dealer' | 'Untagged Dealer';
 }
 
 interface DealerAccountCardProps {

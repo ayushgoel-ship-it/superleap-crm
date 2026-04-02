@@ -1,192 +1,30 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ArrowLeft, Phone, Mail, ChevronDown, ChevronUp, Check, Clock, AlertCircle } from 'lucide-react';
+import { getDCFLeadById } from '../../data/selectors';
+import { toDCFLeadDetail, type DCFLeadDetailData } from '../../data/adapters/dcfAdapter';
 
 interface DCFLeadDetailPageProps {
   loanId: string;
   onBack: () => void;
 }
 
-interface DCFLeadData {
-  loan_id: string;
-  customer_name: string;
-  customer_phone: string;
-  pan: string;
-  city: string;
-  reg_no: string;
-  car: string;
-  car_value: number;
-  ltv: number | null;
-  loan_amount: number | null;
-  roi: number | null;
-  tenure: number | null;
-  emi: number | null;
-  dealer_name: string;
-  dealer_code: string;
-  dealer_city: string;
-  channel: string;
-  rag_status: 'green' | 'amber' | 'red';
-  book_flag: 'Own Book' | 'Pmax';
-  car_docs_flag: string;
-  conversion_owner: string;
-  conversion_email: string;
-  conversion_phone: string;
-  kam_name: string;
-  first_disbursal_for_dealer: string;
-  commission_eligible: boolean;
-  base_commission: number;
-  booster_applied: string;
-  total_commission: number;
-  current_funnel: string;
-  current_sub_stage: string;
-  overall_status: string;
-  created_at: string;
-  last_updated_at: string;
-  utr?: string;
-  disbursal_date?: string;
-  cibil_score: number;
-  cibil_date: string;
-  employment_type?: string;
-  monthly_income?: number;
-  dealer_account?: string;
+// Use DCFLeadDetailData from adapter as the type
+type DCFLeadData = DCFLeadDetailData & {
+  customer_phone?: string;
   last_dcf_disbursal?: string;
-  delay_message?: string;
-}
-
-// Mock data - 3 leads with different RAG states
-const DCF_LEADS_MOCK_DATA: Record<string, DCFLeadData> = {
-  'DCF-LN-982341': {
-    loan_id: 'DCF-LN-982341',
-    customer_name: 'Rajesh Verma',
-    customer_phone: '+919876543210',
-    pan: 'AJPVR1234D',
-    city: 'Gurugram',
-    reg_no: 'DL1CAC1234',
-    car: 'Maruti Swift VXI 2020',
-    car_value: 680000,
-    ltv: 75,
-    loan_amount: 510000,
-    roi: 18.5,
-    tenure: 36,
-    emi: 18650,
-    dealer_name: 'Gupta Auto World',
-    dealer_code: 'GGN-001',
-    dealer_city: 'Gurugram',
-    channel: 'Dealer Shared',
-    rag_status: 'green',
-    book_flag: 'Own Book',
-    car_docs_flag: 'Received',
-    conversion_owner: 'Ananya Mehta',
-    conversion_email: 'ananya.mehta@cars24.com',
-    conversion_phone: '+919123456789',
-    kam_name: 'Rajesh Kumar',
-    first_disbursal_for_dealer: 'YES',
-    commission_eligible: true,
-    base_commission: 2550,
-    booster_applied: 'YES',
-    total_commission: 5100,
-    current_funnel: 'DISBURSAL',
-    current_sub_stage: 'DISBURSAL',
-    overall_status: 'DISBURSED',
-    created_at: '2024-12-07 11:05',
-    last_updated_at: '2024-12-09 18:42',
-    utr: 'UTR-HDFC-20241209-7741',
-    disbursal_date: '2024-12-09 18:42',
-    cibil_score: 742,
-    cibil_date: '2024-12-07',
-    employment_type: 'Salaried',
-    monthly_income: 45000,
-    dealer_account: 'HDFC ***4567',
-  },
-  'DCF-LN-982780': {
-    loan_id: 'DCF-LN-982780',
-    customer_name: 'Priya Sharma',
-    customer_phone: '+919812345678',
-    pan: 'BQKPS6789L',
-    city: 'Faridabad',
-    reg_no: 'HR26DK5678',
-    car: 'Hyundai i20 Sportz 2021',
-    car_value: 540000,
-    ltv: null,
-    loan_amount: null,
-    roi: null,
-    tenure: null,
-    emi: null,
-    dealer_name: 'Sharma Motors',
-    dealer_code: 'GGN-002',
-    dealer_city: 'Gurugram',
-    channel: 'Dealer Shared',
-    rag_status: 'amber',
-    book_flag: 'Pmax',
-    car_docs_flag: 'Pending',
-    conversion_owner: 'Ritesh Khanna',
-    conversion_email: 'ritesh.khanna@cars24.com',
-    conversion_phone: '+919988777665',
-    kam_name: 'Priya Sharma',
-    first_disbursal_for_dealer: 'NO',
-    commission_eligible: false,
-    base_commission: 0,
-    booster_applied: 'NO',
-    total_commission: 0,
-    current_funnel: 'CONVERSION',
-    current_sub_stage: 'DOC_UPLOAD',
-    overall_status: 'APPROVAL PENDING',
-    created_at: '2024-12-09 10:10',
-    last_updated_at: '2024-12-10 11:40',
-    cibil_score: 708,
-    cibil_date: '2024-12-09',
-    employment_type: 'Self Employed',
-    monthly_income: 65000,
-    dealer_account: 'ICICI ***8901',
-  },
-  'DCF-LN-983210': {
-    loan_id: 'DCF-LN-983210',
-    customer_name: 'Amit Kumar',
-    customer_phone: '+919800111222',
-    pan: 'DFTPK1122R',
-    city: 'Noida',
-    reg_no: 'UP32AB9012',
-    car: 'Honda City VX 2019',
-    car_value: 720000,
-    ltv: null,
-    loan_amount: null,
-    roi: null,
-    tenure: null,
-    emi: null,
-    dealer_name: 'New City Autos',
-    dealer_code: 'NDA-078',
-    dealer_city: 'Noida',
-    channel: 'Walk-in',
-    rag_status: 'red',
-    book_flag: 'Own Book',
-    car_docs_flag: 'Pending',
-    conversion_owner: 'Not assigned',
-    conversion_email: '',
-    conversion_phone: '',
-    kam_name: 'Akash Singh',
-    first_disbursal_for_dealer: 'YES',
-    commission_eligible: false,
-    base_commission: 0,
-    booster_applied: 'NO',
-    total_commission: 0,
-    current_funnel: 'CREDIT',
-    current_sub_stage: 'UNDERWRITING',
-    overall_status: 'PENDING',
-    created_at: '2024-12-08 13:00',
-    last_updated_at: '2024-12-10 13:00',
-    delay_message: 'Delayed: 2 days in underwriting',
-    cibil_score: 691,
-    cibil_date: '2024-12-08',
-    employment_type: 'Salaried',
-    monthly_income: 38000,
-    dealer_account: 'SBI ***2345',
-  },
 };
 
 export function DCFLeadDetailPage({ loanId, onBack }: DCFLeadDetailPageProps) {
   const [journeyExpanded, setJourneyExpanded] = useState(false);
   const [expandedFunnels, setExpandedFunnels] = useState<Set<string>>(new Set());
-  
-  const leadData = DCF_LEADS_MOCK_DATA[loanId];
+
+  // Canonical data lookup — get from DCF_LEADS via selector + adapter
+  const leadData = useMemo<DCFLeadData | null>(() => {
+    const raw = getDCFLeadById(loanId);
+    if (!raw) return null;
+    const detail = toDCFLeadDetail(raw);
+    return { ...detail, customer_phone: raw.customerPhone } as DCFLeadData;
+  }, [loanId]);
   
   if (!leadData) {
     return (

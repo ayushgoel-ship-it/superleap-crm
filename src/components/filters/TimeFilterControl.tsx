@@ -89,7 +89,88 @@ export const ADMIN_TIME_OPTIONS: TimePeriod[] = [
   TimePeriod.D_MINUS_1, TimePeriod.MTD, TimePeriod.LMTD, TimePeriod.LAST_MONTH,
 ];
 
+/**
+ * CANONICAL time filter options — the single standard set for all pages.
+ * D-1, MTD, LMTD, Last 30D, Last 3M, Last 6M, Custom
+ */
+export const CANONICAL_TIME_OPTIONS: TimePeriod[] = [
+  TimePeriod.D_MINUS_1,
+  TimePeriod.MTD,
+  TimePeriod.LMTD,
+  TimePeriod.LAST_30D,
+  TimePeriod.LAST_3M,
+  TimePeriod.LAST_6M,
+  TimePeriod.CUSTOM,
+];
+
+/** Short labels for canonical options */
+export const CANONICAL_TIME_LABELS: Record<string, string> = {
+  [TimePeriod.D_MINUS_1]: 'D-1',
+  [TimePeriod.MTD]: 'MTD',
+  [TimePeriod.LMTD]: 'LMTD',
+  [TimePeriod.LAST_30D]: '30D',
+  [TimePeriod.LAST_3M]: '3M',
+  [TimePeriod.LAST_6M]: '6M',
+  [TimePeriod.CUSTOM]: 'Custom',
+};
+
 // ── Component ──
+
+// ── Custom Date Picker Inline ──
+
+function CustomDateRangeInline({
+  fromISO,
+  toISO,
+  onApply,
+}: {
+  fromISO?: string;
+  toISO?: string;
+  onApply: (range: { fromISO: string; toISO: string }) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [from, setFrom] = useState(fromISO?.slice(0, 10) ?? '');
+  const [to, setTo] = useState(toISO?.slice(0, 10) ?? today);
+
+  const handleApply = () => {
+    if (from && to && from <= to) {
+      onApply({
+        fromISO: new Date(from + 'T00:00:00').toISOString(),
+        toISO: new Date(to + 'T23:59:59').toISOString(),
+      });
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 mt-2 animate-fade-in">
+      <input
+        type="date"
+        value={from}
+        onChange={(e) => setFrom(e.target.value)}
+        max={to || today}
+        className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-[12px] text-slate-700 bg-white
+                   focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300 transition-all"
+      />
+      <span className="text-[11px] text-slate-400 font-medium">to</span>
+      <input
+        type="date"
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+        min={from}
+        max={today}
+        className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-[12px] text-slate-700 bg-white
+                   focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300 transition-all"
+      />
+      <button
+        onClick={handleApply}
+        disabled={!from || !to || from > to}
+        className="px-3 py-1.5 bg-indigo-600 text-white text-[11px] font-semibold rounded-lg
+                   hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        Apply
+      </button>
+    </div>
+  );
+}
 
 export function TimeFilterControl({
   mode,
@@ -98,6 +179,9 @@ export function TimeFilterControl({
   options,
   labelOverrides,
   allowCustom = false,
+  customFrom,
+  customTo,
+  onCustomRangeChange,
   chipStyle = 'segmented',
 }: TimeFilterControlProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -114,20 +198,49 @@ export function TimeFilterControl({
     visibleOptions = visibleOptions.filter(o => o !== TimePeriod.CUSTOM);
   }
 
+  const showCustomPicker = allowCustom && value === TimePeriod.CUSTOM && onCustomRangeChange;
+
   // ── Chips Mode ──
   if (mode === 'chips') {
     if (chipStyle === 'pill') {
       return (
-        <div className="flex flex-wrap gap-2">
+        <div>
+          <div className="flex flex-wrap gap-2">
+            {visibleOptions.map((period) => (
+              <button
+                key={period}
+                onClick={() => onChange(period)}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-medium
+                  transition-all duration-150 min-h-[36px] whitespace-nowrap
+                  ${value === period
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }
+                `}
+              >
+                {getLabel(period)}
+              </button>
+            ))}
+          </div>
+          {showCustomPicker && (
+            <CustomDateRangeInline fromISO={customFrom} toISO={customTo} onApply={onCustomRangeChange} />
+          )}
+        </div>
+      );
+    }
+
+    // Segmented control (default) — matches DCFPage / VisitsPage pattern
+    return (
+      <div>
+        <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
           {visibleOptions.map((period) => (
             <button
               key={period}
               onClick={() => onChange(period)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-medium
-                transition-all duration-150 min-h-[36px] whitespace-nowrap
+              className={`flex-1 py-2 px-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 min-h-[36px]
                 ${value === period
-                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  ? 'bg-white text-slate-800 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
                 }
               `}
             >
@@ -135,26 +248,9 @@ export function TimeFilterControl({
             </button>
           ))}
         </div>
-      );
-    }
-
-    // Segmented control (default) — matches DCFPage / VisitsPage pattern
-    return (
-      <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
-        {visibleOptions.map((period) => (
-          <button
-            key={period}
-            onClick={() => onChange(period)}
-            className={`flex-1 py-2 px-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 min-h-[36px]
-              ${value === period
-                ? 'bg-white text-slate-800 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-              }
-            `}
-          >
-            {getLabel(period)}
-          </button>
-        ))}
+        {showCustomPicker && (
+          <CustomDateRangeInline fromISO={customFrom} toISO={customTo} onApply={onCustomRangeChange} />
+        )}
       </div>
     );
   }
@@ -179,7 +275,7 @@ export function TimeFilterControl({
                 key={period}
                 onClick={() => {
                   onChange(period);
-                  setDropdownOpen(false);
+                  if (period !== TimePeriod.CUSTOM) setDropdownOpen(false);
                 }}
                 className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
                   value === period ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
@@ -188,6 +284,15 @@ export function TimeFilterControl({
                 {getLabel(period)}
               </button>
             ))}
+            {showCustomPicker && (
+              <div className="px-3 py-2 border-t border-gray-100">
+                <CustomDateRangeInline
+                  fromISO={customFrom}
+                  toISO={customTo}
+                  onApply={(range) => { onCustomRangeChange(range); setDropdownOpen(false); }}
+                />
+              </div>
+            )}
           </div>
         </>
       )}

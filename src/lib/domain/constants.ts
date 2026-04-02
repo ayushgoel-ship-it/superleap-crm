@@ -25,6 +25,7 @@ export enum TimePeriod {
   LAST_MONTH = 'Last Month',
   LAST_7D = 'Last 7D',
   LAST_30D = 'Last 30D',
+  LAST_3M = 'Last 3M',
   LAST_6M = 'Last 6M',
   LIFETIME = 'Lifetime',
   QTD = 'QTD',
@@ -383,6 +384,82 @@ export type AdminRoute = typeof ADMIN_ROUTES[number];
 // ============================================================================
 // Don't define UserRole here - it lives in /lib/auth/types.ts
 // Import from there when needed
+
+// ============================================================================
+// CANONICAL KAM TARGETS
+// ============================================================================
+
+/**
+ * Standardized KAM targets — single source of truth.
+ * Used in: Home KPIs, DCF KPIs, targets cards, leaderboards, incentive engine.
+ */
+export const KAM_TARGETS = {
+  STOCKIN: 20,            // Stock-in target per KAM per month
+  DCF_LEADS: 30,          // DCF lead target per KAM per month
+  DCF_DISBURSEMENTS: 5,   // DCF disbursement target per KAM per month
+  I2SI_PERCENT: 20,       // Inspection-to-Stock-In % target
+} as const;
+
+// ============================================================================
+// DEALER CLASSIFICATION
+// ============================================================================
+
+/**
+ * Canonical dealer categories — derived, not stored.
+ *
+ * Rules:
+ *   Top Dealer    = onboarded + KAM has explicitly marked as top dealer (isTopDealer flag)
+ *   Tagged Dealer  = onboarded under a KAM, but NOT marked as top dealer
+ *   Untagged Dealer = visited-only, not onboarded
+ *
+ * Architecture: only `isTopDealer: boolean` needs to be persisted.
+ * The category is computed from (isTopDealer, dealer.status, dealer.kamId).
+ */
+export enum DealerCategory {
+  TOP = 'Top Dealer',
+  TAGGED = 'Tagged Dealer',
+  UNTAGGED = 'Untagged Dealer',
+}
+
+export const DEALER_CATEGORIES = Object.values(DealerCategory);
+
+/**
+ * Derive dealer category from dealer state.
+ * @param isOnboarded  - dealer has status 'active' and has a kamId
+ * @param isTopDealer  - KAM has explicitly marked this dealer as top
+ */
+export function deriveDealerCategory(isOnboarded: boolean, isTopDealer: boolean): DealerCategory {
+  if (!isOnboarded) return DealerCategory.UNTAGGED;
+  if (isTopDealer) return DealerCategory.TOP;
+  return DealerCategory.TAGGED;
+}
+
+// ============================================================================
+// LEAD STAGE FILTERS (GS/NGS and DCF)
+// ============================================================================
+
+/**
+ * Stage filter definitions for GS and NGS channels.
+ * Includes Stockin as a separate filter stage.
+ */
+export const STOCK_CHANNEL_STAGE_FILTERS = [
+  { key: 'lead-dropped', label: 'Lead Dropped', patterns: ['pr', 'lead created', 'lead_created'] },
+  { key: 'inspection-pending', label: 'Insp. Pending', patterns: ['pll', 'in progress', 'inspection scheduled', 'in_progress', 'inspection_scheduled'] },
+  { key: 'in-nego', label: 'In Nego', patterns: ['inspection done', 'inspection_completed', 'nego'] },
+  { key: 'bbnp', label: 'BBNP', patterns: ['bbnp', 'token', 'bought'] },
+  { key: 'stockin', label: 'Stock-In', patterns: ['stock-in', 'stockin', 'stock_in'] },
+] as const;
+
+/**
+ * Stage filter definitions for DCF channel.
+ */
+export const DCF_STAGE_FILTERS = [
+  { key: 'lead-dropped', label: 'Lead Dropped', patterns: ['pr', 'lead created', 'lead_created', 'dropped'] },
+  { key: 'offer-gen', label: 'Offer Gen.', patterns: ['offer', 'generated', 'pll', 'in progress', 'in_progress', 'approval_pending'] },
+  { key: 'in-nego', label: 'In Nego', patterns: ['nego', 'inspection'] },
+  { key: 'disbursed', label: 'Disbursed', patterns: ['stock-in', 'stockin', 'disburse', 'payout', 'disbursed'] },
+  { key: 'doc-pending', label: 'Doc Pending', patterns: ['doc', 'post-disbursal', 'pending'] },
+] as const;
 
 // ============================================================================
 // METRIC THRESHOLDS

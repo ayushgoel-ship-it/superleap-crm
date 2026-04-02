@@ -38,11 +38,13 @@ import { DealerDetailPageV2 } from './DealerDetailPageV2';
 import { DealerAccountCard, type DealerCardData } from '../dealers/DealerAccountCard';
 import { toast } from 'sonner@2.0.3';
 import { getAllDealers } from '../../data/selectors';
+import { getDealerLeadMetrics, computeDashboardMetrics, getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { TimePeriod, DealerCategory, deriveDealerCategory } from '../../lib/domain/constants';
 
 // ── Filter Types ──
 type QuickFilter = 'all' | 'active' | 'dormant' | 'inactive';
+type CategoryFilter = 'all' | 'top' | 'tagged' | 'untagged';
 type SortKey = 'name' | 'segment' | 'leads' | 'last-activity';
-type SummaryRange = 'mtd' | 'last-30';
 
 interface DealersPageProps {
   userRole: UserRole;
@@ -66,6 +68,13 @@ const FILTER_CHIPS: { key: QuickFilter; label: string }[] = [
   { key: 'inactive', label: 'Inactive' },
 ];
 
+const CATEGORY_CHIPS: { key: CategoryFilter; label: string }[] = [
+  { key: 'all', label: 'All Categories' },
+  { key: 'top', label: 'Top Dealer' },
+  { key: 'tagged', label: 'Tagged' },
+  { key: 'untagged', label: 'Untagged' },
+];
+
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name A-Z' },
   { key: 'segment', label: 'Segment' },
@@ -74,9 +83,10 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 ];
 
 // ── Helpers ──
-function mapDBDealerToCard(d: any): DealerCardData {
-  const mtd = d.metrics?.mtd ?? { leads: 0, inspections: 0, sis: 0, dcf: 0 };
-  const productivityPct = mtd.leads > 0 ? Math.min(100, Math.round((mtd.sis / Math.max(mtd.leads, 1)) * 100)) : 0;
+function mapDBDealerToCard(d: any, period: TimePeriod = TimePeriod.MTD): DealerCardData {
+  // Derive metrics from actual LEADS array via canonical metrics
+  const metrics = getDealerLeadMetrics(d.id, { period });
+  const productivityPct = metrics.leadsMTD > 0 ? Math.min(100, Math.round((metrics.sisMTD / Math.max(metrics.leadsMTD, 1)) * 100)) : 0;
 
   return {
     id: d.id,
@@ -88,13 +98,17 @@ function mapDBDealerToCard(d: any): DealerCardData {
     tags: d.tags ?? [],
     lastActivity: d.lastContact ?? d.lastVisit ?? 'Unknown',
     lastActivityDaysAgo: Math.min(d.lastContactDaysAgo ?? 999, d.lastVisitDaysAgo ?? 999),
-    callsMTD: mtd.inspections || 0,
-    visitsMTD: mtd.sis || 0,
-    leadsMTD: mtd.leads || 0,
-    sisMTD: mtd.sis || 0,
+    callsMTD: metrics.inspectionsMTD,
+    visitsMTD: metrics.sisMTD,
+    leadsMTD: metrics.leadsMTD,
+    sisMTD: metrics.sisMTD,
     productivityPct,
     hasLocation: !!d.latitude,
     distanceKm: undefined,
+    category: deriveDealerCategory(
+      d.status === 'active' && !!d.kamId,
+      !!d.isTopDealer
+    ),
   };
 }
 
@@ -143,10 +157,11 @@ export function DealersPage({
   const [activeFilter, setActiveFilter] = useState<QuickFilter>(
     initialFilter === 'Dormant' ? 'dormant' : 'all'
   );
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showContextBanner, setShowContextBanner] = useState(!!navigationContext);
-  const [summaryRange, setSummaryRange] = useState<SummaryRange>('mtd');
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(TimePeriod.MTD);
 
   // ── Data loading ──
   const [rawDealers, setRawDealers] = useState<any[]>([]);
@@ -155,27 +170,26 @@ export function DealersPage({
   }, []);
 
   const dealers: DealerCardData[] = useMemo(
-    () => rawDealers.map(mapDBDealerToCard),
-    [rawDealers]
+    () => rawDealers.map(d => mapDBDealerToCard(d, timePeriod)),
+    [rawDealers, timePeriod]
   );
 
-  // ── Summary metrics (NOT filtered by status chips) ──
+  // ── Summary metrics (from canonical data, NOT filtered by status chips) ──
+  // Tagged = static (all dealers), rest = timeframe-driven
   const summaryMetrics = useMemo(() => {
-    // Use all dealers for summary, regardless of active filter
-    const all = dealers;
-    // Adjust multiplier for Last 30 Days to simulate broader window
-    const mult = summaryRange === 'last-30' ? 1.2 : 1;
+    const canonical = computeDashboardMetrics({ period: timePeriod });
+    // Count distinct dealers that have at least 1 DCF lead in the period
+    const dcfLeads = getFilteredDCFLeads({ period: timePeriod });
+    const dcfLeadGivingDealers = new Set(dcfLeads.map(l => l.dealerId)).size;
 
-    const totalTagged = all.length;
-    const inspecting = all.filter(d => Math.round(d.leadsMTD * mult) > 0).length;
-    const transacting = all.filter(d => Math.round(d.sisMTD * mult) > 0).length;
-    const dcfOnboarded = all.filter(d => d.tags.includes('DCF Onboarded')).length;
-    const dcfLeadGiving = all.filter(d =>
-      d.tags.includes('DCF Onboarded') && Math.round(d.leadsMTD * mult) > 0
-    ).length;
-
-    return { totalTagged, inspecting, transacting, dcfOnboarded, dcfLeadGiving };
-  }, [dealers, summaryRange]);
+    return {
+      totalTagged: canonical.totalDealers, // static — not timeframe driven
+      inspecting: canonical.inspectingDealers,
+      transacting: canonical.transactingDealers,
+      dcfOnboarded: canonical.dcfOnboardedDealers, // static — tag-based
+      dcfLeadGiving: dcfLeadGivingDealers,
+    };
+  }, [timePeriod]);
 
   // ── Dormant count ──
   const dormantCount = useMemo(
@@ -195,7 +209,7 @@ export function DealersPage({
       );
     }
 
-    // Quick filter
+    // Quick filter (status)
     switch (activeFilter) {
       case 'active':
         result = result.filter(d => d.status === 'active' && (d.leadsMTD > 0 || d.sisMTD > 0));
@@ -208,6 +222,17 @@ export function DealersPage({
         break;
       default:
         break;
+    }
+
+    // Category filter
+    if (categoryFilter !== 'all') {
+      const catMap: Record<CategoryFilter, string> = {
+        all: '',
+        top: DealerCategory.TOP,
+        tagged: DealerCategory.TAGGED,
+        untagged: DealerCategory.UNTAGGED,
+      };
+      result = result.filter(d => d.category === catMap[categoryFilter]);
     }
 
     // Sort
@@ -227,9 +252,9 @@ export function DealersPage({
     });
 
     return result;
-  }, [dealers, searchTerm, activeFilter, sortKey]);
+  }, [dealers, searchTerm, activeFilter, categoryFilter, sortKey]);
 
-  const hasActiveFilters = activeFilter !== 'all' || searchTerm.length > 0;
+  const hasActiveFilters = activeFilter !== 'all' || categoryFilter !== 'all' || searchTerm.length > 0;
 
   // ── Handlers ──
   const handleDealerTap = (dealer: DealerCardData) => {
@@ -241,6 +266,7 @@ export function DealersPage({
   const clearAllFilters = () => {
     setSearchTerm('');
     setActiveFilter('all');
+    setCategoryFilter('all');
   };
 
   // ── DealerDetail sub-page ──
@@ -374,19 +400,21 @@ export function DealersPage({
 
       {/* ── Portfolio Summary Section ── */}
       <div className="mx-4 mt-3 space-y-2.5">
-        {/* Range toggle */}
+        {/* Time period selector */}
         <div className="flex items-center justify-between">
           <h2 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Portfolio</h2>
-          <div className="flex bg-slate-100 rounded-lg p-0.5">
+          <div className="flex gap-1 overflow-x-auto scrollbar-hide">
             {([
-              { key: 'mtd' as SummaryRange, label: 'MTD' },
-              { key: 'last-30' as SummaryRange, label: 'Last 30d' },
+              { key: TimePeriod.MTD, label: 'MTD' },
+              { key: TimePeriod.LAST_7D, label: '7D' },
+              { key: TimePeriod.LAST_30D, label: '30D' },
+              { key: TimePeriod.LAST_3M, label: '3M' },
             ]).map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => setSummaryRange(key)}
-                className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all duration-200
-                  ${summaryRange === key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}
+                onClick={() => setTimePeriod(key)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all duration-200
+                  ${timePeriod === key ? 'bg-slate-800 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:text-slate-700'}
                 `}
               >
                 {label}
@@ -473,12 +501,36 @@ export function DealersPage({
         </div>
       </div>
 
+      {/* ── Category Filter Chips ── */}
+      <div className="px-4 pb-1">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-1">
+          {CATEGORY_CHIPS.map((chip) => {
+            const isActive = categoryFilter === chip.key;
+            return (
+              <button
+                key={chip.key}
+                onClick={() => setCategoryFilter(isActive ? 'all' : chip.key)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all duration-150 flex-shrink-0
+                  ${isActive
+                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-200'
+                    : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'
+                  }
+                `}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* ── Filters Applied Bar ── */}
       {hasActiveFilters && (
         <div className="mx-4 mb-1 flex items-center justify-between px-3.5 py-2 bg-slate-100/70 rounded-xl">
           <span className="text-[11px] font-medium text-slate-500">
             {filteredDealers.length} result{filteredDealers.length !== 1 ? 's' : ''}
             {activeFilter !== 'all' && ` \u00b7 ${FILTER_CHIPS.find(c => c.key === activeFilter)?.label}`}
+            {categoryFilter !== 'all' && ` \u00b7 ${CATEGORY_CHIPS.find(c => c.key === categoryFilter)?.label}`}
             {searchTerm && ` \u00b7 "${searchTerm}"`}
           </span>
           <button

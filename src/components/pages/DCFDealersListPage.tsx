@@ -1,5 +1,9 @@
+import { useMemo } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import { getAllDealers } from '../../data/selectors';
+import { getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { TimePeriod } from '../../lib/domain/constants';
 
 interface DCFDealersListPageProps {
   onBack: () => void;
@@ -20,39 +24,34 @@ interface DealerRow {
 }
 
 export function DCFDealersListPage({ onBack, filterType, dateRange, onDealerClick }: DCFDealersListPageProps) {
-  // Mock dealer data based on filter type
-  const dealers: DealerRow[] = filterType === 'onboarded' 
-    ? [
-        { id: '1', name: 'Gupta Auto World', code: 'GGN-001', city: 'Gurugram', status: 'Active', mtdLeads: 12, mtdDisbursals: 5 },
-        { id: '2', name: 'Sharma Motors', code: 'GGN-002', city: 'Faridabad', status: 'Active', mtdLeads: 8, mtdDisbursals: 3 },
-        { id: '3', name: 'New City Autos', code: 'NDA-078', city: 'Noida', status: 'Active', mtdLeads: 10, mtdDisbursals: 4 },
-        { id: '4', name: 'Prime Auto Hub', code: 'FBD-012', city: 'Faridabad', status: 'Pending Docs', mtdLeads: 6, mtdDisbursals: 2 },
-        { id: '5', name: 'Delhi Car Bazaar', code: 'DLH-034', city: 'Delhi', status: 'Active', mtdLeads: 15, mtdDisbursals: 7 },
-        { id: '6', name: 'Royal Auto Sales', code: 'GGN-045', city: 'Gurugram', status: 'Active', mtdLeads: 11, mtdDisbursals: 6 },
-        { id: '7', name: 'Metro Motors', code: 'NDA-056', city: 'Noida', status: 'Active', mtdLeads: 9, mtdDisbursals: 4 },
-        { id: '8', name: 'Speed Auto Point', code: 'FBD-067', city: 'Faridabad', status: 'Active', mtdLeads: 7, mtdDisbursals: 3 },
-        { id: '9', name: 'City Cars Hub', code: 'DLH-089', city: 'Delhi', status: 'Pending Docs', mtdLeads: 5, mtdDisbursals: 1 },
-        { id: '10', name: 'Elite Auto World', code: 'GGN-098', city: 'Gurugram', status: 'Active', mtdLeads: 13, mtdDisbursals: 6 },
-        { id: '11', name: 'Trust Motors', code: 'NDA-101', city: 'Noida', status: 'Active', mtdLeads: 8, mtdDisbursals: 3 },
-        { id: '12', name: 'Highway Auto', code: 'FBD-112', city: 'Faridabad', status: 'Active', mtdLeads: 10, mtdDisbursals: 5 },
-        { id: '13', name: 'Star Auto Sales', code: 'DLH-123', city: 'Delhi', status: 'Active', mtdLeads: 12, mtdDisbursals: 4 },
-        { id: '14', name: 'Premium Car Point', code: 'GGN-134', city: 'Gurugram', status: 'Active', mtdLeads: 14, mtdDisbursals: 7 },
-        { id: '15', name: 'Super Auto Traders', code: 'NDA-145', city: 'Noida', status: 'Active', mtdLeads: 11, mtdDisbursals: 5 },
-      ]
-    : [
-        { id: '1', name: 'Gupta Auto World', code: 'GGN-001', city: 'Gurugram', status: 'Active', dcfLeads: 12 },
-        { id: '2', name: 'Sharma Motors', code: 'GGN-002', city: 'Faridabad', status: 'Active', dcfLeads: 8 },
-        { id: '3', name: 'New City Autos', code: 'NDA-078', city: 'Noida', status: 'Active', dcfLeads: 10 },
-        { id: '5', name: 'Delhi Car Bazaar', code: 'DLH-034', city: 'Delhi', status: 'Active', dcfLeads: 15 },
-        { id: '6', name: 'Royal Auto Sales', code: 'GGN-045', city: 'Gurugram', status: 'Active', dcfLeads: 11 },
-        { id: '7', name: 'Metro Motors', code: 'NDA-056', city: 'Noida', status: 'Active', dcfLeads: 9 },
-        { id: '8', name: 'Speed Auto Point', code: 'FBD-067', city: 'Faridabad', status: 'Active', dcfLeads: 7 },
-        { id: '10', name: 'Elite Auto World', code: 'GGN-098', city: 'Gurugram', status: 'Active', dcfLeads: 13 },
-        { id: '11', name: 'Trust Motors', code: 'NDA-101', city: 'Noida', status: 'Active', dcfLeads: 8 },
-        { id: '12', name: 'Highway Auto', code: 'FBD-112', city: 'Faridabad', status: 'Active', dcfLeads: 10 },
-        { id: '13', name: 'Star Auto Sales', code: 'DLH-123', city: 'Delhi', status: 'Active', dcfLeads: 12 },
-        { id: '14', name: 'Premium Car Point', code: 'GGN-134', city: 'Gurugram', status: 'Active', dcfLeads: 14 },
-      ];
+  // Derive dealer list from canonical time-filtered data
+  const dealers: DealerRow[] = useMemo(() => {
+    const period = (Object.values(TimePeriod).includes(dateRange as TimePeriod)
+      ? dateRange as TimePeriod
+      : TimePeriod.MTD);
+    const allDealers = getAllDealers();
+    const allDCFLeads = getFilteredDCFLeads({ period });
+
+    const rows: DealerRow[] = allDealers.map(d => {
+      const dcfLeads = allDCFLeads.filter(l => l.dealerId === d.id);
+      const disbursed = dcfLeads.filter(l => l.overallStatus === 'DISBURSED');
+      return {
+        id: d.id,
+        name: d.name,
+        code: d.code,
+        city: d.city,
+        status: d.status === 'active' ? 'Active' : d.status === 'dormant' ? 'Dormant' : 'Inactive',
+        dcfLeads: dcfLeads.length,
+        mtdLeads: dcfLeads.length,
+        mtdDisbursals: disbursed.length,
+      };
+    });
+
+    if (filterType === 'leadGiving') {
+      return rows.filter(d => (d.dcfLeads ?? 0) > 0);
+    }
+    return rows;
+  }, [filterType, dateRange]);
 
   const title = filterType === 'onboarded' ? 'DCF Onboarded Dealers' : 'DCF Lead Giving Dealers';
   const filterChips = filterType === 'onboarded'

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { ChevronDown, ChevronUp, Zap, TrendingUp } from 'lucide-react';
 
 interface InputScoreData {
   visits: number;
@@ -8,6 +8,7 @@ interface InputScoreData {
   targetConnects: number;
   avgInspectingDealers: number;
   targetInspectingDealers: number;
+  // Output-only metrics (no longer part of input score calculation)
   uniqueRaisePercent: number;
   targetUniqueRaise: number;
   raiseQuality: number;
@@ -28,10 +29,12 @@ interface InputScoreCardProps {
 export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputScoreCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // ── INPUT SCORE: 2 components × 50 pts each = 100 total ──
+
   const calculateVisitsConnectsScore = () => {
     const visitsRatio = Math.min(data.visits / data.targetVisits, 1);
     const callsRatio = Math.min(data.connects / data.targetConnects, 1);
-    return Math.max(visitsRatio, callsRatio) * 25;
+    return Math.max(visitsRatio, callsRatio) * 50;
   };
 
   const calculateProductivityScore = () => {
@@ -42,26 +45,32 @@ export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputSc
     const dcfThreshold = 15;
     const sisRatio = data.sis / siThreshold;
     const dcfRatio = data.dcfDisbursalsValue / dcfThreshold;
-    if (sisRatio >= 1 && dcfRatio >= 1) return 25;
+    if (sisRatio >= 1 && dcfRatio >= 1) return 50;
     const avgRatio = Math.min((sisRatio + dcfRatio) / 2, 1);
-    return avgRatio * 25;
+    return avgRatio * 50;
   };
 
-  const calculateInspectingDealersScore = () => Math.min(data.avgInspectingDealers / data.targetInspectingDealers, 1) * 25;
-  const calculateUniqueRaiseScore = () => Math.min(data.uniqueRaisePercent / data.targetUniqueRaise, 1) * 25;
+  const calculateInspectingDealersScore = () => Math.min(data.avgInspectingDealers / data.targetInspectingDealers, 1) * 50;
+
+  // Output-only metric scores (NOT part of input total, shown for visibility)
+  const calculateUniqueRaiseScore = () => Math.min(data.uniqueRaisePercent / data.targetUniqueRaise, 1) * 100;
   const calculateRaiseQualityScore = () => {
     const targetQuality = data.targetQualityRatio * data.hbtpValue;
-    if (data.raiseQuality <= targetQuality) return 25;
+    if (data.raiseQuality <= targetQuality) return 100;
     const qualityRatio = Math.min(targetQuality / data.raiseQuality, 1);
-    return qualityRatio * 25;
+    return qualityRatio * 100;
   };
 
   const firstComponentScore = mode === 'TL' ? calculateProductivityScore() : calculateVisitsConnectsScore();
   const inspectingDealersScore = calculateInspectingDealersScore();
-  const uniqueRaiseScore = calculateUniqueRaiseScore();
-  const raiseQualityScore = calculateRaiseQualityScore();
-  const totalScore = Math.round(firstComponentScore + inspectingDealersScore + uniqueRaiseScore + raiseQualityScore);
+
+  // Input score = 2 components only (Visits/Connects + Inspecting Dealers)
+  const totalScore = Math.round(firstComponentScore + inspectingDealersScore);
   const isOnTarget = totalScore >= targetScore;
+
+  // Output metrics (for display only, not part of input score)
+  const uniqueRaisePct = Math.round(calculateUniqueRaiseScore());
+  const raiseQualityPct = Math.round(calculateRaiseQualityScore());
 
   // Circular progress calculation
   const circumference = 2 * Math.PI * 36;
@@ -117,51 +126,57 @@ export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputSc
       {/* Expanded Breakdown */}
       {isExpanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-slate-100 pt-4 animate-fade-in">
+          {/* Input Score Components */}
           <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-            4 components • 25 pts each
+            Input Score • 2 components × 50 pts
           </div>
 
           {mode === 'TL' ? (
             <ComponentRow
               label="Productivity of KAMs"
               score={firstComponentScore}
-              maxScore={25}
+              maxScore={50}
               description={`${data.sis || 0} SIs (target ${data.sisTarget || 20}) • ₹${data.dcfDisbursalsValue || 0}L DCF`}
-              status={firstComponentScore >= 20 ? 'good' : firstComponentScore >= 15 ? 'warning' : 'poor'}
+              status={firstComponentScore >= 40 ? 'good' : firstComponentScore >= 30 ? 'warning' : 'poor'}
             />
           ) : (
             <ComponentRow
               label="Visits / Connects"
               score={firstComponentScore}
-              maxScore={25}
+              maxScore={50}
               description={`${data.visits} visits (${data.targetVisits}) • ${data.connects} connects (${data.targetConnects})`}
-              status={firstComponentScore >= 20 ? 'good' : firstComponentScore >= 15 ? 'warning' : 'poor'}
+              status={firstComponentScore >= 40 ? 'good' : firstComponentScore >= 30 ? 'warning' : 'poor'}
             />
           )}
 
           <ComponentRow
             label="Inspecting Dealers"
             score={inspectingDealersScore}
-            maxScore={25}
+            maxScore={50}
             description={`Avg ${data.avgInspectingDealers.toFixed(1)}/day (target ${data.targetInspectingDealers})`}
-            status={inspectingDealersScore >= 20 ? 'good' : inspectingDealersScore >= 15 ? 'warning' : 'poor'}
+            status={inspectingDealersScore >= 40 ? 'good' : inspectingDealersScore >= 30 ? 'warning' : 'poor'}
           />
 
-          <ComponentRow
-            label="Unique Raise %"
-            score={uniqueRaiseScore}
-            maxScore={25}
-            description={`${data.uniqueRaisePercent}% (target ${data.targetUniqueRaise}%)`}
-            status={uniqueRaiseScore >= 20 ? 'good' : uniqueRaiseScore >= 15 ? 'warning' : 'poor'}
-          />
+          {/* Output / Bottom-of-Funnel Metrics (not part of input score) */}
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-3">
+              <TrendingUp className="w-3 h-3" />
+              Output Metrics
+            </div>
 
-          <ComponentRow
-            label="Raise Quality vs HBTP"
-            score={raiseQualityScore}
-            maxScore={25}
-            description={`Quality ${data.raiseQuality.toFixed(2)} (target \u2264 ${(data.targetQualityRatio * data.hbtpValue).toFixed(2)})`}
-            status={raiseQualityScore >= 20 ? 'good' : raiseQualityScore >= 15 ? 'warning' : 'poor'}
-          />
+            <OutputMetricRow
+              label="Unique Raise %"
+              value={`${data.uniqueRaisePercent}%`}
+              target={`${data.targetUniqueRaise}%`}
+              pct={uniqueRaisePct}
+            />
+            <OutputMetricRow
+              label="Raise Quality vs HBTP"
+              value={data.raiseQuality.toFixed(2)}
+              target={`≤ ${(data.targetQualityRatio * data.hbtpValue).toFixed(2)}`}
+              pct={raiseQualityPct}
+            />
+          </div>
 
           {!isOnTarget && (
             <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
@@ -169,25 +184,22 @@ export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputSc
                 <Zap className="w-3 h-3" /> Quick Wins
               </div>
               <div className="text-[11px] text-indigo-600 space-y-1 leading-relaxed">
-                {firstComponentScore < 20 && mode === 'TL' && (
+                {firstComponentScore < 40 && mode === 'TL' && (
                   <div>
                     • {(data.sis || 0) < (data.sisTarget || 20)
                       ? `+${((data.sisTarget || 20) - (data.sis || 0)).toFixed(0)} SIs`
                       : `+₹${((data.dcfDisbursalsTarget || 15) - (data.dcfDisbursalsValue || 0)).toFixed(0)}L DCF`}
                   </div>
                 )}
-                {firstComponentScore < 20 && mode === 'KAM' && (
+                {firstComponentScore < 40 && mode === 'KAM' && (
                   <div>
                     • {data.visits < data.targetVisits
                       ? `+${(data.targetVisits - data.visits).toFixed(0)} visits/day`
                       : `+${(data.targetConnects - data.connects).toFixed(0)} connects/day`}
                   </div>
                 )}
-                {inspectingDealersScore < 20 && (
+                {inspectingDealersScore < 40 && (
                   <div>• +{(data.targetInspectingDealers - data.avgInspectingDealers).toFixed(1)} inspecting dealers/day</div>
-                )}
-                {uniqueRaiseScore < 20 && (
-                  <div>• +{(data.targetUniqueRaise - data.uniqueRaisePercent).toFixed(0)}% unique raise</div>
                 )}
               </div>
             </div>
@@ -223,6 +235,30 @@ function ComponentRow({
         />
       </div>
       <div className="text-[11px] text-slate-400">{description}</div>
+    </div>
+  );
+}
+
+function OutputMetricRow({
+  label, value, target, pct
+}: {
+  label: string; value: string; target: string; pct: number;
+}) {
+  const color = pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-rose-600';
+  const barColor = pct >= 80 ? 'bg-emerald-400' : pct >= 50 ? 'bg-amber-400' : 'bg-rose-400';
+
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <div className="flex-1 min-w-0">
+        <div className="text-[12px] text-slate-600">{label}</div>
+        <div className="flex items-center gap-2 mt-0.5">
+          <div className="w-16 bg-slate-100 rounded-full h-1 overflow-hidden">
+            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+          </div>
+          <span className="text-[11px] text-slate-400">{value} / {target}</span>
+        </div>
+      </div>
+      <span className={`text-[12px] font-semibold ${color}`}>{pct}%</span>
     </div>
   );
 }

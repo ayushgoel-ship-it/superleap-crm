@@ -22,25 +22,13 @@ interface AdminCommonFiltersProps {
   scope: FilterScope;
 }
 
-// Time options for Admin (leader view)
-const ADMIN_TIME_OPTIONS = [
-  TimePeriod.MTD,
-  TimePeriod.LMTD,
-  TimePeriod.LAST_MONTH,
-  TimePeriod.LAST_7D,
-  TimePeriod.LAST_30D,
-  TimePeriod.D_MINUS_1,
-] as const;
+import { CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 
-// Short labels for time periods
-const TIME_LABELS: Record<string, string> = {
-  [TimePeriod.MTD]: 'MTD',
-  [TimePeriod.LMTD]: 'LMTD',
-  [TimePeriod.LAST_MONTH]: 'LM',
-  [TimePeriod.LAST_7D]: 'L7D',
-  [TimePeriod.LAST_30D]: 'L30D',
-  [TimePeriod.D_MINUS_1]: 'D-1',
-};
+// Use canonical time options (excluding Custom for admin dropdown)
+const ADMIN_TIME_OPTIONS = CANONICAL_TIME_OPTIONS.filter(k => k !== TimePeriod.CUSTOM);
+
+// Labels
+const TIME_LABELS = CANONICAL_TIME_LABELS;
 
 export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
   const { state, setFilter, resetFilters } = useFilterScope(scope);

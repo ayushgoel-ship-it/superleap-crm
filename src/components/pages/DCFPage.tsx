@@ -37,6 +37,8 @@ import { FilterChip } from '../premium/Chip';
 import { EmptyState } from '../premium/EmptyState';
 import { CardSkeleton } from '../premium/SkeletonLoader';
 import { toast } from 'sonner';
+import { computeDashboardMetrics, getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { getAllDealers } from '../../data/selectors';
 
 // ── Types ──
 
@@ -54,56 +56,43 @@ interface DCFPageProps {
 }
 
 import { TimePeriod } from '../../lib/domain/constants';
-import { DCF_TIME_OPTIONS } from '../filters/TimeFilterControl';
+import { CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 
 type StatusFilter = 'All' | 'Onboarded' | 'Not Onboarded';
 
-// ── Mock Data (preserves existing data shape) ──
+// ── Derive DCF dealer data from canonical sources ──
 
-const DCF_DEALERS_DATA: DCFDealerData[] = [
-  {
-    id: '1', name: 'Gupta Auto World', code: 'GGN-001',
-    isOnboarded: true, onboardingStatus: 'Active',
-    currentStep: 'onboarded', completedSteps: ['form_filled', 'docs_cibil', 'inspection', 'finance_approval', 'onboarded'],
-    dcfLeads: 12, dcfLeadsTarget: 20, approvals: 8, approvalsTarget: 12, disbursals: 5, disbursalsTarget: 8,
-  },
-  {
-    id: '2', name: 'Sharma Motors', code: 'GGN-002',
-    isOnboarded: true, onboardingStatus: 'Active',
-    currentStep: 'onboarded', completedSteps: ['form_filled', 'docs_cibil', 'inspection', 'finance_approval', 'onboarded'],
-    dcfLeads: 8, dcfLeadsTarget: 15, approvals: 6, approvalsTarget: 10, disbursals: 3, disbursalsTarget: 6,
-  },
-  {
-    id: '3', name: 'New City Autos', code: 'NDA-078',
-    isOnboarded: true, onboardingStatus: 'Active',
-    currentStep: 'onboarded', completedSteps: ['form_filled', 'docs_cibil', 'inspection', 'finance_approval', 'onboarded'],
-    dcfLeads: 10, dcfLeadsTarget: 18, approvals: 7, approvalsTarget: 11, disbursals: 4, disbursalsTarget: 7,
-  },
-  {
-    id: '4', name: 'Prime Auto Hub', code: 'FBD-012',
-    isOnboarded: false, onboardingStatus: 'Pending Docs',
-    currentStep: 'docs_cibil', completedSteps: ['form_filled'],
-    dcfLeads: 0, dcfLeadsTarget: 20, approvals: 0, approvalsTarget: 12, disbursals: 0, disbursalsTarget: 8,
-  },
-  {
-    id: '5', name: 'Royal Car Trading', code: 'DEL-045',
-    isOnboarded: true, onboardingStatus: 'Active',
-    currentStep: 'onboarded', completedSteps: ['form_filled', 'docs_cibil', 'inspection', 'finance_approval', 'onboarded'],
-    dcfLeads: 15, dcfLeadsTarget: 22, approvals: 11, approvalsTarget: 16, disbursals: 7, disbursalsTarget: 10,
-  },
-  {
-    id: '6', name: 'Metro Motors', code: 'GGN-089',
-    isOnboarded: false, onboardingStatus: 'Inspection Pending',
-    currentStep: 'inspection', completedSteps: ['form_filled', 'docs_cibil'],
-    dcfLeads: 0, dcfLeadsTarget: 18, approvals: 0, approvalsTarget: 11, disbursals: 0, disbursalsTarget: 7,
-  },
-  {
-    id: '7', name: 'Elite Automobiles', code: 'FBD-156',
-    isOnboarded: false, onboardingStatus: 'Finance Review',
-    currentStep: 'finance_approval', completedSteps: ['form_filled', 'docs_cibil', 'inspection'],
-    dcfLeads: 0, dcfLeadsTarget: 15, approvals: 0, approvalsTarget: 10, disbursals: 0, disbursalsTarget: 6,
-  },
-];
+function buildDCFDealerData(timeScope: TimePeriod): DCFDealerData[] {
+  const allDealers = getAllDealers();
+  const dcfLeads = getFilteredDCFLeads({ period: timeScope });
+
+  return allDealers.map(d => {
+    const dealerDCFLeads = dcfLeads.filter(l => l.dealerId === d.id);
+    const isOnboarded = (d.tags || []).includes('DCF Onboarded');
+    const approvals = dealerDCFLeads.filter(l =>
+      !['REJECTED', 'DELAYED'].includes(l.overallStatus.toUpperCase())
+    ).length;
+    const disbursals = dealerDCFLeads.filter(l => l.overallStatus === 'DISBURSED').length;
+
+    return {
+      id: d.id,
+      name: d.name,
+      code: d.code,
+      isOnboarded,
+      onboardingStatus: isOnboarded ? 'Active' : 'Not Onboarded',
+      currentStep: (isOnboarded ? 'onboarded' : 'form_filled') as OnboardingStep,
+      completedSteps: isOnboarded
+        ? ['form_filled', 'docs_cibil', 'inspection', 'finance_approval', 'onboarded'] as OnboardingStep[]
+        : ['form_filled'] as OnboardingStep[],
+      dcfLeads: dealerDCFLeads.length,
+      dcfLeadsTarget: 20,
+      approvals,
+      approvalsTarget: 12,
+      disbursals,
+      disbursalsTarget: 8,
+    };
+  });
+}
 
 // ── Component ──
 
@@ -156,40 +145,43 @@ export function DCFPage({
     setTimeout(() => setIsLoading(false), 200);
   };
 
-  // ── Computed metrics ──
+  // ── Computed metrics (canonical) ──
 
-  const dealers = DCF_DEALERS_DATA;
+  const dealers = useMemo(() => buildDCFDealerData(timeScope), [timeScope]);
   const onboarded = useMemo(() => dealers.filter(d => d.isOnboarded), [dealers]);
   const notOnboarded = useMemo(() => dealers.filter(d => !d.isOnboarded), [dealers]);
   const leadGiving = useMemo(() => onboarded.filter(d => d.dcfLeads > 0), [onboarded]);
-
-  const totalLeads = useMemo(() => onboarded.reduce((s, d) => s + d.dcfLeads, 0), [onboarded]);
-  const totalDisbursals = useMemo(() => onboarded.reduce((s, d) => s + d.disbursals, 0), [onboarded]);
   const zeroDisbursals = useMemo(() => onboarded.filter(d => d.disbursals === 0), [onboarded]);
   const nearComplete = useMemo(
     () => notOnboarded.filter(d => d.completedSteps.length >= 3),
     [notOnboarded]
   );
 
-  // ── KPI values ──
+  // Canonical metrics for KPI cards
+  const canonicalMetrics = useMemo(
+    () => computeDashboardMetrics({ period: timeScope }),
+    [timeScope]
+  );
+
+  // ── KPI values (driven by canonical data) ──
   const kpis = useMemo(() => ({
-    onboardedValue: `${onboarded.length}`,
+    onboardedValue: `${canonicalMetrics.dcfOnboarded}`,
     onboardedTarget: '20',
-    onboardedPct: (onboarded.length / 20) * 100,
+    onboardedPct: (canonicalMetrics.dcfOnboarded / 20) * 100,
 
     leadGivingValue: `${leadGiving.length}`,
     leadGivingTarget: `${onboarded.length}`,
     leadGivingPct: onboarded.length > 0 ? (leadGiving.length / onboarded.length) * 100 : 0,
 
-    leadsValue: `${totalLeads}`,
+    leadsValue: `${canonicalMetrics.dcfTotal}`,
     leadsTarget: '60',
-    leadsPct: (totalLeads / 60) * 100,
+    leadsPct: (canonicalMetrics.dcfTotal / 60) * 100,
 
-    disbursalValue: '\u20B942.5L',
+    disbursalValue: `\u20B9${canonicalMetrics.dcfDisbursedValue.toFixed(1)}L`,
     disbursalTarget: '\u20B960L',
-    disbursalPct: (42.5 / 60) * 100,
-    disbursalLoans: `${totalDisbursals}`,
-  }), [onboarded, leadGiving, totalLeads, totalDisbursals]);
+    disbursalPct: (canonicalMetrics.dcfDisbursedValue / 60) * 100,
+    disbursalLoans: `${canonicalMetrics.dcfDisbursals}`,
+  }), [canonicalMetrics, onboarded, leadGiving]);
 
   // ── Insights ──
 
@@ -293,14 +285,9 @@ export function DCFPage({
           </div>
         </div>
 
-        {/* Time scope segmented control */}
+        {/* Time scope — canonical options */}
         <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
-          {([
-            { key: TimePeriod.MTD, label: 'MTD' },
-            { key: TimePeriod.LAST_7D, label: '7 Days' },
-            { key: TimePeriod.LAST_30D, label: '30 Days' },
-            { key: TimePeriod.QTD, label: 'QTD' },
-          ]).map(({ key, label }) => (
+          {CANONICAL_TIME_OPTIONS.filter(k => k !== TimePeriod.CUSTOM).map((key) => (
             <button
               key={key}
               onClick={() => handleTimeScopeChange(key)}
@@ -311,7 +298,7 @@ export function DCFPage({
                 }
               `}
             >
-              {label}
+              {CANONICAL_TIME_LABELS[key] || key}
             </button>
           ))}
         </div>

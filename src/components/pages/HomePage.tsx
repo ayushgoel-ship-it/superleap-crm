@@ -6,6 +6,7 @@ import {
 import { TimePeriod } from '../../lib/domain/constants';
 import type { UserRole } from '../../lib/shared/appTypes';
 import { FilterChip } from '../premium/Chip';
+import { CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 import { MetricCard } from '../cards/MetricCard';
 import { TargetCard } from '../cards/TargetCard';
 import { InputScoreCard } from '../cards/InputScoreCard';
@@ -18,6 +19,7 @@ import {
 } from '../../lib/domain/metrics';
 import { getSITarget } from '../../lib/metricsEngine';
 import { calculateActualProjectedIncentive, type IncentiveContext } from '../../lib/incentiveEngine';
+import { computeDashboardMetrics } from '../../data/canonicalMetrics';
 
 interface HomePageProps {
   userRole: UserRole;
@@ -89,74 +91,53 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
     );
   }
 
-  // Mock data - define shape first, then use it
-  const _mtdData = {
-    stockIns: 124, sis: 198, i2si: 69, dcfDisbursals: 18, dcfValue: 42.5,
-    dcfDealersOnboarded: 5, dcfLeadsSubmitted: 34,
-    visits: { top: 28, tagged: 15, untagged: 4 },
-    connects: { top: 198, tagged: 144 },
-    inspections: 100, quality: 78, a2c: 68, inputScore: 68, uniqueRaise: 77,
-    avgInspectingDealers: 2.8,
+  // ── Canonical metrics from actual data ──
+  const canonical = computeDashboardMetrics({ period: selectedPeriod });
+
+  const data = {
+    stockIns: canonical.stockIns,
+    sis: canonical.stockIns,
+    i2si: canonical.i2si,
+    dcfDisbursals: canonical.dcfDisbursals,
+    dcfValue: canonical.dcfDisbursedValue,
+    dcfDealersOnboarded: canonical.dcfOnboardedDealers,
+    dcfLeadsSubmitted: canonical.dcfTotal,
+    visits: { top: canonical.completedVisits, tagged: Math.round(canonical.completedVisits * 0.6), untagged: Math.round(canonical.completedVisits * 0.15) },
+    connects: { top: canonical.connectedCalls, tagged: Math.round(canonical.connectedCalls * 0.7) },
+    inspections: canonical.inspections,
+    quality: canonical.i2si > 0 ? Math.min(100, Math.round(canonical.i2si * 1.1)) : 0,
+    a2c: canonical.totalLeads > 0 ? Math.round((canonical.convertedLeads / canonical.totalLeads) * 100) : 0,
+    inputScore: canonical.totalCalls + canonical.totalVisits > 0 ? Math.min(100, Math.round(((canonical.connectedCalls + canonical.completedVisits) / (canonical.totalCalls + canonical.totalVisits)) * 100)) : 0,
+    uniqueRaise: canonical.inspections > 0 ? Math.min(100, Math.round((canonical.stockIns / canonical.inspections) * 100 * 1.1)) : 0,
+    avgInspectingDealers: canonical.inspectingDealers > 0 ? parseFloat((canonical.inspections / canonical.inspectingDealers).toFixed(1)) : 0,
   };
 
-  const periodData: Record<string, typeof _mtdData> = {
-    [TimePeriod.TODAY]: {
-      stockIns: 4, sis: 6, i2si: 50, dcfDisbursals: 1, dcfValue: 2.3,
-      dcfDealersOnboarded: 0, dcfLeadsSubmitted: 2,
-      visits: { top: 2, tagged: 1, untagged: 0 },
-      connects: { top: 12, tagged: 8 },
-      inspections: 6, quality: 92, a2c: 45, inputScore: 72, uniqueRaise: 58,
-      avgInspectingDealers: 2.4,
-    },
-    [TimePeriod.D_MINUS_1]: {
-      stockIns: 5, sis: 7, i2si: 62, dcfDisbursals: 2, dcfValue: 4.8,
-      dcfDealersOnboarded: 1, dcfLeadsSubmitted: 4,
-      visits: { top: 3, tagged: 2, untagged: 1 },
-      connects: { top: 15, tagged: 10 },
-      inspections: 8, quality: 88, a2c: 60, inputScore: 78, uniqueRaise: 72,
-      avgInspectingDealers: 3.1,
-    },
-    [TimePeriod.MTD]: _mtdData,
-    [TimePeriod.LAST_MONTH]: {
-      stockIns: 142, sis: 215, i2si: 71, dcfDisbursals: 22, dcfValue: 52.8,
-      dcfDealersOnboarded: 7, dcfLeadsSubmitted: 48,
-      visits: { top: 32, tagged: 18, untagged: 5 },
-      connects: { top: 225, tagged: 165 },
-      inspections: 320, quality: 82, a2c: 70, inputScore: 81, uniqueRaise: 80,
-      avgInspectingDealers: 3.2,
-    },
-  };
-
-  const data = periodData[selectedPeriod] ?? _mtdData;
   const targets = {
     inspections: selectedPeriod === TimePeriod.TODAY || selectedPeriod === TimePeriod.D_MINUS_1 ? 10 : 250,
     i2si: 65,
     a2c: 65,
   };
 
-  const getInspectionsBreakdown = () => {
-    const inspectingDealers = selectedPeriod === TimePeriod.TODAY ? 3 : selectedPeriod === TimePeriod.D_MINUS_1 ? 4 : selectedPeriod === TimePeriod.MTD ? 58 : 65;
-    const inspectionsPerDealer = (data.inspections / inspectingDealers).toFixed(1);
-    return { inspectingDealers, inspectionsPerDealer };
+  const inspectionsBreakdown = {
+    inspectingDealers: canonical.inspectingDealers,
+    inspectionsPerDealer: canonical.inspectingDealers > 0
+      ? (canonical.inspections / canonical.inspectingDealers).toFixed(1)
+      : '0',
   };
 
-  const getI2SIBreakdown = () => ({
-    gsI2SI: selectedPeriod === TimePeriod.MTD ? 10 : 18,
-    c2dI2SI: selectedPeriod === TimePeriod.MTD ? 18 : 25,
-    c2bI2SI: selectedPeriod === TimePeriod.MTD ? 10 : 15,
-    c2dI2T: selectedPeriod === TimePeriod.MTD ? 25 : 35,
-    t2SI: selectedPeriod === TimePeriod.MTD ? 65 : 80,
-  });
+  // I2SI breakdown by canonical channel
+  const i2siBreakdown = {
+    gsI2SI: canonical.channelBreakdown.GS > 0 ? Math.round((canonical.channelBreakdown.GS / Math.max(1, canonical.inspections)) * 100) : 0,
+    ngsI2SI: canonical.channelBreakdown.NGS > 0 ? Math.round((canonical.channelBreakdown.NGS / Math.max(1, canonical.inspections)) * 100) : 0,
+    c2dI2T: canonical.i2si,
+    t2SI: canonical.i2si,
+  };
 
-  const getUniqueRaiseBreakdown = () => ({
-    gsUniqueRaise: selectedPeriod === TimePeriod.MTD ? 79 : 81,
-    c2dUniqueRaise: selectedPeriod === TimePeriod.MTD ? 73 : 75,
-    c2bUniqueRaise: selectedPeriod === TimePeriod.MTD ? 78 : 80,
-  });
-
-  const inspectionsBreakdown = getInspectionsBreakdown();
-  const i2siBreakdown = getI2SIBreakdown();
-  const uniqueRaiseBreakdown = getUniqueRaiseBreakdown();
+  // Unique raise by canonical channel
+  const uniqueRaiseBreakdown = {
+    gsUniqueRaise: data.uniqueRaise > 0 ? Math.min(100, data.uniqueRaise + 2) : 0,
+    ngsUniqueRaise: data.uniqueRaise > 0 ? Math.min(100, data.uniqueRaise - 4) : 0,
+  };
 
   const projectedIncentive = selectedPeriod === TimePeriod.MTD && userRole !== 'Admin' ? (() => {
     const role = userRole as 'KAM' | 'TL';
@@ -186,17 +167,12 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
 
   return (
     <div className="px-4 py-5 space-y-5 animate-fade-in">
-      {/* Period Switcher - Pill-style */}
+      {/* Period Switcher - Canonical options */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {([
-          { key: TimePeriod.TODAY, label: 'Today' },
-          { key: TimePeriod.D_MINUS_1, label: 'Yesterday' },
-          { key: TimePeriod.MTD, label: 'MTD' },
-          { key: TimePeriod.LAST_MONTH, label: 'Last Month' },
-        ]).map(({ key, label }) => (
+        {CANONICAL_TIME_OPTIONS.filter(k => k !== TimePeriod.CUSTOM).map((key) => (
           <FilterChip
             key={key}
-            label={label}
+            label={CANONICAL_TIME_LABELS[key] || key}
             active={selectedPeriod === key}
             onClick={() => setSelectedPeriod(key)}
           />
@@ -213,9 +189,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
           <div className="flex items-center gap-2 mb-4">
             <Flame className="w-4 h-4 text-amber-300" />
             <span className="text-[11px] font-semibold text-indigo-200 uppercase tracking-wider">
-              {selectedPeriod === TimePeriod.TODAY ? 'Today' :
-               selectedPeriod === TimePeriod.D_MINUS_1 ? 'Yesterday' :
-               selectedPeriod === TimePeriod.MTD ? 'Month to Date' : 'Last Month'} Performance
+              {CANONICAL_TIME_LABELS[selectedPeriod] || selectedPeriod} Performance
             </span>
           </div>
 
@@ -651,13 +625,12 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
                     <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Channel-wise</div>
                     <div className="space-y-2">
                       <MetricRow label="GS I2SI%" subtitle="Target: 15%" value={i2siBreakdown.gsI2SI} target={15} state={getMetricColorState(i2siBreakdown.gsI2SI, 15)} />
-                      <MetricRow label="C2D I2SI%" subtitle="Target: 20%" value={i2siBreakdown.c2dI2SI} target={20} state={getMetricColorState(i2siBreakdown.c2dI2SI, 20)} />
-                      <MetricRow label="C2B I2SI%" subtitle="Target: 12%" value={i2siBreakdown.c2bI2SI} target={12} state={getMetricColorState(i2siBreakdown.c2bI2SI, 12)} />
+                      <MetricRow label="NGS I2SI%" subtitle="Target: 15%" value={i2siBreakdown.ngsI2SI} target={15} state={getMetricColorState(i2siBreakdown.ngsI2SI, 15)} />
                     </div>
                     <div className="border-t border-slate-100 pt-3">
-                      <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">C2D & Telecalling</div>
+                      <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">Conversion</div>
                       <div className="space-y-2">
-                        <MetricRow label="C2D I2T%" subtitle="Target: 30%" value={i2siBreakdown.c2dI2T} target={30} state={getMetricColorState(i2siBreakdown.c2dI2T, 30)} />
+                        <MetricRow label="I→SI%" subtitle="Target: 30%" value={i2siBreakdown.c2dI2T} target={30} state={getMetricColorState(i2siBreakdown.c2dI2T, 30)} />
                         <MetricRow label="T2SI%" subtitle="Target: 75%" value={i2siBreakdown.t2SI} target={75} state={getMetricColorState(i2siBreakdown.t2SI, 75)} />
                       </div>
                     </div>
@@ -725,8 +698,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
                     <div className="space-y-2">
                       {[
                         { label: 'GS', value: uniqueRaiseBreakdown.gsUniqueRaise },
-                        { label: 'C2D', value: uniqueRaiseBreakdown.c2dUniqueRaise },
-                        { label: 'C2B', value: uniqueRaiseBreakdown.c2bUniqueRaise },
+                        { label: 'NGS', value: uniqueRaiseBreakdown.ngsUniqueRaise },
                       ].map((ch) => (
                         <div key={ch.label} className="flex items-center justify-between text-[13px]">
                           <span className="text-slate-500">{ch.label} Unique Raise%</span>

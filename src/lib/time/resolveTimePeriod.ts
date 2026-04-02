@@ -99,6 +99,11 @@ export function resolveTimePeriodToRange(
     case TimePeriod.QTD:
       return { fromISO: toISO(firstOfQuarter(today)), toISO: toISO(tomorrow) };
 
+    case TimePeriod.LAST_3M: {
+      const from = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+      return { fromISO: toISO(from), toISO: toISO(tomorrow) };
+    }
+
     case TimePeriod.LAST_6M: {
       const from = new Date(today.getFullYear(), today.getMonth() - 6, 1);
       return { fromISO: toISO(from), toISO: toISO(tomorrow) };
@@ -156,6 +161,7 @@ export const TIME_PERIOD_LABELS: Record<TimePeriod, string> = {
   [TimePeriod.LAST_MONTH]: 'Last Month',
   [TimePeriod.LAST_7D]: 'Last 7D',
   [TimePeriod.LAST_30D]: 'Last 30D',
+  [TimePeriod.LAST_3M]: 'Last 3M',
   [TimePeriod.LAST_6M]: 'Last 6M',
   [TimePeriod.LIFETIME]: 'Lifetime',
   [TimePeriod.QTD]: 'QTD',
@@ -181,6 +187,7 @@ const TIME_MULTIPLIERS: Partial<Record<TimePeriod, number>> = {
   [TimePeriod.TODAY]: 0.065,
   [TimePeriod.LAST_7D]: 0.45,
   [TimePeriod.LAST_30D]: 1.0,
+  [TimePeriod.LAST_3M]: 3.0,
   [TimePeriod.QTD]: 2.8,
   [TimePeriod.LAST_6M]: 6.0,
   [TimePeriod.LIFETIME]: 12.0,

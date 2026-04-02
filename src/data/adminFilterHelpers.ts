@@ -166,7 +166,7 @@ export const ADMIN_LEAD_DATA: AdminLeadItem[] = [
 export interface AdminLeadFilters {
   regions: Region[];
   tlId: string;
-  channel: string; // 'all' | 'C2B' | 'C2D' | 'GS' | 'DCF'
+  channel: string; // 'all' | 'NGS' | 'GS' | 'DCF'
   type: 'all' | 'seller' | 'inventory';
 }
 
@@ -174,7 +174,11 @@ export function filterAdminLeads(filters: AdminLeadFilters): AdminLeadItem[] {
   return ADMIN_LEAD_DATA.filter(l => {
     if (filters.regions.length > 0 && !filters.regions.includes(l.region)) return false;
     if (filters.tlId && l.tlId !== filters.tlId) return false;
-    if (filters.channel !== 'all' && l.channel !== filters.channel) return false;
+    if (filters.channel !== 'all') {
+      // Map raw channel to canonical for comparison
+      const canonical = (l.channel === 'C2B' || l.channel === 'C2D') ? 'NGS' : l.channel;
+      if (canonical !== filters.channel) return false;
+    }
     if (filters.type !== 'all' && l.type !== filters.type) return false;
     return true;
   });

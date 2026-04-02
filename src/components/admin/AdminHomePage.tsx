@@ -307,10 +307,10 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
               delay={50}
             />
             <PremiumMetricCard
-              title="C2D"
+              title="NGS"
               value={formatPct(metrics.c2d)}
               trend={trends.c2d}
-              accentColor="violet"
+              accentColor="blue"
               delay={100}
             />
             <PremiumMetricCard
