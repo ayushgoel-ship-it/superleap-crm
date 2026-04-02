@@ -162,6 +162,8 @@ export function DealersPage({
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showContextBanner, setShowContextBanner] = useState(!!navigationContext);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState<string | undefined>();
+  const [customTo, setCustomTo] = useState<string | undefined>();
 
   // ── Data loading ──
   const [rawDealers, setRawDealers] = useState<any[]>([]);
@@ -177,9 +179,10 @@ export function DealersPage({
   // ── Summary metrics (from canonical data, NOT filtered by status chips) ──
   // Tagged = static (all dealers), rest = timeframe-driven
   const summaryMetrics = useMemo(() => {
-    const canonical = computeDashboardMetrics({ period: timePeriod });
+    const filters = { period: timePeriod, customFrom, customTo };
+    const canonical = computeDashboardMetrics(filters);
     // Count distinct dealers that have at least 1 DCF lead in the period
-    const dcfLeads = getFilteredDCFLeads({ period: timePeriod });
+    const dcfLeads = getFilteredDCFLeads(filters);
     const dcfLeadGivingDealers = new Set(dcfLeads.map(l => l.dealerId)).size;
 
     return {
@@ -189,7 +192,7 @@ export function DealersPage({
       dcfOnboarded: canonical.dcfOnboardedDealers, // static — tag-based
       dcfLeadGiving: dcfLeadGivingDealers,
     };
-  }, [timePeriod]);
+  }, [timePeriod, customFrom, customTo]);
 
   // ── Dormant count ──
   const dormantCount = useMemo(

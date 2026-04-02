@@ -30,6 +30,8 @@ interface HomePageProps {
 export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivity }: HomePageProps) {
   const [showSimulator, setShowSimulator] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState<string | undefined>();
+  const [customTo, setCustomTo] = useState<string | undefined>();
   const [selectedKAM, setSelectedKAM] = useState<{ name: string, city: string } | null>(null);
   const [showInspectingDealersDetail, setShowInspectingDealersDetail] = useState(false);
   const [expandedInspections, setExpandedInspections] = useState(false);
@@ -92,7 +94,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
   }
 
   // ── Canonical metrics from actual data ──
-  const canonical = computeDashboardMetrics({ period: selectedPeriod });
+  const canonical = computeDashboardMetrics({ period: selectedPeriod, customFrom, customTo });
 
   const data = {
     stockIns: canonical.stockIns,

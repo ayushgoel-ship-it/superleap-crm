@@ -141,16 +141,77 @@ export function getFilteredVisits(filters: MetricFilters): VisitLog[] {
   return visits;
 }
 
-// ── Stage classification ──
+// ── Centralized Stage Classification ──
+// SINGLE SOURCE OF TRUTH for all lead stage logic.
+// Every module (Home, Leads, Dealers, DCF) must use these functions.
 
-function isStockIn(stage: string): boolean {
+/**
+ * Canonical lead stage buckets for GS/NGS.
+ * Rules:
+ *   1. Stock-in done → Stockin
+ *   2. PR done + no stock-in → BBNP
+ *   3. Inspection done + no PR → In Nego
+ *   4. Has inspection scheduled but not done → Insp Pending
+ *   5. No movement in 60 days → Lead Dropped (checked via createdAt)
+ *   6. Default → New/PR
+ */
+export type CanonicalStage = 'Stockin' | 'BBNP' | 'In Nego' | 'Insp Pending' | 'Lead Dropped' | 'New/PR' | 'Lost' | 'Payout Done';
+
+export function classifyLeadStage(stage: string, createdAt?: string): CanonicalStage {
   const s = stage.toLowerCase();
-  return s.includes('stock-in') || s.includes('stockin') || s === 'bought' || s === 'bbnp';
+
+  // Terminal: Lost
+  if (s === 'lost') return 'Lead Dropped';
+
+  // Stock-in / Payout
+  if (s.includes('stock-in') || s.includes('stockin') || s.includes('stock_in')) return 'Stockin';
+  if (s.includes('payout')) return 'Payout Done';
+
+  // BBNP = bought but not picked up / PR punched / token
+  if (s === 'bbnp' || s === 'bought' || s.includes('token') || s.includes('pr punched') || s.includes('pr_punched')) return 'BBNP';
+
+  // Inspection completed = In Nego
+  if (s.includes('inspection done') || s.includes('inspection_completed') || s.includes('ocb') || s.includes('nego') || s.includes('hb discovered')) return 'In Nego';
+
+  // Inspection scheduled but not done = Insp Pending
+  if (s.includes('inspection') || s.includes('pll') || s.includes('in progress') || s.includes('in_progress') || s.includes('3ca')) return 'Insp Pending';
+
+  // Check 60-day no-movement rule
+  if (createdAt) {
+    const daysSince = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
+    if (daysSince > 60 && (s.includes('lead created') || s.includes('lead_created'))) return 'Lead Dropped';
+  }
+
+  return 'New/PR';
 }
 
-function isInspection(stage: string): boolean {
-  const s = stage.toLowerCase();
-  return s.includes('inspection');
+export function isStockIn(stage: string): boolean {
+  const canonical = classifyLeadStage(stage);
+  return canonical === 'Stockin';
+}
+
+export function isInspection(stage: string): boolean {
+  const canonical = classifyLeadStage(stage);
+  return canonical === 'In Nego' || canonical === 'Insp Pending' || canonical === 'Stockin' || canonical === 'BBNP';
+}
+
+export function isPastInspection(stage: string): boolean {
+  const canonical = classifyLeadStage(stage);
+  return canonical === 'In Nego' || canonical === 'Stockin' || canonical === 'BBNP' || canonical === 'Payout Done';
+}
+
+/**
+ * Derive dealer activity stage from lead metrics.
+ * Used by DealerAccountCard and anywhere dealer stage is shown.
+ */
+export type DealerActivityStage = 'Transacting' | 'Inspecting' | 'Lead Giving' | 'Dormant' | 'Inactive';
+
+export function deriveDealerActivityStage(metrics: DealerLeadMetrics, dealerStatus?: string): DealerActivityStage {
+  if (dealerStatus === 'inactive') return 'Inactive';
+  if (metrics.sisMTD > 0) return 'Transacting';
+  if (metrics.inspectionsMTD > 0) return 'Inspecting';
+  if (metrics.leadsMTD > 0 || metrics.dcfMTD > 0) return 'Lead Giving';
+  return 'Dormant';
 }
 
 // ── Dashboard metrics ──

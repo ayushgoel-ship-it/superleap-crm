@@ -30,7 +30,7 @@ import { DCFLeadDetailPage } from './DCFLeadDetailPage';
 import { LeadCreatePage } from './LeadCreatePage';
 import { getAllLeads, searchLeads, getAnyLeadById } from '../../data/selectors';
 import { toLeadListVM, dcfToLeadCardVM, validateLeadIdForNavigation } from '../../data/adapters/leadAdapter';
-import { getFilteredLeads, getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { getFilteredLeads, getFilteredDCFLeads, classifyLeadStage } from '../../data/canonicalMetrics';
 import type { Lead } from '../../data/types';
 import type { LeadCardVM } from '../../data/adapters/leadAdapter';
 import { LeadPipelineCard } from '../leads/LeadPipelineCard';
@@ -104,12 +104,20 @@ function daysAgo(dateStr: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000));
 }
 
-function classifyStage(stage: string): string {
-  const s = stage.toLowerCase();
-  for (const bucket of STAGE_ORDER) {
-    if (bucket.pattern.split('|').some(p => s.includes(p))) return bucket.label;
-  }
-  return 'Other';
+function classifyStage(stage: string, createdAt?: string): string {
+  // Use canonical stage classifier, then map to display labels
+  const canonical = classifyLeadStage(stage, createdAt);
+  const mapping: Record<string, string> = {
+    'New/PR': 'New / PR',
+    'Lead Dropped': 'Lost',
+    'Insp Pending': 'In Progress',
+    'In Nego': 'Inspection',
+    'BBNP': 'Stock-In',
+    'Stockin': 'Stock-In',
+    'Payout Done': 'Payout Done',
+    'Lost': 'Lost',
+  };
+  return mapping[canonical] || 'Other';
 }
 
 function formatMoney(n: number | null | undefined): string {

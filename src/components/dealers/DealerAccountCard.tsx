@@ -43,14 +43,16 @@ interface DealerAccountCardProps {
   onTap: () => void;
 }
 
+/**
+ * Derive dealer stage from metrics — mirrors canonicalMetrics.deriveDealerActivityStage.
+ * Uses the same rules so that card labels match dashboard counts exactly.
+ */
 function getStageFromMetrics(dealer: DealerCardData): { label: string; variant: 'success' | 'info' | 'warning' | 'danger' } {
-  if (dealer.status === 'dormant' || (dealer.leadsMTD === 0 && dealer.sisMTD === 0)) {
-    return { label: 'Dormant', variant: 'danger' };
-  }
+  if (dealer.status === 'inactive') return { label: 'Inactive', variant: 'danger' };
   if (dealer.sisMTD > 0) return { label: 'Transacting', variant: 'success' };
-  if (dealer.leadsMTD > 5) return { label: 'Inspecting', variant: 'info' };
+  if (dealer.callsMTD > 0) return { label: 'Inspecting', variant: 'info' }; // callsMTD = inspectionsMTD from DealersPage
   if (dealer.leadsMTD > 0) return { label: 'Lead Giving', variant: 'warning' };
-  return { label: 'Inactive', variant: 'danger' };
+  return { label: 'Dormant', variant: 'danger' };
 }
 
 export function DealerAccountCard({ dealer, onTap }: DealerAccountCardProps) {
