@@ -345,6 +345,27 @@ export function getDealerLeadMetrics(dealerId: string, filters: MetricFilters): 
   };
 }
 
+// ── GS/NGS Range Comparison Logic ──
+
+/**
+ * GS/NGS Range comparison logic.
+ * Range = [Gmin, Gmax] where Gmin = 0.85 * cep, Gmax = 1.05 * cep
+ * Compares C24 Quote against this range.
+ */
+export type RangeStatus = 'Within Range' | 'Less than Range' | 'More than Range' | 'C24 Quote Pending';
+
+export function deriveRangeStatus(lead: { cep?: number | null; c24Quote?: number | null }): RangeStatus {
+  if (!lead.c24Quote || lead.c24Quote <= 0) return 'C24 Quote Pending';
+  if (!lead.cep || lead.cep <= 0) return 'C24 Quote Pending';
+
+  const gMin = lead.cep * 0.85;
+  const gMax = lead.cep * 1.05;
+
+  if (lead.c24Quote >= gMin && lead.c24Quote <= gMax) return 'Within Range';
+  if (lead.c24Quote < gMin) return 'Less than Range';
+  return 'More than Range';
+}
+
 // ── Get all leads with canonical channel ──
 
 export function getLeadsWithCanonicalChannel(filters: MetricFilters): (Lead & { canonicalChannel: CanonicalChannel })[] {

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { getLeadById } from '../../data/selectors';
 import type { Lead } from '../../data/types';
+import { deriveRangeStatus, mapChannelToCanonical } from '../../data/canonicalMetrics';
 import { StatusChip } from '../premium/Chip';
 import { InlineEmpty } from '../premium/EmptyState';
 import { toast } from 'sonner@2.0.3';
@@ -254,6 +255,12 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     const gap = effectiveCep - c24Quote;
     return { raw: gap, abs: Math.abs(gap), pct: Math.round((gap / c24Quote) * 100) };
   }, [effectiveCep, c24Quote]);
+
+  // ── Range Status (GS/NGS only) ──
+  const rangeStatus = useMemo(() => {
+    if (mapChannelToCanonical(lead.channel) === 'DCF') return null;
+    return deriveRangeStatus({ cep: effectiveCep, c24Quote });
+  }, [lead.channel, effectiveCep, c24Quote]);
 
   // ── CEP Save Handler ──
   const handleCEPSave = useCallback(async (data: CEPData) => {
@@ -613,6 +620,19 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
                         {cepGap ? `${cepGap.raw > 0 ? '+' : ''}${formatAmount(cepGap.raw)} (${cepGap.pct > 0 ? '+' : ''}${cepGap.pct}%)` : '\u2014'}
                       </span>
                     </div>
+                    {rangeStatus && (
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[12px] font-semibold text-slate-600">Range</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                          rangeStatus === 'Within Range'    ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                          rangeStatus === 'Less than Range' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                          rangeStatus === 'More than Range' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                                              'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                          {rangeStatus}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   {/* Insight */}
                   {cepGap && cepGap.raw > 0 && (

@@ -8,7 +8,7 @@
  */
 
 import type { Lead } from '../types';
-import { mapChannelToCanonical, type CanonicalChannel } from '../canonicalMetrics';
+import { mapChannelToCanonical, type CanonicalChannel, deriveRangeStatus, type RangeStatus } from '../canonicalMetrics';
 
 // ── View-Model ──
 
@@ -34,6 +34,7 @@ export interface LeadCardVM {
   kamOwner?: string;         // KAM name (for TL views)
   kamPhone?: string;         // KAM phone (for Call RA)
   phone: string;             // Fallback phone
+  rangeStatus?: RangeStatus; // GS/NGS only: C24 Quote vs CEP range comparison
   badges: Array<{
     type: string;
     label: string;
@@ -138,6 +139,7 @@ function toLeadCardVM(lead: Lead): LeadCardVM {
     kamOwner: lead.kamName,
     kamPhone: lead.kamPhone,
     phone: lead.customerPhone || '',
+    rangeStatus: mapChannelToCanonical(lead.channel) !== 'DCF' ? deriveRangeStatus(lead) : undefined,
     badges: buildBadges(lead),
   };
 }

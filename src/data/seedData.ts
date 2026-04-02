@@ -385,6 +385,10 @@ export function generateSeedData(): SeedData {
         const isConverted = stage === 'Stock-in' || stage === 'Payout Done';
         const status = stage === 'Lost' ? 'Lost' : isConverted ? 'Converted' : 'Active';
         const cep = rng.int(200000, 1200000);
+        // C24 Quote: ~70% of leads get a quote, varying around CEP
+        const hasC24Quote = rng.bool(0.7);
+        const c24QuoteVariance = rng.pick([-0.20, -0.10, -0.05, 0, 0.02, 0.05, 0.10, 0.15]);
+        const c24Quote = hasC24Quote ? Math.round(cep * (1 + c24QuoteVariance)) : null;
 
         // Ensure some records on yesterday (D-1) for testing
         let finalCreatedDate = createdDate;
@@ -419,6 +423,7 @@ export function generateSeedData(): SeedData {
           expectedRevenue,
           actualRevenue: isConverted ? expectedRevenue : 0,
           cep,
+          c24Quote,
           createdAt: toISO(finalCreatedDate),
           updatedAt: toISO(updatedDate),
           inspectionDate: ['Inspection Scheduled', 'Inspection Done', 'Stock-in', 'Payout Done'].includes(stage)

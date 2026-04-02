@@ -78,6 +78,16 @@ export function LeadPipelineCard({
   const isDCF = lead.channel === 'DCF';
   const secondaryLabel = isDCF ? 'LTV' : 'C24 Quote';
 
+  // Range status chip config (GS/NGS only)
+  const rangeChip = !isDCF && lead.rangeStatus
+    ? ({
+        'Within Range':    { label: 'Within Range',    bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' },
+        'Less than Range': { label: 'Below Range',     bg: 'bg-rose-100',    text: 'text-rose-700',    border: 'border-rose-200'    },
+        'More than Range': { label: 'Above Range',     bg: 'bg-amber-100',   text: 'text-amber-700',   border: 'border-amber-200'   },
+        'C24 Quote Pending': { label: 'Quote Pending', bg: 'bg-slate-100',   text: 'text-slate-500',   border: 'border-slate-200'   },
+      } as const)[lead.rangeStatus]
+    : null;
+
   // Prefer onCallRA, fallback to legacy onCall
   const handleCall = onCallRA || onCall;
 
@@ -184,6 +194,11 @@ export function LeadPipelineCard({
                 <div className={`text-[12px] font-bold tabular-nums ${lead.secondaryValue > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
                   {lead.secondaryValue > 0 ? formatMoney(lead.secondaryValue) : '--'}
                 </div>
+              )}
+              {rangeChip && (
+                <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded-md text-[8px] font-semibold border ${rangeChip.bg} ${rangeChip.text} ${rangeChip.border}`}>
+                  {rangeChip.label}
+                </span>
               )}
             </div>
             <div className="text-right">

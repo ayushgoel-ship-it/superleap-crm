@@ -603,6 +603,22 @@ export function getKAMMetrics(kamId: string) {
   };
 }
 
+/**
+ * Toggle Top Dealer status for a dealer
+ */
+export function toggleTopDealer(dealerCode: string): boolean {
+  const dealer = DEALERS.find(d => d.code === dealerCode);
+  if (!dealer) return false;
+  dealer.isTopDealer = !dealer.isTopDealer;
+  // Sync tags array
+  if (dealer.isTopDealer) {
+    if (!dealer.tags.includes('Top Dealer')) dealer.tags.push('Top Dealer' as any);
+  } else {
+    dealer.tags = dealer.tags.filter((t: string) => t !== 'Top Dealer') as any;
+  }
+  return dealer.isTopDealer;
+}
+
 export function getTLMetrics(tlId: string) {
   const tl = getTLById(tlId);
   if (!tl) return null;

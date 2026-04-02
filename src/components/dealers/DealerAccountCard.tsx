@@ -15,7 +15,7 @@
  * └──────────────────────────────────────────────────────┘
  */
 
-import { MapPin, Clock, ChevronRight, Navigation } from 'lucide-react';
+import { MapPin, Clock, ChevronRight, Navigation, Star } from 'lucide-react';
 import { StatusChip, SegmentBadge } from '../premium/Chip';
 
 export interface DealerCardData {
@@ -35,6 +35,7 @@ export interface DealerCardData {
   productivityPct: number;
   hasLocation: boolean;
   distanceKm?: number;
+  isTopDealer?: boolean;
   category?: 'Top Dealer' | 'Tagged Dealer' | 'Untagged Dealer';
 }
 
@@ -80,6 +81,9 @@ export function DealerAccountCard({ dealer, onTap }: DealerAccountCardProps) {
               `}>
                 {dealer.name}
               </h3>
+              {dealer.isTopDealer && (
+                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 flex-shrink-0" />
+              )}
               <ChevronRight className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
             </div>
             <div className="flex items-center gap-2 mt-0.5">

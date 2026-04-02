@@ -38,7 +38,7 @@ import { DealerDetailPageV2 } from './DealerDetailPageV2';
 import { DealerAccountCard, type DealerCardData } from '../dealers/DealerAccountCard';
 import { toast } from 'sonner@2.0.3';
 import { getAllDealers } from '../../data/selectors';
-import { getDealerLeadMetrics, computeDashboardMetrics, getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { getDealerLeadMetrics, computeDashboardMetrics, getFilteredDCFLeads, getFilteredCalls, getFilteredVisits } from '../../data/canonicalMetrics';
 import { TimePeriod, DealerCategory, deriveDealerCategory } from '../../lib/domain/constants';
 
 // ── Filter Types ──
@@ -88,6 +88,9 @@ function mapDBDealerToCard(d: any, period: TimePeriod = TimePeriod.MTD): DealerC
   const metrics = getDealerLeadMetrics(d.id, { period });
   const productivityPct = metrics.leadsMTD > 0 ? Math.min(100, Math.round((metrics.sisMTD / Math.max(metrics.leadsMTD, 1)) * 100)) : 0;
 
+  const filteredCalls = getFilteredCalls({ period }).filter(c => c.dealerId === d.id);
+  const filteredVisits = getFilteredVisits({ period }).filter(v => v.dealerId === d.id);
+
   return {
     id: d.id,
     name: d.name,
@@ -98,13 +101,14 @@ function mapDBDealerToCard(d: any, period: TimePeriod = TimePeriod.MTD): DealerC
     tags: d.tags ?? [],
     lastActivity: d.lastContact ?? d.lastVisit ?? 'Unknown',
     lastActivityDaysAgo: Math.min(d.lastContactDaysAgo ?? 999, d.lastVisitDaysAgo ?? 999),
-    callsMTD: metrics.inspectionsMTD,
-    visitsMTD: metrics.sisMTD,
+    callsMTD: filteredCalls.length,
+    visitsMTD: filteredVisits.length,
     leadsMTD: metrics.leadsMTD,
     sisMTD: metrics.sisMTD,
     productivityPct,
     hasLocation: !!d.latitude,
     distanceKm: undefined,
+    isTopDealer: !!d.isTopDealer,
     category: deriveDealerCategory(
       d.status === 'active' && !!d.kamId,
       !!d.isTopDealer
@@ -196,7 +200,10 @@ export function DealersPage({
 
   // ── Dormant count ──
   const dormantCount = useMemo(
-    () => dealers.filter(d => d.status === 'dormant' || (d.leadsMTD === 0 && d.sisMTD === 0)).length,
+    () => dealers.filter(d => {
+      if (d.status === 'inactive') return false;
+      return d.leadsMTD === 0 && d.sisMTD === 0 && d.callsMTD === 0;
+    }).length,
     [dealers]
   );
 
@@ -215,10 +222,10 @@ export function DealersPage({
     // Quick filter (status)
     switch (activeFilter) {
       case 'active':
-        result = result.filter(d => d.status === 'active' && (d.leadsMTD > 0 || d.sisMTD > 0));
+        result = result.filter(d => d.status === 'active' && (d.leadsMTD > 0 || d.sisMTD > 0 || d.callsMTD > 0));
         break;
       case 'dormant':
-        result = result.filter(d => d.status === 'dormant' || (d.leadsMTD === 0 && d.sisMTD === 0));
+        result = result.filter(d => d.status !== 'inactive' && d.leadsMTD === 0 && d.sisMTD === 0 && d.callsMTD === 0);
         break;
       case 'inactive':
         result = result.filter(d => d.status === 'inactive');
@@ -313,7 +320,7 @@ export function DealersPage({
         onNavigateToDCFDetail={(loanId) => {
           setSelectedDealerCode(null);
           setSelectedDealerRaw(null);
-          toast.info(`Opening DCF loan ${loanId}...`);
+          onNavigateToLeadDetail?.(loanId);
         }}
       />
     );
@@ -473,7 +480,7 @@ export function DealersPage({
               : chip.key === 'dormant'
               ? dormantCount
               : chip.key === 'active'
-              ? dealers.filter(d => d.status === 'active' && (d.leadsMTD > 0 || d.sisMTD > 0)).length
+              ? dealers.filter(d => d.status === 'active' && (d.leadsMTD > 0 || d.sisMTD > 0 || d.callsMTD > 0)).length
               : chip.key === 'inactive'
               ? dealers.filter(d => d.status === 'inactive').length
               : undefined;
