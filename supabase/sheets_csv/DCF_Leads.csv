@@ -1,0 +1,21 @@
+dcf_id,lead_id,customer_name,dealer_name,lender,stage,pan_status,aadhar_status,income_proof_status,disbursed_amount,created_date,approved_date,disbursed_date,kam_name
+dcf-01,a0000001-0000-0000-0000-000000000004,Priya Devi,Sharma Motors,HDFC,disbursed,received,received,received,595000,2026-02-12,2026-02-14,2026-02-16,Amit Verma
+dcf-02,a0000001-0000-0000-0000-000000000005,Manoj Tiwari,Patel Wheels,ICICI,disbursed,received,received,received,850000,2026-02-13,2026-02-15,2026-02-18,Amit Verma
+dcf-03,a0000001-0000-0000-0000-000000000006,Deepika Reddy,Kapoor Cars,Bajaj Finance,disbursed,received,received,received,990000,2026-02-14,2026-02-17,2026-02-20,Amit Verma
+dcf-04,a0000001-0000-0000-0000-000000000011,Arun Mehta,Delhi Auto Hub,SBI,approved,received,received,received,,2026-02-14,2026-02-18,,Amit Verma
+dcf-05,b0000001-0000-0000-0000-000000000004,Rakesh Verma,Verma Auto Sales,Kotak,disbursed,received,received,received,920000,2026-02-13,2026-02-16,2026-02-19,Sneha Kapoor
+dcf-06,b0000001-0000-0000-0000-000000000005,Rohit Saxena,Verma Auto Sales,HDFC,in_progress,received,pending,pending,,2026-02-14,,,Sneha Kapoor
+dcf-07,b0000001-0000-0000-0000-000000000006,Geeta Devi,Agarwal Motors,Axis Bank,created,pending,pending,pending,,2026-02-15,,,Sneha Kapoor
+dcf-08,b0000001-0000-0000-0000-000000000011,Karan Bajaj,RK Car World,ICICI,disbursed,received,received,received,680000,2026-02-15,2026-02-18,2026-02-21,Sneha Kapoor
+dcf-09,new-01,Vikram Malhotra,Sharma Motors,HDFC,disbursed,received,received,received,510000,2026-02-15,2026-02-18,2026-02-20,Amit Verma
+dcf-10,new-02,Meenakshi Iyer,Kapoor Cars,ICICI,disbursed,received,received,received,620000,2026-02-16,2026-02-19,2026-02-22,Amit Verma
+dcf-11,new-04,Anurag Sinha,National Motors,Bajaj Finance,disbursed,received,received,received,850000,2026-02-20,2026-02-23,2026-02-26,Amit Verma
+dcf-12,new-06,Rahul Pandey,Metro Wheels Hub,SBI,disbursed,received,received,received,990000,2026-02-24,2026-02-27,2026-03-01,Amit Verma
+dcf-13,new-07,Kavita Nair,Jai Shree Cars,Kotak,approved,received,received,pending,,2026-02-25,2026-02-28,,Amit Verma
+dcf-14,new-09,Pooja Gupta,United Car Emporium,HDFC,in_progress,received,pending,pending,,2026-02-27,,,Amit Verma
+dcf-15,new-16,Sanjay Verma,Singh Auto Palace,ICICI,disbursed,received,received,received,480000,2026-02-14,2026-02-17,2026-02-19,Sneha Kapoor
+dcf-16,new-18,Ashok Mittal,RK Car World,Bajaj Finance,disbursed,received,received,received,720000,2026-02-17,2026-02-20,2026-02-23,Sneha Kapoor
+dcf-17,new-19,Priyanka Das,Royal Auto Gallery,SBI,disbursed,received,received,received,940000,2026-02-19,2026-02-22,2026-02-25,Sneha Kapoor
+dcf-18,new-17,Geeta Rani,Agarwal Motors,Kotak,approved,received,received,received,,2026-02-16,2026-02-20,,Sneha Kapoor
+dcf-19,new-25,Rohit Saxena,Verma Auto Sales,HDFC,in_progress,received,pending,pending,,2026-02-22,,,Sneha Kapoor
+dcf-20,new-26,Geeta Devi,Agarwal Motors,Axis Bank,created,pending,pending,pending,,2026-02-26,,,Sneha Kapoor

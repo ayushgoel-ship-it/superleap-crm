@@ -1,0 +1,18 @@
+{
+  "appId": "com.cars24.superleapcrm",
+  "appName": "Superleap CRM",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": [
+      "fdmlyrgiktljuyuthgki.supabase.co",
+      "*.supabase.co",
+      "*.supabase.in"
+    ]
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

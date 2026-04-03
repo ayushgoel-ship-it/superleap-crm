@@ -31,26 +31,19 @@ export type {
 } from './types';
 
 // ============================================================================
-// MOCK DATABASE (Single Source of Truth)
+// ID HELPERS (canonical — no mock dependency)
 // ============================================================================
 export {
-  DEALERS,
-  CALLS,
-  VISITS,
-  LEADS,
-  DCF_LEADS,
-  TEAM_LEADS,
-  KAMS,
-  LOCATION_REQUESTS,
-  makeDealerId,
-  makeKAMId,
-  makeTLId,
-  makeCallId,
-  makeVisitId,
-  makeLeadId,
   normalizeDealerId,
-  LEGACY_ID_MAP,
-} from './mockDatabase';
+  normalizeKAMId,
+  normalizeTLId,
+  makeUntaggedDealerId,
+} from './idUtils';
+
+// ============================================================================
+// RUNTIME DB (Supabase-backed, replaces mock arrays)
+// ============================================================================
+export { getRuntimeDBSync, loadRuntimeDB, clearRuntimeDBCache } from './runtimeDB';
 
 // ============================================================================
 // SELECTORS (Data Access Layer)

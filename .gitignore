@@ -4,3 +4,7 @@ dist
 .env
 .env.*
 *.log
+.env.local
+.claude/worktrees/
+build/
+Extras/

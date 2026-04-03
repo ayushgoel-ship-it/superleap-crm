@@ -1,0 +1,5 @@
+user_id,name,phone,role,team_name,active
+9114cd06-e411-48e0-903c-a471df514caf,Admin User,+919876543200,ADMIN,,true
+d0148a1b-a375-4590-9319-56c4a5fe4ebf,Rajesh Kumar,+919876543210,TL,NCR Squad Alpha,true
+3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,+919876543201,KAM,NCR Squad Alpha,true
+14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,+919876543202,KAM,NCR Squad Beta,true

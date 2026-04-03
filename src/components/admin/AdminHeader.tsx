@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronDown, X, AlertCircle, UserCog } from 'lucide-react';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
 
 export type AdminTab = 'home' | 'dealers' | 'leads' | 'visits' | 'calls' | 'dcf' | 'performance' | 'targets';
 
@@ -13,14 +14,19 @@ interface AdminHeaderProps {
   viewMode?: 'desktop' | 'mobile';
 }
 
-const mockTLs = [
-  { id: 'all', name: 'All TLs', region: '' },
-  { id: 'tl1', name: 'Nikhil Verma', region: 'North' },
-  { id: 'tl2', name: 'Seema Rao', region: 'West' },
-  { id: 'tl3', name: 'Harsh Gupta', region: 'East' },
-  { id: 'tl4', name: 'Priya Sharma', region: 'South' },
-  { id: 'tl5', name: 'Rajesh Kumar', region: 'NCR' },
-];
+function getTLsFromDB(): { id: string; name: string; region: string }[] {
+  const db = getRuntimeDBSync();
+  const tlMap = new Map<string, { name: string; region: string }>();
+  db.dealers.forEach((d: any) => {
+    if (d.kamName && d.kamId && !tlMap.has(d.kamId)) {
+      tlMap.set(d.kamId, { name: d.kamName, region: d.city || 'NCR' });
+    }
+  });
+  return [
+    { id: 'all', name: 'All TLs', region: '' },
+    ...Array.from(tlMap.entries()).map(([id, v]) => ({ id, name: v.name, region: v.region })),
+  ];
+}
 
 export function AdminHeader({
   currentTab,
@@ -32,6 +38,7 @@ export function AdminHeader({
   viewMode = 'desktop',
 }: AdminHeaderProps) {
   const [showTLDropdown, setShowTLDropdown] = useState(false);
+  const mockTLs = getTLsFromDB();
 
   const tabs: { id: AdminTab; label: string }[] = [
     { id: 'home', label: 'Home' },
@@ -89,9 +96,8 @@ export function AdminHeader({
                       onTLChange(tl.id);
                       setShowTLDropdown(false);
                     }}
-                    className={`w-full px-3 py-2 text-left hover:bg-gray-50 ${
-                      selectedTL === tl.id ? 'bg-blue-50' : ''
-                    }`}
+                    className={`w-full px-3 py-2 text-left hover:bg-gray-50 ${selectedTL === tl.id ? 'bg-blue-50' : ''
+                      }`}
                   >
                     <div className="text-sm text-gray-900">{tl.name}</div>
                     {tl.region && <div className="text-xs text-gray-600">{tl.region}</div>}
@@ -105,11 +111,10 @@ export function AdminHeader({
           {canImpersonate && (
             <button
               onClick={onToggleImpersonation}
-              className={`w-full mt-2 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 ${
-                isImpersonating
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-blue-50 text-blue-700 border border-blue-200'
-              }`}
+              className={`w-full mt-2 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 ${isImpersonating
+                ? 'bg-orange-500 text-white'
+                : 'bg-blue-50 text-blue-700 border border-blue-200'
+                }`}
             >
               <UserCog className="w-4 h-4" />
               {isImpersonating ? 'Exit Impersonation' : 'Act as TL'}
@@ -132,11 +137,10 @@ export function AdminHeader({
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${
-                  currentTab === tab.id
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${currentTab === tab.id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+                  }`}
               >
                 {tab.label}
               </button>
@@ -200,9 +204,8 @@ export function AdminHeader({
                         onTLChange(tl.id);
                         setShowTLDropdown(false);
                       }}
-                      className={`w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
-                        selectedTL === tl.id ? 'bg-blue-50' : ''
-                      }`}
+                      className={`w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${selectedTL === tl.id ? 'bg-blue-50' : ''
+                        }`}
                     >
                       <div className="text-sm text-gray-900">{tl.name}</div>
                       {tl.region && <div className="text-xs text-gray-600">{tl.region}</div>}
@@ -216,11 +219,10 @@ export function AdminHeader({
             {canImpersonate && (
               <button
                 onClick={onToggleImpersonation}
-                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
-                  isImpersonating
-                    ? 'bg-orange-500 text-white hover:bg-orange-600'
-                    : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
-                }`}
+                className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${isImpersonating
+                  ? 'bg-orange-500 text-white hover:bg-orange-600'
+                  : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                  }`}
               >
                 <UserCog className="w-4 h-4" />
                 {isImpersonating ? 'Exit Impersonation' : 'Act as TL'}
@@ -245,11 +247,10 @@ export function AdminHeader({
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`px-4 py-3 text-sm relative ${
-                currentTab === tab.id
-                  ? 'text-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={`px-4 py-3 text-sm relative ${currentTab === tab.id
+                ? 'text-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+                }`}
             >
               {tab.label}
               {currentTab === tab.id && (

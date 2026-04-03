@@ -53,11 +53,11 @@ export function StatusChip({ label, variant = 'neutral', size = 'sm', dot = fals
 type ChannelType = 'NGS' | 'GS' | 'DCF' | string;
 
 const CHANNEL_STYLES: Record<string, string> = {
-  NGS: 'bg-blue-50 text-blue-700 border-blue-100',
+  NGS: 'bg-violet-50 text-violet-700 border-violet-100',
   GS: 'bg-emerald-50 text-emerald-700 border-emerald-100',
   DCF: 'bg-amber-50 text-amber-700 border-amber-100',
-  // Legacy fallbacks for any remaining raw channel references
-  C2B: 'bg-blue-50 text-blue-700 border-blue-100',
+  // Legacy fallbacks (won't appear in new data, kept for safety)
+  C2B: 'bg-violet-50 text-violet-700 border-violet-100',
   C2D: 'bg-blue-50 text-blue-700 border-blue-100',
 };
 

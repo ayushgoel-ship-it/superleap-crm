@@ -125,24 +125,24 @@ export function calculateI2SIWithTarget(stockIns: number, inspections: number, t
  * Get channel-specific I2SI targets
  * SINGLE SOURCE OF TRUTH for channel I2SI targets
  */
-export function getChannelI2SITarget(channel: 'GS' | 'C2D' | 'C2B'): number {
-  const targets = {
+export function getChannelI2SITarget(channel: 'GS' | 'NGS' | 'DCF' | string): number {
+  const targets: Record<string, number> = {
     GS: 15,
-    C2D: 20,
-    C2B: 12,
+    NGS: 12,
+    DCF: 20,
   };
-  return targets[channel];
+  return targets[channel] ?? 15;
 }
 
 /**
  * Calculate channel-specific I2SI with target
  */
 export function calculateChannelI2SI(
-  channel: 'GS' | 'C2D' | 'C2B',
+  channel: 'GS' | 'NGS' | 'DCF' | string,
   stockIns: number,
   inspections: number
 ): {
-  channel: 'GS' | 'C2D' | 'C2B';
+  channel: string;
   i2si: number;
   target: number;
   achievement: number;

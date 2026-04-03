@@ -10,8 +10,9 @@
 import { useMemo } from 'react';
 import { IndianRupee, Users, TrendingUp } from 'lucide-react';
 import { TimePeriod } from '../../lib/domain/constants';
-import { MOCK_TL_METRICS, getTLsByRegions, type Region } from '../../data/adminOrgMock';
+import { getTLsByRegions, type Region } from '../../data/adminOrgMock';
 import { scaleTLMetrics } from '../../data/adminFilterHelpers';
+import { computeMetrics, computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
 import { AdminCommonFilters } from './AdminCommonFilters';
 import { useFilterScope } from '../../contexts/FilterContext';
 import { resolveTimePeriodToRange, type DateRange } from '../../lib/time/resolveTimePeriodToRange';
@@ -83,66 +84,38 @@ export function AdminDCFPage({ onNavigate }: AdminDCFPageProps = {}) {
     return [regionId as Region];
   }, [regionId]);
 
-  // Get TL metrics with time scaling - MEMOIZED
-  const relevantTLs = useMemo(() => getTLsByRegions(selectedRegions), [selectedRegions]);
-  const rawTLMetrics = useMemo(() => {
-    let filtered = MOCK_TL_METRICS.filter(m => relevantTLs.some(tl => tl.tlId === m.tlId));
-    // Apply TL filter if selected
-    if (tlId) {
-      filtered = filtered.filter(m => m.tlId === tlId);
-    }
-    return filtered;
-  }, [relevantTLs, tlId]);
-  
-  const scaledTLMetrics = useMemo(() => scaleTLMetrics(rawTLMetrics, timePeriod), [rawTLMetrics, timePeriod]);
+  // Get real metrics from metricsFromDB
+  const currentMetrics = useMemo(() => computeMetrics(timePeriod), [timePeriod]);
+  const kamMetrics = useMemo(() => computeKAMMetrics(timePeriod), [timePeriod]);
 
-  // Aggregate top-level KPIs - MEMOIZED
+  // Aggregate top-level KPIs from real data
   const aggregatedKPIs = useMemo(() => {
-    const totalLeads = scaledTLMetrics.reduce((sum, m) => sum + m.dcfLeads, 0);
-    const totalDisbCount = scaledTLMetrics.reduce((sum, m) => sum + m.dcfDisbursements, 0);
-    const totalDisbValue = scaledTLMetrics.reduce((sum, m) => sum + m.dcfGMV, 0);
-    const totalOnboarded = scaledTLMetrics.reduce((sum, m) => sum + m.dcfOnboardings, 0);
-
-    // Active dealers: those with leads OR disbursements (estimate: unique dealers with activity)
-    // For demo purposes, estimate as ~60% of onboarded
-    const activeDealers = Math.round(totalOnboarded * 0.65);
-
     return {
-      dcfLeads: totalLeads,
-      disbursalsCount: totalDisbCount,
-      disbursalsValue: totalDisbValue,
-      onboardedDealers: totalOnboarded,
-      activeDealers,
-      conversionRate: totalLeads > 0 ? (totalDisbCount / totalLeads) * 100 : 0,
+      dcfLeads: currentMetrics.dcfTotal,
+      disbursalsCount: currentMetrics.dcfDisbursals,
+      disbursalsValue: currentMetrics.dcfDisbursedValue * 100000,
+      onboardedDealers: currentMetrics.totalDealers,
+      activeDealers: currentMetrics.uniqueDealersVisited,
+      conversionRate: currentMetrics.dcfTotal > 0 ? (currentMetrics.dcfDisbursals / currentMetrics.dcfTotal) * 100 : 0,
     };
-  }, [scaledTLMetrics]);
+  }, [currentMetrics]);
 
-  // Build TL Performance rows - MEMOIZED
+  // Build TL Performance rows from real KAM metrics
   const tlPerformanceRows = useMemo<TLPerformance[]>(() => {
-    return scaledTLMetrics.map(tl => {
-      const leadsCount = tl.dcfLeads;
-      const disbursedCount = tl.dcfDisbursements;
-      const disbursedValue = tl.dcfGMV;
-      const onboardedDealers = tl.dcfOnboardings;
-      // Estimate active dealers as ~65% of onboarded for this TL
-      const activeDealers = Math.round(onboardedDealers * 0.65);
-      const conversionRate = leadsCount > 0 ? (disbursedCount / leadsCount) * 100 : 0;
+    return kamMetrics.map(km => ({
+      tlId: km.kamId,
+      tlName: km.kamName,
+      region: 'NCR',
+      leadsCount: km.dcfTotal,
+      disbursedCount: km.dcfDisbursals,
+      disbursedValue: km.dcfDisbursedValue * 100000,
+      onboardedDealers: km.totalDealers,
+      activeDealers: km.uniqueDealersVisited,
+      conversionRate: km.dcfTotal > 0 ? (km.dcfDisbursals / km.dcfTotal) * 100 : 0,
+    }));
+  }, [kamMetrics]);
 
-      return {
-        tlId: tl.tlId,
-        tlName: tl.tlName,
-        region: tl.region,
-        leadsCount,
-        disbursedCount,
-        disbursedValue,
-        onboardedDealers,
-        activeDealers,
-        conversionRate,
-      };
-    });
-  }, [scaledTLMetrics]);
-
-  // Sort by GMV (disbursedValue) desc, then by disbursedCount desc - MEMOIZED
+  // Sort by GMV (disbursedValue) desc - MEMOIZED
   const sortedTLs = useMemo(() => {
     return [...tlPerformanceRows]
       .sort((a, b) => {
@@ -151,7 +124,7 @@ export function AdminDCFPage({ onNavigate }: AdminDCFPageProps = {}) {
         }
         return b.disbursedCount - a.disbursedCount;
       })
-      .slice(0, 10); // Top 10
+      .slice(0, 10);
   }, [tlPerformanceRows]);
 
   // Handle TL drill-down
@@ -285,9 +258,9 @@ export function AdminDCFPage({ onNavigate }: AdminDCFPageProps = {}) {
                 {sortedTLs.map((tl, index) => {
                   const rankBadgeColor =
                     index === 0 ? 'bg-amber-100 text-amber-700' :
-                    index === 1 ? 'bg-slate-100 text-slate-700' :
-                    index === 2 ? 'bg-orange-100 text-orange-700' :
-                    'bg-indigo-50 text-indigo-600';
+                      index === 1 ? 'bg-slate-100 text-slate-700' :
+                        index === 2 ? 'bg-orange-100 text-orange-700' :
+                          'bg-indigo-50 text-indigo-600';
 
                   return (
                     <button

@@ -10,6 +10,7 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { toast } from 'sonner@2.0.3';
 import { getDealerDTO } from '../../data/dtoSelectors';
+import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '../auth/AuthProvider';
 
 interface LeadCreatePageProps {
@@ -55,21 +56,49 @@ export function LeadCreatePage({ dealerId, onBack, onSuccess }: LeadCreatePagePr
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      // Generate mock lead ID
+    try {
+      // Generate lead ID
       const leadId = `C24-${dealer?.id.slice(-3)}${String(Math.floor(Math.random() * 900) + 100).padStart(3, '0')}`;
+
+      // Insert into Supabase leads_raw table
+
+      const { error } = await supabase.from('leads_raw').insert({
+        lead_id: leadId,
+        dealer_id: dealerId,
+        kam_id: profile?.id || '',
+        channel: formData.channel,
+        customer_name: formData.customerName,
+        customer_phone: formData.customerPhone,
+        car_make: formData.carMake,
+        car_model: formData.carModel,
+        year: formData.year,
+        variant: formData.variant,
+        reg_number: formData.regNumber,
+        kms_driven: formData.kms,
+        fuel_type: formData.fuelType,
+        transmission: formData.transmission,
+        expected_price: formData.expectedPrice,
+        notes: formData.notes,
+        status: 'New',
+        created_at: new Date().toISOString(),
+      });
+
+      if (error) {
+        toast.error('Failed to create lead: ' + error.message);
+        setIsSubmitting(false);
+        return;
+      }
 
       toast.success('Lead created successfully!', {
         description: `Lead ID: ${leadId}`,
       });
 
-      // TODO: Save to centralized mock DB
-      // createLead({ ...formData, dealerId, kamId: profile.id, leadId });
-
       setIsSubmitting(false);
       onSuccess(leadId);
-    }, 1500);
+    } catch (err: any) {
+      toast.error('Error creating lead: ' + (err.message || 'Unknown error'));
+      setIsSubmitting(false);
+    }
   };
 
   if (!dealer) {
@@ -112,11 +141,10 @@ export function LeadCreatePage({ dealerId, onBack, onSuccess }: LeadCreatePagePr
               <button
                 key={channel}
                 onClick={() => setFormData({ ...formData, channel })}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  formData.channel === channel
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${formData.channel === channel
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
               >
                 {channel}
               </button>

@@ -207,6 +207,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
   );
   const allVMs = useMemo(() => [...leadVMs, ...dcfVMs], [leadVMs, dcfVMs]);
 
+
   // CEP Pending count (cross-channel, always computed)
   const cepPendingCount = useMemo(
     () => allVMs.filter(l => l.cep === null).length,

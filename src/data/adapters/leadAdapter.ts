@@ -8,7 +8,6 @@
  */
 
 import type { Lead } from '../types';
-import { mapChannelToCanonical, type CanonicalChannel, deriveRangeStatus, type RangeStatus } from '../canonicalMetrics';
 
 // ── View-Model ──
 
@@ -17,8 +16,7 @@ export interface LeadCardVM {
   customerName: string;
   carDisplay: string;        // e.g. "Maruti Swift 2021"
   regNo: string;             // Registration number or 'N/A'
-  channel: string;           // Canonical: NGS | GS | DCF
-  rawChannel: string;        // Original: C2B | C2D | GS | DCF
+  channel: string;           // C2B | C2D | GS | DCF
   leadType: string;          // Seller | Inventory
   stage: string;             // Current pipeline stage
   status: string;            // Active | Converted | Lost
@@ -34,7 +32,6 @@ export interface LeadCardVM {
   kamOwner?: string;         // KAM name (for TL views)
   kamPhone?: string;         // KAM phone (for Call RA)
   phone: string;             // Fallback phone
-  rangeStatus?: RangeStatus; // GS/NGS only: C24 Quote vs CEP range comparison
   badges: Array<{
     type: string;
     label: string;
@@ -46,9 +43,12 @@ export interface LeadCardVM {
 
 function channelColor(ch: string): 'purple' | 'green' | 'blue' | 'amber' | 'red' | 'gray' {
   switch (ch) {
-    case 'NGS': return 'blue';
+    case 'NGS': return 'purple';
     case 'GS':  return 'green';
     case 'DCF': return 'amber';
+    // Legacy fallbacks
+    case 'C2B': return 'blue';
+    case 'C2D': return 'purple';
     default:    return 'gray';
   }
 }
@@ -63,13 +63,12 @@ function statusColor(status: string): 'purple' | 'green' | 'blue' | 'amber' | 'r
 
 function buildBadges(lead: Lead): LeadCardVM['badges'] {
   const badges: LeadCardVM['badges'] = [];
-  const canonical = mapChannelToCanonical(lead.channel);
 
-  // Channel badge (canonical)
+  // Channel badge
   badges.push({
     type: 'channel',
-    label: canonical,
-    color: channelColor(canonical),
+    label: lead.channel,
+    color: channelColor(lead.channel),
   });
 
   // Lead type badge
@@ -122,8 +121,7 @@ function toLeadCardVM(lead: Lead): LeadCardVM {
     customerName: lead.customerName,
     carDisplay: carDisplay || 'Unknown Vehicle',
     regNo: lead.regNo || lead.registrationNumber || 'N/A',
-    channel: mapChannelToCanonical(lead.channel),
-    rawChannel: lead.channel,
+    channel: lead.channel,
     leadType: lead.leadType,
     stage: lead.currentStage || lead.stage,
     status: lead.status,
@@ -139,7 +137,6 @@ function toLeadCardVM(lead: Lead): LeadCardVM {
     kamOwner: lead.kamName,
     kamPhone: lead.kamPhone,
     phone: lead.customerPhone || '',
-    rangeStatus: mapChannelToCanonical(lead.channel) !== 'DCF' ? deriveRangeStatus(lead) : undefined,
     badges: buildBadges(lead),
   };
 }
@@ -149,36 +146,6 @@ function toLeadCardVM(lead: Lead): LeadCardVM {
 /** Map an array of raw Leads to view-model LeadCardVMs */
 export function toLeadListVM(leads: Lead[]): LeadCardVM[] {
   return leads.map(toLeadCardVM);
-}
-
-/** Convert DCFLeadCardVM to LeadCardVM for unified display in Leads page */
-export function dcfToLeadCardVM(dcf: import('./dcfAdapter').DCFLeadCardVM): LeadCardVM {
-  return {
-    id: dcf.id,
-    customerName: dcf.customerName,
-    carDisplay: dcf.car,
-    regNo: 'N/A',
-    channel: 'DCF',
-    rawChannel: 'DCF',
-    leadType: dcf.bookFlag,
-    stage: dcf.overallStatus,
-    status: dcf.overallStatus === 'REJECTED' ? 'Lost' : dcf.overallStatus === 'DISBURSED' ? 'Converted' : 'Active',
-    cep: dcf.loanAmount,
-    secondaryValue: dcf.carValue,
-    revenue: dcf.loanAmount ?? 0,
-    createdAt: dcf.createdAt,
-    dealerName: dcf.dealerName,
-    dealerCode: dcf.dealerCode,
-    dealerId: dcf.dealerId,
-    city: dcf.city,
-    kamOwner: dcf.kamName,
-    phone: dcf.phone,
-    badges: [
-      { type: 'channel', label: 'DCF', color: 'amber' as const },
-      { type: 'rag', label: dcf.ragStatus.toUpperCase(), color: dcf.ragStatus === 'green' ? 'green' as const : dcf.ragStatus === 'amber' ? 'amber' as const : 'red' as const },
-      { type: 'status', label: dcf.overallStatus, color: dcf.overallStatus === 'DISBURSED' ? 'green' as const : dcf.overallStatus === 'REJECTED' ? 'red' as const : 'blue' as const },
-    ],
-  };
 }
 
 /** Validate a lead ID before navigation — logs a warning for invalid IDs */

@@ -19,6 +19,8 @@ import {
   CheckCircle, Zap, Target, ChevronRight, Phone, MapPin, FileText,
   Rocket, ShieldAlert, ArrowUpRight, BarChart3, CircleDollarSign,
 } from 'lucide-react';
+import { TimePeriod } from '../../lib/domain/constants';
+import { computeMetrics } from '../../lib/metrics/metricsFromDB';
 
 // ── Types ──
 
@@ -61,7 +63,7 @@ function LmtdMarker({ direction, label }: { direction: MomentumDir; label: strin
   );
 }
 
-// ── Mock Data ──
+// ── Real Data from Supabase ──
 
 interface KAMLmtd {
   stockInsPct: number;
@@ -71,65 +73,73 @@ interface KAMLmtd {
   dcfGMV: number;
 }
 
-function getKAMData(period: Period) {
-  const base = {
-    today: {
-      stockIns: 4, stockInsTarget: 6, i2si: 67, i2siTarget: 65,
-      inputScore: 85, inputScoreTarget: 85,
-      inspections: 8, leads: 12, sis: 6,
-      dcfDisbursals: 1, dcfTarget: 1, dcfOnboardings: 0, dcfLeadsSubmitted: 2, dcfGMV: 2.3, dcfConversion: 50,
-      visits: 3, visitsTarget: 3, connects: 12, connectsTarget: 15,
-      callFeedbackPct: 78, dealersVisited: 3, dormantDealers: 2,
-      cepPending: 2, cepConversionPct: 65, inspectionsBooked: 4,
-      dcfOnboardingRatio: 0, dcfWeeklyAvgSubmissions: 3,
-      attendance: 1, attendanceTarget: 1,
-    },
-    'd-1': {
-      stockIns: 5, stockInsTarget: 6, i2si: 71, i2siTarget: 65,
-      inputScore: 87, inputScoreTarget: 85,
-      inspections: 9, leads: 14, sis: 7,
-      dcfDisbursals: 2, dcfTarget: 1, dcfOnboardings: 1, dcfLeadsSubmitted: 4, dcfGMV: 4.8, dcfConversion: 67,
-      visits: 6, visitsTarget: 4, connects: 15, connectsTarget: 15,
-      callFeedbackPct: 82, dealersVisited: 6, dormantDealers: 1,
-      cepPending: 3, cepConversionPct: 70, inspectionsBooked: 5,
-      dcfOnboardingRatio: 33, dcfWeeklyAvgSubmissions: 4,
-      attendance: 1, attendanceTarget: 1,
-    },
-    mtd: {
-      stockIns: 124, stockInsTarget: 150, i2si: 69, i2siTarget: 65,
-      inputScore: 87, inputScoreTarget: 85,
-      inspections: 287, leads: 456, sis: 198,
-      dcfDisbursals: 18, dcfTarget: 25, dcfOnboardings: 5, dcfLeadsSubmitted: 34, dcfGMV: 42.5, dcfConversion: 53,
-      visits: 28, visitsTarget: 32, connects: 198, connectsTarget: 200,
-      callFeedbackPct: 68, dealersVisited: 42, dormantDealers: 8,
-      cepPending: 6, cepConversionPct: 62, inspectionsBooked: 14,
-      dcfOnboardingRatio: 42, dcfWeeklyAvgSubmissions: 8,
-      attendance: 7, attendanceTarget: 8,
-    },
-    'last-month': {
-      stockIns: 142, stockInsTarget: 150, i2si: 66, i2siTarget: 65,
-      inputScore: 84, inputScoreTarget: 85,
-      inspections: 312, leads: 498, sis: 215,
-      dcfDisbursals: 22, dcfTarget: 25, dcfOnboardings: 7, dcfLeadsSubmitted: 48, dcfGMV: 52.8, dcfConversion: 46,
-      visits: 32, visitsTarget: 32, connects: 225, connectsTarget: 200,
-      callFeedbackPct: 74, dealersVisited: 48, dormantDealers: 5,
-      cepPending: 4, cepConversionPct: 68, inspectionsBooked: 18,
-      dcfOnboardingRatio: 58, dcfWeeklyAvgSubmissions: 12,
-      attendance: 20, attendanceTarget: 22,
-    },
-  };
-  return base[period];
+function periodToTimePeriod(p: Period): TimePeriod {
+  switch (p) {
+    case 'today': return TimePeriod.TODAY;
+    case 'd-1': return TimePeriod.D_MINUS_1;
+    case 'mtd': return TimePeriod.MTD;
+    case 'last-month': return TimePeriod.LAST_MONTH;
+  }
 }
 
-// LMTD comparison data per period (what the same metrics were at the same point last month)
-function getKAMLmtd(period: Period): KAMLmtd {
-  const data: Record<Period, KAMLmtd> = {
-    today: { stockInsPct: 60, i2si: 64, inputScore: 82, dcfDisbursalsPct: 80, dcfGMV: 2.0 },
-    'd-1': { stockInsPct: 75, i2si: 68, inputScore: 84, dcfDisbursalsPct: 90, dcfGMV: 4.2 },
-    mtd: { stockInsPct: 78, i2si: 72, inputScore: 83, dcfDisbursalsPct: 68, dcfGMV: 38.5 },
-    'last-month': { stockInsPct: 90, i2si: 64, inputScore: 82, dcfDisbursalsPct: 82, dcfGMV: 48.0 },
+function getKAMData(period: Period) {
+  const tp = periodToTimePeriod(period);
+  const m = computeMetrics(tp);
+
+  const stockInsTarget = period === 'today' || period === 'd-1' ? 6 : 150;
+  const dcfTarget = period === 'today' || period === 'd-1' ? 1 : 25;
+  const visitsTarget = period === 'today' || period === 'd-1' ? 3 : 32;
+  const connectsTarget = period === 'today' || period === 'd-1' ? 15 : 200;
+  const inputScoreTarget = 85;
+
+  // Compute input score
+  const inputScore = Math.round(
+    (Math.min(m.completedVisits / 3, 1) * 30) +
+    (Math.min(m.totalCalls / 5, 1) * 30) +
+    (Math.min(m.uniqueDealersCalled / 3, 1) * 20) +
+    (Math.min(m.conversionRate / 50, 1) * 20)
+  );
+
+  const dcfConversion = m.dcfTotal > 0 ? Math.round((m.dcfDisbursals / m.dcfTotal) * 100) : 0;
+  const dcfOnboardingRatio = m.dcfTotal > 0 ? Math.round((m.dcfDisbursals / m.dcfTotal) * 100) : 0;
+  const callFeedbackPct = m.callConnectRate;
+  const dormantDealers = Math.max(0, m.totalDealers - m.uniqueDealersCalled);
+  const cepPending = Math.max(0, m.openLeads - m.completedVisits);
+  const cepConversionPct = m.totalLeads > 0 ? Math.round((m.wonLeads / m.totalLeads) * 100) : 0;
+
+  return {
+    stockIns: m.stockIns, stockInsTarget, i2si: m.i2si, i2siTarget: 65,
+    inputScore, inputScoreTarget,
+    inspections: m.totalLeads, leads: m.totalLeads, sis: m.wonLeads,
+    dcfDisbursals: m.dcfDisbursals, dcfTarget, dcfOnboardings: m.dcfTotal - m.dcfDisbursals,
+    dcfLeadsSubmitted: m.dcfTotal, dcfGMV: m.dcfDisbursedValue, dcfConversion,
+    visits: m.completedVisits, visitsTarget, connects: m.connectedCalls, connectsTarget,
+    callFeedbackPct, dealersVisited: m.uniqueDealersVisited, dormantDealers,
+    cepPending, cepConversionPct, inspectionsBooked: m.scheduledVisits,
+    dcfOnboardingRatio, dcfWeeklyAvgSubmissions: Math.max(1, Math.round(m.dcfTotal / 4)),
+    attendance: m.completedVisits, attendanceTarget: visitsTarget,
   };
-  return data[period];
+}
+
+function getKAMLmtd(period: Period): KAMLmtd {
+  // Use last month data as LMTD comparison baseline
+  const lastMonth = computeMetrics(TimePeriod.LAST_MONTH);
+  const lastMonthSIPct = lastMonth.totalLeads > 0 ? Math.round((lastMonth.wonLeads / lastMonth.totalLeads) * 100) : 0;
+  const lastMonthDCFPct = lastMonth.dcfTotal > 0 ? Math.round((lastMonth.dcfDisbursals / lastMonth.dcfTotal) * 100) : 0;
+  const lastMonthScore = Math.round(
+    (Math.min(lastMonth.completedVisits / 3, 1) * 30) +
+    (Math.min(lastMonth.totalCalls / 5, 1) * 30) +
+    (Math.min(lastMonth.uniqueDealersCalled / 3, 1) * 20) +
+    (Math.min(lastMonth.conversionRate / 50, 1) * 20)
+  );
+
+  return {
+    stockInsPct: lastMonthSIPct,
+    i2si: lastMonth.i2si,
+    inputScore: lastMonthScore,
+    dcfDisbursalsPct: lastMonthDCFPct,
+    dcfGMV: lastMonth.dcfDisbursedValue,
+  };
 }
 
 // ── Helpers ──
@@ -213,22 +223,22 @@ export function KAMDetailPage({ kamName, kamCity, onBack, onNavigateToSection }:
   // Overall KAM status for header
   const kamStatus: RAG = siAchievePct >= 95 && d.inputScore >= 85 ? 'green'
     : siAchievePct >= 80 && d.inputScore >= 70 ? 'amber'
-    : 'red';
+      : 'red';
   const kamStatusLabel = kamStatus === 'green' ? 'On Track' : kamStatus === 'amber' ? 'Needs Attention' : 'Critical';
 
   // Incentive slab
   const slabStatus = siAchievePct >= 110
     ? { icon: Rocket, label: 'On track for 110% slab', sublabel: `${siNeededFor110 === 0 ? 'Already unlocked' : `${siNeededFor110} more SI to lock`}`, color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-100' }
     : siAchievePct >= 95
-    ? { icon: CheckCircle, label: 'Eligible for 95% slab', sublabel: `${siNeededFor110} more SI to unlock 110% slab`, color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-100' }
-    : { icon: AlertTriangle, label: `Needs ${siNeededFor95} more stock-ins for 95% slab`, sublabel: `Currently at ${siAchievePct}% achievement`, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-100' };
+      ? { icon: CheckCircle, label: 'Eligible for 95% slab', sublabel: `${siNeededFor110} more SI to unlock 110% slab`, color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-100' }
+      : { icon: AlertTriangle, label: `Needs ${siNeededFor95} more stock-ins for 95% slab`, sublabel: `Currently at ${siAchievePct}% achievement`, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-100' };
 
   // I2SI slab
   const i2siSlab = d.i2si >= 15
     ? { label: '15% slab unlocked', color: 'text-indigo-700', bg: 'bg-indigo-100 text-indigo-700' }
     : d.i2si >= 12
-    ? { label: '12% slab active', color: 'text-emerald-700', bg: 'bg-emerald-100 text-emerald-700' }
-    : { label: 'Below incentive band', color: 'text-rose-700', bg: 'bg-rose-100 text-rose-700' };
+      ? { label: '12% slab active', color: 'text-emerald-700', bg: 'bg-emerald-100 text-emerald-700' }
+      : { label: 'Below incentive band', color: 'text-rose-700', bg: 'bg-rose-100 text-rose-700' };
 
   // ── Performance Gaps ──
   const pipelineGaps = useMemo(() => [
@@ -377,9 +387,8 @@ export function KAMDetailPage({ kamName, kamCity, onBack, onNavigateToSection }:
                   <span className="text-[28px] font-extrabold text-slate-900 tabular-nums leading-none">{d.stockIns}</span>
                   <span className="text-[14px] font-medium text-slate-400">/ {d.stockInsTarget}</span>
                 </div>
-                <div className={`text-[12px] font-bold mt-1 tabular-nums ${
-                  siAchievePct >= 95 ? 'text-emerald-600' : 'text-amber-600'
-                }`}>
+                <div className={`text-[12px] font-bold mt-1 tabular-nums ${siAchievePct >= 95 ? 'text-emerald-600' : 'text-amber-600'
+                  }`}>
                   {siAchievePct}% achieved
                 </div>
               </div>
@@ -440,9 +449,8 @@ export function KAMDetailPage({ kamName, kamCity, onBack, onNavigateToSection }:
                   <span className="text-[28px] font-extrabold text-slate-900 tabular-nums leading-none">{d.dcfDisbursals}</span>
                   <span className="text-[14px] font-medium text-slate-400">/ {d.dcfTarget}</span>
                 </div>
-                <div className={`text-[12px] font-bold mt-1 tabular-nums ${
-                  dcfAchievePct >= 70 ? 'text-emerald-600' : dcfAchievePct >= 50 ? 'text-amber-600' : 'text-rose-600'
-                }`}>
+                <div className={`text-[12px] font-bold mt-1 tabular-nums ${dcfAchievePct >= 70 ? 'text-emerald-600' : dcfAchievePct >= 50 ? 'text-amber-600' : 'text-rose-600'
+                  }`}>
                   {dcfAchievePct}% achieved
                 </div>
               </div>
@@ -491,9 +499,8 @@ export function KAMDetailPage({ kamName, kamCity, onBack, onNavigateToSection }:
 
           {/* MOMENTUM INSIGHT — micro line between hero and incentive */}
           {overallMomentum !== 'flat' && (
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
-              overallMomentum === 'up' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'
-            }`}>
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${overallMomentum === 'up' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'
+              }`}>
               {overallMomentum === 'up'
                 ? <TrendingUp className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                 : <TrendingDown className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
@@ -535,9 +542,8 @@ export function KAMDetailPage({ kamName, kamCity, onBack, onNavigateToSection }:
               </div>
               <div className="bg-slate-50 rounded-xl p-3">
                 <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Score Gate</div>
-                <span className={`inline-flex text-[11px] font-semibold px-2 py-1 rounded-lg ${
-                  d.inputScore >= 70 ? 'bg-emerald-100 text-emerald-700' : d.inputScore >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
-                }`}>
+                <span className={`inline-flex text-[11px] font-semibold px-2 py-1 rounded-lg ${d.inputScore >= 70 ? 'bg-emerald-100 text-emerald-700' : d.inputScore >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                  }`}>
                   {d.inputScore >= 70 ? 'Full Payout' : d.inputScore >= 50 ? 'Half Payout' : 'Zero Payout'}
                 </span>
                 <div className="text-[11px] text-slate-500 mt-1.5">Score: {d.inputScore}</div>

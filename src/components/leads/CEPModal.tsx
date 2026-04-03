@@ -51,7 +51,7 @@ interface CEPModalProps {
   /** C24 internal quote for gap analysis */
   c24Quote?: number | null;
   /** Lead channel for context */
-  channel?: 'C2B' | 'C2D' | 'GS';
+  channel?: 'NGS' | 'GS' | 'DCF' | string;
   /** Vehicle info for header */
   vehicleInfo?: string;
 }
@@ -91,7 +91,7 @@ export function CEPModal({
   initialConfidence = 'estimated',
   initialNotes = '',
   c24Quote,
-  channel = 'C2B',
+  channel = 'NGS',
   vehicleInfo,
 }: CEPModalProps) {
   const [cepInput, setCepInput] = useState('');

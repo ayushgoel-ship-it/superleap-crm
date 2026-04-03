@@ -10,16 +10,18 @@
  */
 
 interface ChannelBadgeProps {
-  channel: 'C2B' | 'C2D' | 'GS' | 'DCF';
+  channel: 'NGS' | 'GS' | 'DCF' | string;
 }
 
 /** @deprecated — use ChannelChip from premium/Chip.tsx */
 export function ChannelBadge({ channel }: ChannelBadgeProps) {
-  const styles = {
-    C2B: 'bg-violet-50 text-violet-700 border-violet-100',
-    C2D: 'bg-blue-50 text-blue-700 border-blue-100',
+  const styles: Record<string, string> = {
+    NGS: 'bg-violet-50 text-violet-700 border-violet-100',
     GS: 'bg-emerald-50 text-emerald-700 border-emerald-100',
     DCF: 'bg-amber-50 text-amber-700 border-amber-100',
+    // Legacy fallbacks
+    C2B: 'bg-violet-50 text-violet-700 border-violet-100',
+    C2D: 'bg-blue-50 text-blue-700 border-blue-100',
   };
 
   return (

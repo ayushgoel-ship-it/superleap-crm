@@ -103,12 +103,12 @@ export function CreateLeadModal({
     if (!leadData.bookAppointment) return null; // No appointment, no CEP required
     if (leadData.type === 'dcf') return null; // DCF doesn't need CEP
     
-    const channel = leadData.type === 'seller' ? 'C2B' : 
-                    leadData.type === 'gs' ? 'GS' : 
-                    leadData.type === 'inventory' ? 'C2D' : 'C2B';
-    
+    const channel = leadData.type === 'seller' ? 'NGS' :
+                    leadData.type === 'gs' ? 'GS' :
+                    leadData.type === 'dcf' ? 'DCF' : 'NGS';
+
     const validation = validateCEPForAction(
-      channel as 'C2B' | 'GS' | 'C2D',
+      channel as 'NGS' | 'GS' | 'DCF',
       leadData.cep,
       'create_appointment'
     );

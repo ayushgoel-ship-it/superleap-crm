@@ -4,9 +4,13 @@
  * Centralized selectors for V/C module with feedback support
  */
 
-import { CALLS, VISITS } from './mockDatabase';
+import { getRuntimeDBSync } from '@/data/runtimeDB';
 import { CallLog, VisitLog } from './types';
-import { normalizeKAMId, normalizeTLId, normalizeDealerId } from './mockDatabase';
+import { normalizeKAMId, normalizeTLId, normalizeDealerId } from './idUtils';
+
+// Runtime DB access — no more static mock arrays
+const CALLS = () => getRuntimeDBSync().calls;
+const VISITS = () => getRuntimeDBSync().visits;
 
 /**
  * Time scope helpers
@@ -39,15 +43,15 @@ const isWithinScope = (dateStr: string, scope: string): boolean => {
  */
 
 export function getCallById(callId: string): CallLog | undefined {
-  return CALLS.find(c => c.id === callId);
+  return CALLS().find(c => c.id === callId);
 }
 
 export function getTodayCalls(userId: string): CallLog[] {
   const normalizedId = normalizeKAMId(userId);
   const today = new Date().toISOString().split('T')[0];
   
-  return CALLS.filter(c => 
-    c.kamId === normalizedId && 
+  return CALLS().filter(c =>
+    c.kamId === normalizedId &&
     c.callDate === today
   ).sort((a, b) => b.callTime.localeCompare(a.callTime));
 }
@@ -55,8 +59,8 @@ export function getTodayCalls(userId: string): CallLog[] {
 export function getCallsByScope(userId: string, scope: string): CallLog[] {
   const normalizedId = normalizeKAMId(userId);
   
-  return CALLS.filter(c => 
-    c.kamId === normalizedId && 
+  return CALLS().filter(c =>
+    c.kamId === normalizedId &&
     isWithinScope(c.callDate, scope)
   ).sort((a, b) => b.callDate.localeCompare(a.callDate));
 }
@@ -64,8 +68,8 @@ export function getCallsByScope(userId: string, scope: string): CallLog[] {
 export function getPendingCallFeedback(userId: string): CallLog[] {
   const normalizedId = normalizeKAMId(userId);
   
-  return CALLS.filter(c => 
-    c.kamId === normalizedId && 
+  return CALLS().filter(c =>
+    c.kamId === normalizedId &&
     c.feedbackStatus === 'PENDING'
   );
 }
@@ -75,15 +79,15 @@ export function getPendingCallFeedback(userId: string): CallLog[] {
  */
 
 export function getVisitById(visitId: string): VisitLog | undefined {
-  return VISITS.find(v => v.id === visitId);
+  return VISITS().find(v => v.id === visitId);
 }
 
 export function getTodayVisits(userId: string): VisitLog[] {
   const normalizedId = normalizeKAMId(userId);
   const today = new Date().toISOString().split('T')[0];
   
-  return VISITS.filter(v => 
-    v.kamId === normalizedId && 
+  return VISITS().filter(v =>
+    v.kamId === normalizedId &&
     v.visitDate === today &&
     v.status === 'COMPLETED'
   ).sort((a, b) => b.visitTime.localeCompare(a.visitTime));
@@ -92,8 +96,8 @@ export function getTodayVisits(userId: string): VisitLog[] {
 export function getPendingVisits(userId: string): VisitLog[] {
   const normalizedId = normalizeKAMId(userId);
   
-  return VISITS.filter(v => 
-    v.kamId === normalizedId && 
+  return VISITS().filter(v =>
+    v.kamId === normalizedId &&
     v.status === 'CHECKED_IN'
   ).sort((a, b) => (b.checkInAt || '').localeCompare(a.checkInAt || ''));
 }
@@ -101,8 +105,8 @@ export function getPendingVisits(userId: string): VisitLog[] {
 export function getVisitsByScope(userId: string, scope: string): VisitLog[] {
   const normalizedId = normalizeKAMId(userId);
   
-  return VISITS.filter(v => 
-    v.kamId === normalizedId && 
+  return VISITS().filter(v =>
+    v.kamId === normalizedId &&
     v.status === 'COMPLETED' &&
     isWithinScope(v.visitDate, scope)
   ).sort((a, b) => b.visitDate.localeCompare(a.visitDate));
@@ -111,8 +115,8 @@ export function getVisitsByScope(userId: string, scope: string): VisitLog[] {
 export function getPendingVisitFeedback(userId: string): VisitLog[] {
   const normalizedId = normalizeKAMId(userId);
   
-  return VISITS.filter(v => 
-    v.kamId === normalizedId && 
+  return VISITS().filter(v =>
+    v.kamId === normalizedId &&
     v.feedbackStatus === 'PENDING'
   );
 }
@@ -242,26 +246,26 @@ export function getVisitDetailDTO(visitId: string): VisitDetailDTO | null {
  */
 
 export function updateCallFeedback(callId: string, feedbackData: CallLog['feedbackData']): boolean {
-  const call = CALLS.find(c => c.id === callId);
+  const call = CALLS().find(c => c.id === callId);
   if (!call) return false;
-  
+
   call.feedbackData = feedbackData;
   call.feedbackStatus = 'SUBMITTED';
   call.feedbackSubmittedAt = new Date().toISOString();
-  
+
   return true;
 }
 
 export function updateVisitFeedback(visitId: string, feedbackData: VisitLog['feedbackData']): boolean {
-  const visit = VISITS.find(v => v.id === visitId);
+  const visit = VISITS().find(v => v.id === visitId);
   if (!visit) return false;
-  
+
   visit.feedbackData = feedbackData;
   visit.feedbackStatus = 'SUBMITTED';
   visit.feedbackSubmittedAt = new Date().toISOString();
   visit.status = 'COMPLETED';
   visit.completedAt = new Date().toISOString();
-  
+
   return true;
 }
 
@@ -301,12 +305,12 @@ export function createVisit(params: {
     feedbackStatus: 'PENDING',
   };
   
-  VISITS.push(newVisit);
+  VISITS().push(newVisit);
   return visitId;
 }
 
 export function markVisitCheckedIn(visitId: string, userLat: number, userLng: number, distanceM: number): boolean {
-  const visit = VISITS.find(v => v.id === visitId);
+  const visit = VISITS().find(v => v.id === visitId);
   if (!visit) return false;
   
   const now = new Date();
@@ -343,6 +347,6 @@ export function createVisitCheckIn(dealerId: string, dealerName: string, kamId: 
     feedbackStatus: 'PENDING',
   };
   
-  VISITS.push(newVisit);
+  VISITS().push(newVisit);
   return visitId;
 }

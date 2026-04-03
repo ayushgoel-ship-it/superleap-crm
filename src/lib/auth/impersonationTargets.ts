@@ -1,75 +1,53 @@
 import { ImpersonationTarget } from './types';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
 
 /**
- * Mock list of KAMs and TLs that Admin can impersonate
- * These are "actor profiles" - they may or may not have auth credentials
+ * Impersonation targets derived from the Supabase users table.
+ * No more hardcoded mock user lists.
  */
 
-export const MOCK_KAMS: ImpersonationTarget[] = [
-  {
-    userId: 'kam-rajesh',
-    name: 'Rajesh Kumar',
-    role: 'KAM',
-    city: 'Gurgaon',
-  },
-  {
-    userId: 'kam-amit',
-    name: 'Amit Singh',
-    role: 'KAM',
-    city: 'Delhi',
-  },
-  {
-    userId: 'kam-priya',
-    name: 'Priya Mehta',
-    role: 'KAM',
-    city: 'Noida',
-  },
-  {
-    userId: 'kam-vikram',
-    name: 'Vikram Patel',
-    role: 'KAM',
-    city: 'Bangalore',
-  },
-  {
-    userId: 'kam-sneha',
-    name: 'Sneha Reddy',
-    role: 'KAM',
-    city: 'Hyderabad',
-  },
-];
+function buildTargetsFromDB(): { kams: ImpersonationTarget[]; tls: ImpersonationTarget[] } {
+  const db = getRuntimeDBSync();
+  const seen = new Set<string>();
+  const kams: ImpersonationTarget[] = [];
+  const tls: ImpersonationTarget[] = [];
 
-export const MOCK_TLS: ImpersonationTarget[] = [
-  {
-    userId: 'tl-priya',
-    name: 'Priya Sharma',
-    role: 'TL',
-    city: 'Gurgaon',
-  },
-  {
-    userId: 'tl-rahul',
-    name: 'Rahul Verma',
-    role: 'TL',
-    city: 'Delhi',
-  },
-  {
-    userId: 'tl-anjali',
-    name: 'Anjali Kapoor',
-    role: 'TL',
-    city: 'Bangalore',
-  },
-  {
-    userId: 'tl-suresh',
-    name: 'Suresh Kumar',
-    role: 'TL',
-    city: 'Mumbai',
-  },
-];
+  // Extract unique KAMs from dealers and leads
+  db.dealers.forEach((d: any) => {
+    if (d.kamId && d.kamId !== 'unassigned' && !seen.has(d.kamId)) {
+      seen.add(d.kamId);
+      kams.push({ userId: d.kamId, name: d.kamName || 'KAM', role: 'KAM', city: d.city || 'NCR' });
+    }
+  });
+  db.leads.forEach((l: any) => {
+    if (l.kamId && l.kamId !== 'unassigned' && !seen.has(l.kamId)) {
+      seen.add(l.kamId);
+      kams.push({ userId: l.kamId, name: l.kamName || 'KAM', role: 'KAM', city: l.city || 'NCR' });
+    }
+  });
+
+  // TLs — derive from dealers' tlId
+  const tlSeen = new Set<string>();
+  db.dealers.forEach((d: any) => {
+    if (d.tlId && d.tlId !== 'tl-default' && !tlSeen.has(d.tlId)) {
+      tlSeen.add(d.tlId);
+      tls.push({ userId: d.tlId, name: `TL-${d.tlId}`, role: 'TL', city: d.city || 'NCR' });
+    }
+  });
+
+  return { kams, tls };
+}
 
 export function getImpersonationTargets(role: 'KAM' | 'TL'): ImpersonationTarget[] {
-  return role === 'KAM' ? MOCK_KAMS : MOCK_TLS;
+  const { kams, tls } = buildTargetsFromDB();
+  return role === 'KAM' ? kams : tls;
 }
 
 export function getImpersonationTarget(userId: string): ImpersonationTarget | null {
-  const allTargets = [...MOCK_KAMS, ...MOCK_TLS];
-  return allTargets.find(t => t.userId === userId) || null;
+  const { kams, tls } = buildTargetsFromDB();
+  return [...kams, ...tls].find(t => t.userId === userId) || null;
 }
+
+// Legacy exports for backward compatibility
+export const MOCK_KAMS: ImpersonationTarget[] = [];
+export const MOCK_TLS: ImpersonationTarget[] = [];

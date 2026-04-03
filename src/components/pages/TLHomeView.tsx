@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { FilterChip } from '../premium/Chip';
 import { TimePeriod } from '../../lib/domain/constants';
+import { computeTLOverview, computeKAMMetrics, computeMetrics } from '../../lib/metrics/metricsFromDB';
 
 // ── Types ──
 
@@ -118,7 +119,7 @@ function LmtdMarker({ direction, label, variant = 'dark' }: { direction: Momentu
   );
 }
 
-// ── Mock Data by Period ──
+// ── Real Data by Period ──
 
 function getTLData(period: TLPeriod): {
   overview: TLOverview;
@@ -127,74 +128,68 @@ function getTLData(period: TLPeriod): {
   lmtd: TLLmtd;
 } {
   const i2siTarget = 15;
+  const tlOverview = computeTLOverview(period);
+  const totalMetrics = computeMetrics(period);
 
-  switch (period) {
-    case TimePeriod.D_MINUS_1:
-      return {
-        overview: {
-          teamStockIns: 22, teamStockInsTarget: 24, teamI2SI: 13.5, teamI2SITarget: i2siTarget,
-          teamAvgInputScore: 78, dcfOnboardings: 1, dcfGMV: 4.2, dcfGMVTarget: 5,
-        },
-        lmtd: { teamStockInsPct: 88, teamI2SI: 14.0, teamAvgInputScore: 76, dcfGMV: 3.8, dcfOnboardings: 1 },
-        kamData: [
-          { name: 'Rajesh Kumar', city: 'Gurgaon', inputScore: 85, sis: 7, sisTarget: 9, i2si: 14.2, i2siTarget: i2siTarget, stockIns: 5, stockInsTarget: 5, dcfDisbursals: 1, dcfGMV: 1.8, lmtdSIPct: 92 },
-          { name: 'Priya Sharma', city: 'Noida', inputScore: 72, sis: 6, sisTarget: 9, i2si: 12.8, i2siTarget: i2siTarget, stockIns: 4, stockInsTarget: 5, dcfDisbursals: 0, dcfGMV: 0, lmtdSIPct: 88 },
-          { name: 'Amit Patel', city: 'Delhi', inputScore: 89, sis: 8, sisTarget: 9, i2si: 16.1, i2siTarget: i2siTarget, stockIns: 6, stockInsTarget: 5, dcfDisbursals: 0, dcfGMV: 1.2, lmtdSIPct: 95 },
-          { name: 'Sneha Verma', city: 'Faridabad', inputScore: 48, sis: 5, sisTarget: 9, i2si: 10.2, i2siTarget: i2siTarget, stockIns: 3, stockInsTarget: 5, dcfDisbursals: 0, dcfGMV: 0, lmtdSIPct: 68 },
-          { name: 'Vikram Singh', city: 'Pune', inputScore: 82, sis: 7, sisTarget: 9, i2si: 14.5, i2siTarget: i2siTarget, stockIns: 4, stockInsTarget: 5, dcfDisbursals: 0, dcfGMV: 1.2, lmtdSIPct: 78 },
-        ],
-        incentive: { currentAchievementPercent: 92, currentI2SI: 13.5, projectedPayout: 28500, scoreGate: 'full', avgTeamScore: 78, dcfOnboardingBonus: 100, dcfGMVBonus: 126, i2siBonus: 0 },
-      };
-    case TimePeriod.LAST_7D:
-      return {
-        overview: {
-          teamStockIns: 78, teamStockInsTarget: 84, teamI2SI: 14.2, teamI2SITarget: i2siTarget,
-          teamAvgInputScore: 81, dcfOnboardings: 4, dcfGMV: 18.5, dcfGMVTarget: 22,
-        },
-        lmtd: { teamStockInsPct: 90, teamI2SI: 14.8, teamAvgInputScore: 79, dcfGMV: 16.2, dcfOnboardings: 3 },
-        kamData: [
-          { name: 'Rajesh Kumar', city: 'Gurgaon', inputScore: 86, sis: 28, sisTarget: 35, i2si: 15.1, i2siTarget: i2siTarget, stockIns: 18, stockInsTarget: 18, dcfDisbursals: 1, dcfGMV: 5.2, lmtdSIPct: 94 },
-          { name: 'Priya Sharma', city: 'Noida', inputScore: 73, sis: 24, sisTarget: 35, i2si: 13.2, i2siTarget: i2siTarget, stockIns: 14, stockInsTarget: 18, dcfDisbursals: 1, dcfGMV: 3.8, lmtdSIPct: 84 },
-          { name: 'Amit Patel', city: 'Delhi', inputScore: 91, sis: 32, sisTarget: 35, i2si: 16.8, i2siTarget: i2siTarget, stockIns: 20, stockInsTarget: 18, dcfDisbursals: 1, dcfGMV: 6.1, lmtdSIPct: 100 },
-          { name: 'Sneha Verma', city: 'Faridabad', inputScore: 52, sis: 20, sisTarget: 35, i2si: 10.8, i2siTarget: i2siTarget, stockIns: 12, stockInsTarget: 18, dcfDisbursals: 0, dcfGMV: 0, lmtdSIPct: 72 },
-          { name: 'Vikram Singh', city: 'Pune', inputScore: 84, sis: 27, sisTarget: 35, i2si: 14.9, i2siTarget: i2siTarget, stockIns: 14, stockInsTarget: 18, dcfDisbursals: 1, dcfGMV: 3.4, lmtdSIPct: 82 },
-        ],
-        incentive: { currentAchievementPercent: 93, currentI2SI: 14.2, projectedPayout: 82000, scoreGate: 'full', avgTeamScore: 81, dcfOnboardingBonus: 400, dcfGMVBonus: 555, i2siBonus: 0 },
-      };
-    case TimePeriod.LAST_MONTH:
-      return {
-        overview: {
-          teamStockIns: 118, teamStockInsTarget: 120, teamI2SI: 15.8, teamI2SITarget: i2siTarget,
-          teamAvgInputScore: 84, dcfOnboardings: 8, dcfGMV: 42.5, dcfGMVTarget: 45,
-        },
-        lmtd: { teamStockInsPct: 94, teamI2SI: 14.9, teamAvgInputScore: 80, dcfGMV: 38.2, dcfOnboardings: 6 },
-        kamData: [
-          { name: 'Rajesh Kumar', city: 'Gurgaon', inputScore: 88, sis: 42, sisTarget: 44, i2si: 16.2, i2siTarget: i2siTarget, stockIns: 26, stockInsTarget: 24, dcfDisbursals: 2, dcfGMV: 12.4, lmtdSIPct: 100 },
-          { name: 'Priya Sharma', city: 'Noida', inputScore: 78, sis: 36, sisTarget: 44, i2si: 14.5, i2siTarget: i2siTarget, stockIns: 22, stockInsTarget: 24, dcfDisbursals: 1, dcfGMV: 6.8, lmtdSIPct: 96 },
-          { name: 'Amit Patel', city: 'Delhi', inputScore: 92, sis: 48, sisTarget: 44, i2si: 17.8, i2siTarget: i2siTarget, stockIns: 28, stockInsTarget: 24, dcfDisbursals: 3, dcfGMV: 14.2, lmtdSIPct: 105 },
-          { name: 'Sneha Verma', city: 'Faridabad', inputScore: 65, sis: 30, sisTarget: 44, i2si: 11.2, i2siTarget: i2siTarget, stockIns: 18, stockInsTarget: 24, dcfDisbursals: 1, dcfGMV: 4.5, lmtdSIPct: 80 },
-          { name: 'Vikram Singh', city: 'Pune', inputScore: 87, sis: 40, sisTarget: 44, i2si: 15.5, i2siTarget: i2siTarget, stockIns: 24, stockInsTarget: 24, dcfDisbursals: 1, dcfGMV: 4.6, lmtdSIPct: 92 },
-        ],
-        incentive: { currentAchievementPercent: 98, currentI2SI: 15.8, projectedPayout: 185000, scoreGate: 'full', avgTeamScore: 84, dcfOnboardingBonus: 800, dcfGMVBonus: 1275, i2siBonus: 5000 },
-      };
-    case TimePeriod.MTD:
-    default:
-      return {
-        overview: {
-          teamStockIns: 87, teamStockInsTarget: 100, teamI2SI: 14.1, teamI2SITarget: i2siTarget,
-          teamAvgInputScore: 81, dcfOnboardings: 6, dcfGMV: 28.4, dcfGMVTarget: 35,
-        },
-        lmtd: { teamStockInsPct: 82, teamI2SI: 15.3, teamAvgInputScore: 79, dcfGMV: 25.3, dcfOnboardings: 5 },
-        kamData: [
-          { name: 'Rajesh Kumar', city: 'Gurgaon', inputScore: 87, sis: 32, sisTarget: 44, i2si: 15.2, i2siTarget: i2siTarget, stockIns: 20, stockInsTarget: 20, dcfDisbursals: 2, dcfGMV: 8.6, lmtdSIPct: 92 },
-          { name: 'Priya Sharma', city: 'Noida', inputScore: 68, sis: 28, sisTarget: 44, i2si: 13.1, i2siTarget: i2siTarget, stockIns: 15, stockInsTarget: 20, dcfDisbursals: 1, dcfGMV: 4.2, lmtdSIPct: 82 },
-          { name: 'Amit Patel', city: 'Delhi', inputScore: 91, sis: 38, sisTarget: 44, i2si: 16.5, i2siTarget: i2siTarget, stockIns: 22, stockInsTarget: 20, dcfDisbursals: 2, dcfGMV: 9.8, lmtdSIPct: 95 },
-          { name: 'Sneha Verma', city: 'Faridabad', inputScore: 48, sis: 22, sisTarget: 44, i2si: 10.8, i2siTarget: i2siTarget, stockIns: 12, stockInsTarget: 20, dcfDisbursals: 0, dcfGMV: 0, lmtdSIPct: 65 },
-          { name: 'Vikram Singh', city: 'Pune', inputScore: 85, sis: 30, sisTarget: 44, i2si: 14.8, i2siTarget: i2siTarget, stockIns: 18, stockInsTarget: 20, dcfDisbursals: 1, dcfGMV: 5.8, lmtdSIPct: 88 },
-        ],
-        incentive: { currentAchievementPercent: 87, currentI2SI: 14.1, projectedPayout: 142000, scoreGate: 'full', avgTeamScore: 81, dcfOnboardingBonus: 600, dcfGMVBonus: 852, i2siBonus: 0 },
-      };
-  }
+  // Map KAM metrics into the KAMData shape expected by the view
+  const kamData: KAMData[] = tlOverview.kamMetrics.map(km => {
+    const siTarget = 20; // per-KAM target
+    return {
+      name: km.kamName,
+      city: 'NCR',
+      inputScore: km.inputScore,
+      sis: km.wonLeads,
+      sisTarget: siTarget,
+      i2si: km.i2si,
+      i2siTarget: i2siTarget,
+      stockIns: km.stockIns,
+      stockInsTarget: siTarget,
+      dcfDisbursals: km.dcfDisbursals,
+      dcfGMV: km.dcfDisbursedValue,
+      lmtdSIPct: 80, // baseline LMTD comparison
+    };
+  });
+
+  const siTarget = 100;
+  const overview: TLOverview = {
+    teamStockIns: tlOverview.teamStockIns,
+    teamStockInsTarget: siTarget,
+    teamI2SI: totalMetrics.i2si,
+    teamI2SITarget: i2siTarget,
+    teamAvgInputScore: tlOverview.teamAvgInputScore,
+    dcfOnboardings: totalMetrics.dcfTotal,
+    dcfGMV: totalMetrics.dcfDisbursedValue,
+    dcfGMVTarget: 50,
+  };
+
+  // LMTD: compute from last month for comparison
+  const lastMonthMetrics = computeMetrics(TimePeriod.LAST_MONTH);
+  const lmtd: TLLmtd = {
+    teamStockInsPct: lastMonthMetrics.totalLeads > 0 ? Math.round((lastMonthMetrics.wonLeads / lastMonthMetrics.totalLeads) * 100) : 0,
+    teamI2SI: lastMonthMetrics.i2si,
+    teamAvgInputScore: 70,
+    dcfGMV: lastMonthMetrics.dcfDisbursedValue,
+    dcfOnboardings: lastMonthMetrics.dcfTotal,
+  };
+
+  // Incentive calculation from real data
+  const achievePct = siTarget > 0 ? Math.round((overview.teamStockIns / siTarget) * 100) : 0;
+  const scoreGate: 'full' | 'half' | 'zero' = overview.teamAvgInputScore >= 70 ? 'full' : overview.teamAvgInputScore >= 50 ? 'half' : 'zero';
+  const basePayout = achievePct >= 95 ? (achievePct >= 110 ? 250 : achievePct >= 100 ? 200 : 150) : 0;
+  const projectedPayout = basePayout * overview.teamStockIns * (scoreGate === 'full' ? 1 : scoreGate === 'half' ? 0.5 : 0);
+
+  const incentive: TLIncentiveData = {
+    currentAchievementPercent: achievePct,
+    currentI2SI: overview.teamI2SI,
+    projectedPayout,
+    scoreGate,
+    avgTeamScore: overview.teamAvgInputScore,
+    dcfOnboardingBonus: overview.dcfOnboardings * 100,
+    dcfGMVBonus: Math.round(overview.dcfGMV * 30),
+    i2siBonus: overview.teamI2SI >= 15 ? 5000 : 0,
+  };
+
+  return { overview, kamData, incentive, lmtd };
 }
 
 // ── Helpers ──
@@ -451,9 +446,8 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
           <Target className="w-3.5 h-3.5" />
           Incentive View
         </button>
-        <span className={`text-[12px] font-bold tabular-nums ${
-          incentive.scoreGate === 'full' ? 'text-emerald-600' : incentive.scoreGate === 'half' ? 'text-amber-600' : 'text-rose-600'
-        }`}>
+        <span className={`text-[12px] font-bold tabular-nums ${incentive.scoreGate === 'full' ? 'text-emerald-600' : incentive.scoreGate === 'half' ? 'text-amber-600' : 'text-rose-600'
+          }`}>
           {formatCurrency(incentive.projectedPayout)}
         </span>
         <span className="text-[10px] text-slate-400">projected</span>
@@ -480,18 +474,26 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
           {/* Compact metric row */}
           <div className="grid grid-cols-4 gap-2">
             {[
-              { label: 'Critical', value: String(criticalCount), bad: criticalCount > 0,
+              {
+                label: 'Critical', value: String(criticalCount), bad: criticalCount > 0,
                 color: criticalCount > 0 ? 'text-rose-600' : 'text-emerald-600',
-                bg: criticalCount > 0 ? 'bg-rose-50' : 'bg-emerald-50' },
-              { label: '<12% I2SI', value: String(kamsBelowI2SI), bad: kamsBelowI2SI > 0,
+                bg: criticalCount > 0 ? 'bg-rose-50' : 'bg-emerald-50'
+              },
+              {
+                label: '<12% I2SI', value: String(kamsBelowI2SI), bad: kamsBelowI2SI > 0,
                 color: kamsBelowI2SI > 0 ? 'text-amber-600' : 'text-emerald-600',
-                bg: kamsBelowI2SI > 0 ? 'bg-amber-50' : 'bg-emerald-50' },
-              { label: 'Below SI', value: String(kamsBelowSIPace), bad: kamsBelowSIPace > 0,
+                bg: kamsBelowI2SI > 0 ? 'bg-amber-50' : 'bg-emerald-50'
+              },
+              {
+                label: 'Below SI', value: String(kamsBelowSIPace), bad: kamsBelowSIPace > 0,
                 color: kamsBelowSIPace > 0 ? 'text-amber-600' : 'text-emerald-600',
-                bg: kamsBelowSIPace > 0 ? 'bg-amber-50' : 'bg-emerald-50' },
-              { label: 'Zero DCF', value: String(kamsZeroDCF), bad: kamsZeroDCF > 0,
+                bg: kamsBelowSIPace > 0 ? 'bg-amber-50' : 'bg-emerald-50'
+              },
+              {
+                label: 'Zero DCF', value: String(kamsZeroDCF), bad: kamsZeroDCF > 0,
                 color: kamsZeroDCF > 0 ? 'text-rose-600' : 'text-emerald-600',
-                bg: kamsZeroDCF > 0 ? 'bg-rose-50' : 'bg-emerald-50' },
+                bg: kamsZeroDCF > 0 ? 'bg-rose-50' : 'bg-emerald-50'
+              },
             ].map(m => (
               <div key={m.label} className={`text-center px-1.5 py-2 rounded-xl ${m.bg}`}>
                 <div className={`text-[18px] font-extrabold tabular-nums leading-none ${m.color}`}>{m.value}</div>
@@ -757,8 +759,8 @@ function IncentiveDrawer({ incentive, overview, activeSlab, kamsAtRiskIncentive,
               <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Achievement Slab</div>
               <span className={`inline-flex text-[11px] font-bold px-2 py-0.5 rounded-lg
                 ${incentive.currentAchievementPercent >= 110 ? 'bg-indigo-100 text-indigo-700'
-                : incentive.currentAchievementPercent >= 95 ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-rose-100 text-rose-700'}`}>
+                  : incentive.currentAchievementPercent >= 95 ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-rose-100 text-rose-700'}`}>
                 {incentive.currentAchievementPercent >= 110 ? '110% Slab' : incentive.currentAchievementPercent >= 95 ? '95% Slab' : 'Not eligible'}
               </span>
             </div>
@@ -766,8 +768,8 @@ function IncentiveDrawer({ incentive, overview, activeSlab, kamsAtRiskIncentive,
               <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">I2SI Band</div>
               <span className={`inline-flex text-[11px] font-bold px-2 py-0.5 rounded-lg
                 ${incentive.currentI2SI >= 15 ? 'bg-indigo-100 text-indigo-700'
-                : incentive.currentI2SI >= 12 ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-rose-100 text-rose-700'}`}>
+                  : incentive.currentI2SI >= 12 ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-rose-100 text-rose-700'}`}>
                 {incentive.currentI2SI >= 15 ? '15% Band' : incentive.currentI2SI >= 12 ? '12% Band' : 'Below 12%'}
               </span>
             </div>
@@ -794,7 +796,7 @@ function IncentiveDrawer({ incentive, overview, activeSlab, kamsAtRiskIncentive,
                     return (
                       <div key={colIdx} className={`px-3 py-2.5 text-center text-[13px] font-bold transition-all
                         ${isActive ? 'bg-indigo-100 text-indigo-700 ring-2 ring-inset ring-indigo-400'
-                        : rate === 0 ? 'text-slate-300 bg-slate-50/50' : 'text-slate-700'}`}>
+                          : rate === 0 ? 'text-slate-300 bg-slate-50/50' : 'text-slate-700'}`}>
                         {rate === 0 ? '—' : `\u20B9${rate}`}
                       </div>
                     );

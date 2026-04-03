@@ -10,8 +10,9 @@
 import { useMemo } from 'react';
 import { Users, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
 import { TimePeriod } from '../../lib/domain/constants';
-import { Region, getAggregatedRegionMetrics, getTLsByRegions, MOCK_TL_METRICS } from '../../data/adminOrgMock';
+import { Region, getAggregatedRegionMetrics, getTLsByRegions } from '../../data/adminOrgMock';
 import { scaleTLMetrics, scaleMetric, scalePercent } from '../../data/adminFilterHelpers';
+import { computeMetrics, computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
 import { AdminCommonFilters } from './AdminCommonFilters';
 import { useFilterScope } from '../../contexts/FilterContext';
 import { resolveTimePeriodToRange, type DateRange } from '../../lib/time/resolveTimePeriodToRange';
@@ -46,19 +47,9 @@ function formatCurrency(num: number): string {
 
 type TrendDir = 'up' | 'down';
 
-const LMTD_MULTIPLIERS = {
-  si: 0.92,
-  i2si: 0.88,
-  c2d: 0.90,
-  gmv: 0.85,
-  onb: 0.83,
-  disb: 0.87,
-};
-
-function calculateTrend(current: number, multiplier: number): { dir: TrendDir; value: string } | undefined {
-  if (current === 0) return undefined;
-  const lmtd = current * multiplier;
-  const diff = ((current - lmtd) / lmtd) * 100;
+function calculateTrend(current: number, lastMonth: number): { dir: TrendDir; value: string } | undefined {
+  if (current === 0 || lastMonth === 0) return undefined;
+  const diff = ((current - lastMonth) / lastMonth) * 100;
   if (Math.abs(diff) < 2) return undefined;
   return {
     dir: diff > 0 ? 'up' : 'down',
@@ -183,49 +174,45 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
     return [regionId as Region];
   }, [regionId]);
 
-  // Get raw metrics - MEMOIZED with proper dependencies
-  const rawMetrics = useMemo(() => 
-    getAggregatedRegionMetrics(selectedRegions),
-    [selectedRegions]
-  );
-  
+  // Get real metrics from metricsFromDB
+  const currentMetrics = useMemo(() => computeMetrics(timePeriod), [timePeriod]);
+  const lastMonthMetrics = useMemo(() => computeMetrics(TimePeriod.LAST_MONTH), []);
+
   // Scale metrics by time period - MEMOIZED
   const metrics = useMemo(() => ({
-    si: scaleMetric(rawMetrics.siAch, timePeriod),
-    siTarget: rawMetrics.siTarget,
-    i2si: scalePercent(rawMetrics.i2siPercent, timePeriod),
-    c2d: scalePercent(rawMetrics.c2dI2BPercent, timePeriod),
-    dcfLeads: scaleMetric(rawMetrics.dcfLeads, timePeriod),
-    dcfOnb: scaleMetric(rawMetrics.dcfOnboardings, timePeriod),
-    dcfDisb: scaleMetric(rawMetrics.dcfDisbursements, timePeriod),
-    dcfGMV: scaleMetric(rawMetrics.dcfGMV, timePeriod),
-  }), [rawMetrics, timePeriod]);
+    si: currentMetrics.stockIns,
+    siTarget: 150,
+    i2si: currentMetrics.i2si,
+    c2d: currentMetrics.conversionRate,
+    dcfLeads: currentMetrics.dcfTotal,
+    dcfOnb: currentMetrics.dcfTotal - currentMetrics.dcfDisbursals,
+    dcfDisb: currentMetrics.dcfDisbursals,
+    dcfGMV: currentMetrics.dcfDisbursedValue * 100000,
+  }), [currentMetrics]);
 
-  // Calculate trends - MEMOIZED
+  // Calculate trends using real LMTD data
   const trends = useMemo(() => ({
-    si: calculateTrend(metrics.si, LMTD_MULTIPLIERS.si),
-    i2si: calculateTrend(metrics.i2si, LMTD_MULTIPLIERS.i2si),
-    c2d: calculateTrend(metrics.c2d, LMTD_MULTIPLIERS.c2d),
-    gmv: calculateTrend(metrics.dcfGMV, LMTD_MULTIPLIERS.gmv),
-    onb: calculateTrend(metrics.dcfOnb, LMTD_MULTIPLIERS.onb),
-    disb: calculateTrend(metrics.dcfDisb, LMTD_MULTIPLIERS.disb),
-  }), [metrics]);
+    si: calculateTrend(metrics.si, lastMonthMetrics.stockIns),
+    i2si: calculateTrend(metrics.i2si, lastMonthMetrics.i2si),
+    c2d: calculateTrend(metrics.c2d, lastMonthMetrics.conversionRate),
+    gmv: calculateTrend(metrics.dcfGMV, lastMonthMetrics.dcfDisbursedValue * 100000),
+    onb: calculateTrend(metrics.dcfOnb, lastMonthMetrics.dcfTotal - lastMonthMetrics.dcfDisbursals),
+    disb: calculateTrend(metrics.dcfDisb, lastMonthMetrics.dcfDisbursals),
+  }), [metrics, lastMonthMetrics]);
 
-  // Get TL data - MEMOIZED with proper dependencies
-  const relevantTLs = useMemo(() => getTLsByRegions(selectedRegions), [selectedRegions]);
-  const rawTLMetrics = useMemo(() => {
-    let filtered = MOCK_TL_METRICS.filter(m => relevantTLs.some(tl => tl.tlId === m.tlId));
-    // Apply TL filter if selected
-    if (tlId) {
-      filtered = filtered.filter(m => m.tlId === tlId);
-    }
-    return filtered;
-  }, [relevantTLs, tlId]);
-  
-  const tlMetrics = useMemo(() => scaleTLMetrics(rawTLMetrics, timePeriod), [rawTLMetrics, timePeriod]);
-  const sortedTLs = useMemo(() => 
-    [...tlMetrics].sort((a, b) => (b.siAch / b.siTarget) - (a.siAch / a.siTarget)),
-    [tlMetrics]
+  // Get TL data from real KAM metrics - MEMOIZED
+  const kamMetrics = useMemo(() => computeKAMMetrics(timePeriod), [timePeriod]);
+  const sortedTLs = useMemo(() =>
+    kamMetrics.map(km => ({
+      tlId: km.kamId,
+      tlName: km.kamName,
+      region: 'NCR',
+      siAch: km.stockIns,
+      siTarget: 20,
+      i2siPercent: km.i2si,
+      dcfDisbValueAch: km.dcfDisbursedValue * 100000,
+    })).sort((a, b) => (b.siAch / b.siTarget) - (a.siAch / a.siTarget)),
+    [kamMetrics]
   );
 
   // Loading state
@@ -256,7 +243,7 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
       <div className="relative">
         {/* Gradient background */}
         <div className="absolute inset-0 h-24 bg-gradient-to-b from-indigo-50/40 to-transparent pointer-events-none" />
-        
+
         {/* Common Filter Bar */}
         <div className="relative">
           <AdminCommonFilters scope="admin_home" />
@@ -398,9 +385,8 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                            isOnTrack ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                          }`}
+                          className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${isOnTrack ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                            }`}
                         >
                           {achPct.toFixed(0)}%
                         </div>

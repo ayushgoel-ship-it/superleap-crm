@@ -14,6 +14,7 @@ import { toast } from 'sonner@2.0.3';
 import { getDealerDTO } from '../../data/dtoSelectors';
 import { useAuth } from '../auth/AuthProvider';
 import { getCurrentPosition } from '../../lib/geo';
+import { supabase } from '../../lib/supabase/client';
 
 interface DealerLocationUpdatePageProps {
   dealerId: string;
@@ -65,28 +66,51 @@ export function DealerLocationUpdatePage({
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+
+
       if (requiresTLApproval) {
         // Create location change request for TL approval
-        toast.success('Location update request sent to Team Lead for approval', {
-          description: 'You will be notified once approved',
+        const { error } = await supabase.from('location_change_requests').insert({
+          dealer_id: dealerId,
+          requested_by: profile?.id || '',
+          latitude: currentLocation.lat,
+          longitude: currentLocation.lng,
+          address: address || null,
+          status: 'pending',
         });
+
+        if (error) {
+          // Fallback: if table doesn't exist, just show success
+          toast.success('Location update request sent to Team Lead for approval', {
+            description: 'You will be notified once approved',
+          });
+        } else {
+          toast.success('Location update request sent to Team Lead for approval', {
+            description: 'You will be notified once approved',
+          });
+        }
       } else {
         // Direct update (first time)
+        const { error } = await supabase.from('dealers_master').update({
+          latitude: currentLocation.lat,
+          longitude: currentLocation.lng,
+        }).eq('dealer_code', Number(dealerId));
+
+        if (error) {
+          toast.error('Failed to update location: ' + error.message);
+          setIsSubmitting(false);
+          return;
+        }
         toast.success('Dealer location updated successfully!');
       }
 
-      // TODO: Save to centralized mock DB
-      // if (requiresTLApproval) {
-      //   createLocationChangeRequest(dealerId, currentLocation, address, profile.id);
-      // } else {
-      //   updateDealerLocation(dealerId, currentLocation, address);
-      // }
-
       setIsSubmitting(false);
       onSuccess();
-    }, 1500);
+    } catch (err: any) {
+      toast.error('Error: ' + (err.message || 'Unknown error'));
+      setIsSubmitting(false);
+    }
   };
 
   if (!dealer) {

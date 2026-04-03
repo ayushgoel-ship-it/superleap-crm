@@ -1,16 +1,18 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { AuthSession, UserProfile, LoginCredentials, ImpersonationTarget } from '../../lib/auth/types';
-import { 
-  login as authLogin, 
-  logout as authLogout, 
-  getSession, 
+import {
+  login as authLogin,
+  logout as authLogout,
+  getSession,
   getCurrentUserProfile,
   initializeAuthData,
   setImpersonation as authSetImpersonation,
   clearImpersonation as authClearImpersonation,
   canImpersonate,
   isImpersonating,
-  getActiveActorProfile
+  getActiveActorProfile,
+  cacheCurrentProfile,
+  clearCachedProfile
 } from '../../lib/auth/authService';
 
 interface AuthContextValue {
@@ -45,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadSession = () => {
     const currentSession = getSession();
     const currentProfile = getCurrentUserProfile();
-    
+
     // Safety: auto-clear impersonation state if the real user is not Admin
     if (currentSession && currentProfile && currentSession.activeActorId !== currentSession.userId) {
       const isAdmin = currentProfile.role === 'Admin' || currentProfile.role === 'ADMIN';
@@ -61,9 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
     }
-    
+
     const currentActiveActor = getActiveActorProfile();
-    
+
     setSession(currentSession);
     setProfile(currentProfile);
     setActiveActor(currentActiveActor);
@@ -72,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (credentials: LoginCredentials) => {
     const result = await authLogin(credentials);
+    cacheCurrentProfile(result.profile);
     setSession(result.session);
     setProfile(result.profile);
     setActiveActor({ userId: result.profile.userId, name: result.profile.name, role: result.profile.role });
@@ -80,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     authLogout();
+    clearCachedProfile();
     setSession(null);
     setProfile(null);
     setActiveActor(null);
@@ -105,15 +109,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      session, 
-      profile, 
+    <AuthContext.Provider value={{
+      session,
+      profile,
       activeActor,
-      isLoading, 
+      isLoading,
       isImpersonating: isImpersonating(),
       canImpersonate: canImpersonate(),
-      login, 
-      logout, 
+      login,
+      logout,
       refreshProfile,
       refreshSession,
       setImpersonation: setImpersonationHandler,

@@ -3,8 +3,14 @@
   <html lang="en">
     <head>
       <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>CRM (Copy)</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+      <title>Superleap CRM</title>
+      <!-- Capacitor bridge stub: prevent triggerEvent errors before bundle loads -->
+      <script>
+        window.Capacitor = window.Capacitor || {};
+        window.Capacitor.Plugins = window.Capacitor.Plugins || {};
+        window.Capacitor.triggerEvent = window.Capacitor.triggerEvent || function() {};
+      </script>
     </head>
 
     <body>

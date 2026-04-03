@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { X, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
+import { TimePeriod } from '../../lib/domain/constants';
+import { computeMetrics } from '../../lib/metrics/metricsFromDB';
 
 interface TargetsModalProps {
   isOpen: boolean;
@@ -19,31 +22,35 @@ export interface TargetData {
   notes: string;
 }
 
-const mockTLs = [
-  { id: 'tl1', name: 'Nikhil Verma', region: 'North' },
-  { id: 'tl2', name: 'Seema Rao', region: 'West' },
-  { id: 'tl3', name: 'Harsh Gupta', region: 'East' },
-  { id: 'tl4', name: 'Priya Sharma', region: 'South' },
-  { id: 'tl5', name: 'Rajesh Kumar', region: 'NCR' },
-];
+function getTLsFromDB() {
+  const db = getRuntimeDBSync();
+  const tlMap = new Map<string, { name: string; region: string }>();
+  db.dealers.forEach((d: any) => {
+    if (d.kamName && d.kamId && !tlMap.has(d.kamId)) {
+      tlMap.set(d.kamId, { name: d.kamName, region: d.city || 'NCR' });
+    }
+  });
+  return Array.from(tlMap.entries()).map(([id, v]) => ({ id, name: v.name, region: v.region }));
+}
 
-const mockKAMs = {
-  tl1: [
-    { id: 'kam1', name: 'Rohit Sharma' },
-    { id: 'kam2', name: 'Priya Singh' },
-    { id: 'kam3', name: 'Amit Patel' },
-  ],
-  tl2: [
-    { id: 'kam4', name: 'Sneha Gupta' },
-    { id: 'kam5', name: 'Vikram Reddy' },
-  ],
-};
+function getKAMsFromDB(): Record<string, { id: string; name: string }[]> {
+  const db = getRuntimeDBSync();
+  const kamsByTL: Record<string, { id: string; name: string }[]> = {};
+  db.leads.forEach((l: any) => {
+    const tlId = l.kamId || 'unknown';
+    if (!kamsByTL[tlId]) kamsByTL[tlId] = [];
+    if (l.kamName && !kamsByTL[tlId].find((k: any) => k.name === l.kamName)) {
+      kamsByTL[tlId].push({ id: l.kamId || tlId, name: l.kamName });
+    }
+  });
+  return kamsByTL;
+}
 
 export function TargetsModal({ isOpen, onClose, onSave, prefilledScope, prefilledId }: TargetsModalProps) {
   const [scope, setScope] = useState<'Global' | 'Region' | 'TL' | 'KAM'>(prefilledScope || 'Global');
   const [region, setRegion] = useState('NCR');
-  const [selectedTL, setSelectedTL] = useState(prefilledId || 'tl1');
-  const [selectedKAM, setSelectedKAM] = useState('kam1');
+  const [selectedTL, setSelectedTL] = useState(prefilledId || '');
+  const [selectedKAM, setSelectedKAM] = useState('');
   const [metric, setMetric] = useState('stockins');
   const [targetValue, setTargetValue] = useState('500');
   const [period, setPeriod] = useState<'Monthly' | 'Quarterly' | 'Custom'>('Monthly');
@@ -51,27 +58,23 @@ export function TargetsModal({ isOpen, onClose, onSave, prefilledScope, prefille
   const [notes, setNotes] = useState('');
   const [showWarning, setShowWarning] = useState(false);
 
+  const mockTLs = getTLsFromDB();
+  const mockKAMs = getKAMsFromDB();
+
   if (!isOpen) return null;
 
-  // Mock current values based on metric
+  // Real current values from metricsFromDB
   const getCurrentValue = () => {
+    const m = computeMetrics(TimePeriod.MTD);
     switch (metric) {
-      case 'stockins':
-        return 420;
-      case 'dcfCount':
-        return 34;
-      case 'dcfValue':
-        return 1240000;
-      case 'inputScore':
-        return 78;
-      case 'i2si':
-        return 21;
-      case 'productiveVisits':
-        return 68;
-      case 'productiveCalls':
-        return 60;
-      default:
-        return 0;
+      case 'stockins': return m.stockIns;
+      case 'dcfCount': return m.dcfDisbursals;
+      case 'dcfValue': return m.dcfDisbursedValue * 100000;
+      case 'inputScore': return m.conversionRate;
+      case 'i2si': return m.i2si;
+      case 'productiveVisits': return m.completedVisits;
+      case 'productiveCalls': return m.callConnectRate;
+      default: return 0;
     }
   };
 
@@ -283,13 +286,13 @@ export function TargetsModal({ isOpen, onClose, onSave, prefilledScope, prefille
           {/* Preview Pane */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="text-sm text-gray-900 mb-3">Target Preview</h3>
-            
+
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Current {getMetricLabel(metric)}:</span>
                 <span className="text-gray-900">{formatValue(currentValue, metric)}</span>
               </div>
-              
+
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Proposed Target:</span>
                 <span className="text-blue-700">{formatValue(targetValueNum, metric)}</span>
@@ -322,7 +325,7 @@ export function TargetsModal({ isOpen, onClose, onSave, prefilledScope, prefille
                     Unrealistic Target Change
                   </div>
                   <div className="text-xs text-red-700 mb-3">
-                    The proposed target represents a {Math.abs(percentageChange).toFixed(0)}% change from current value. 
+                    The proposed target represents a {Math.abs(percentageChange).toFixed(0)}% change from current value.
                     Changes above 200% require additional approval.
                   </div>
                   <button

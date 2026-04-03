@@ -136,7 +136,7 @@ export interface AdminLeadItem {
   tlId: string;
   tlName: string;
   dealerName: string;
-  channel: 'C2B' | 'C2D' | 'GS' | 'DCF';
+  channel: 'NGS' | 'GS' | 'DCF' | string;
   type: 'seller' | 'inventory';
   stage: string;
   value: number;
@@ -146,21 +146,21 @@ export interface AdminLeadItem {
 }
 
 export const ADMIN_LEAD_DATA: AdminLeadItem[] = [
-  { id: 'l1', customerName: 'Ravi Patel', vehicle: '2020 Swift', region: 'NCR', tlId: 'tl-ncr-1', tlName: 'Rajesh Kumar', dealerName: 'Gupta Motors', channel: 'C2B', type: 'seller', stage: 'Inspected', value: 485000, hasCEP: true, hasInspection: true, hasSI: true },
-  { id: 'l2', customerName: 'Amit Shah', vehicle: '2019 i20', region: 'NCR', tlId: 'tl-ncr-1', tlName: 'Rajesh Kumar', dealerName: 'Royal Auto', channel: 'C2B', type: 'seller', stage: 'New', value: 520000, hasCEP: true, hasInspection: false, hasSI: false },
-  { id: 'l3', customerName: 'Priya Mehta', vehicle: '2021 Creta', region: 'NCR', tlId: 'tl-ncr-2', tlName: 'Neha Singh', dealerName: 'City Car Bazaar', channel: 'C2D', type: 'inventory', stage: 'Offer Made', value: 1150000, hasCEP: false, hasInspection: true, hasSI: false },
+  { id: 'l1', customerName: 'Ravi Patel', vehicle: '2020 Swift', region: 'NCR', tlId: 'tl-ncr-1', tlName: 'Rajesh Kumar', dealerName: 'Gupta Motors', channel: 'NGS', type: 'seller', stage: 'Inspected', value: 485000, hasCEP: true, hasInspection: true, hasSI: true },
+  { id: 'l2', customerName: 'Amit Shah', vehicle: '2019 i20', region: 'NCR', tlId: 'tl-ncr-1', tlName: 'Rajesh Kumar', dealerName: 'Royal Auto', channel: 'NGS', type: 'seller', stage: 'New', value: 520000, hasCEP: true, hasInspection: false, hasSI: false },
+  { id: 'l3', customerName: 'Priya Mehta', vehicle: '2021 Creta', region: 'NCR', tlId: 'tl-ncr-2', tlName: 'Neha Singh', dealerName: 'City Car Bazaar', channel: 'NGS', type: 'inventory', stage: 'Offer Made', value: 1150000, hasCEP: false, hasInspection: true, hasSI: false },
   { id: 'l4', customerName: 'Suresh Gupta', vehicle: '2018 Verna', region: 'NCR', tlId: 'tl-ncr-2', tlName: 'Neha Singh', dealerName: 'NCR Auto Hub', channel: 'GS', type: 'seller', stage: 'Inspected', value: 380000, hasCEP: true, hasInspection: true, hasSI: true },
-  { id: 'l5', customerName: 'Deepak Joshi', vehicle: '2020 Nexon', region: 'West', tlId: 'tl-west-1', tlName: 'Amit Sharma', dealerName: 'Sharma Auto', channel: 'C2B', type: 'seller', stage: 'Won', value: 720000, hasCEP: true, hasInspection: true, hasSI: true },
-  { id: 'l6', customerName: 'Meera Desai', vehicle: '2019 Baleno', region: 'West', tlId: 'tl-west-1', tlName: 'Amit Sharma', dealerName: 'Western Wheels', channel: 'C2D', type: 'inventory', stage: 'New', value: 550000, hasCEP: false, hasInspection: false, hasSI: false },
+  { id: 'l5', customerName: 'Deepak Joshi', vehicle: '2020 Nexon', region: 'West', tlId: 'tl-west-1', tlName: 'Amit Sharma', dealerName: 'Sharma Auto', channel: 'NGS', type: 'seller', stage: 'Won', value: 720000, hasCEP: true, hasInspection: true, hasSI: true },
+  { id: 'l6', customerName: 'Meera Desai', vehicle: '2019 Baleno', region: 'West', tlId: 'tl-west-1', tlName: 'Amit Sharma', dealerName: 'Western Wheels', channel: 'NGS', type: 'inventory', stage: 'New', value: 550000, hasCEP: false, hasInspection: false, hasSI: false },
   { id: 'l7', customerName: 'Arjun Kulkarni', vehicle: '2021 Seltos', region: 'West', tlId: 'tl-west-1', tlName: 'Amit Sharma', dealerName: 'Pune Motor', channel: 'DCF', type: 'seller', stage: 'Inspected', value: 980000, hasCEP: true, hasInspection: true, hasSI: false },
-  { id: 'l8', customerName: 'Kavitha Reddy', vehicle: '2020 XUV300', region: 'South', tlId: 'tl-south-1', tlName: 'Priya Iyer', dealerName: 'Prime Motors', channel: 'C2B', type: 'seller', stage: 'Inspected', value: 610000, hasCEP: true, hasInspection: true, hasSI: true },
+  { id: 'l8', customerName: 'Kavitha Reddy', vehicle: '2020 XUV300', region: 'South', tlId: 'tl-south-1', tlName: 'Priya Iyer', dealerName: 'Prime Motors', channel: 'NGS', type: 'seller', stage: 'Inspected', value: 610000, hasCEP: true, hasInspection: true, hasSI: true },
   { id: 'l9', customerName: 'Ramesh Nair', vehicle: '2019 Ertiga', region: 'South', tlId: 'tl-south-1', tlName: 'Priya Iyer', dealerName: 'South Star', channel: 'GS', type: 'seller', stage: 'New', value: 750000, hasCEP: false, hasInspection: false, hasSI: false },
-  { id: 'l10', customerName: 'Anitha S', vehicle: '2021 Brezza', region: 'South', tlId: 'tl-south-1', tlName: 'Priya Iyer', dealerName: 'Prime Motors', channel: 'C2B', type: 'seller', stage: 'Won', value: 820000, hasCEP: true, hasInspection: true, hasSI: true },
-  { id: 'l11', customerName: 'Debashish Bose', vehicle: '2018 Tiago', region: 'East', tlId: 'tl-east-1', tlName: 'Suresh Ghosh', dealerName: 'Eastern Motors', channel: 'C2B', type: 'seller', stage: 'Contacted', value: 350000, hasCEP: true, hasInspection: false, hasSI: false },
-  { id: 'l12', customerName: 'Neelam Sarkar', vehicle: '2020 Sonet', region: 'East', tlId: 'tl-east-1', tlName: 'Suresh Ghosh', dealerName: 'Eastern Motors', channel: 'C2D', type: 'inventory', stage: 'New', value: 680000, hasCEP: false, hasInspection: false, hasSI: false },
+  { id: 'l10', customerName: 'Anitha S', vehicle: '2021 Brezza', region: 'South', tlId: 'tl-south-1', tlName: 'Priya Iyer', dealerName: 'Prime Motors', channel: 'NGS', type: 'seller', stage: 'Won', value: 820000, hasCEP: true, hasInspection: true, hasSI: true },
+  { id: 'l11', customerName: 'Debashish Bose', vehicle: '2018 Tiago', region: 'East', tlId: 'tl-east-1', tlName: 'Suresh Ghosh', dealerName: 'Eastern Motors', channel: 'NGS', type: 'seller', stage: 'Contacted', value: 350000, hasCEP: true, hasInspection: false, hasSI: false },
+  { id: 'l12', customerName: 'Neelam Sarkar', vehicle: '2020 Sonet', region: 'East', tlId: 'tl-east-1', tlName: 'Suresh Ghosh', dealerName: 'Eastern Motors', channel: 'NGS', type: 'inventory', stage: 'New', value: 680000, hasCEP: false, hasInspection: false, hasSI: false },
   { id: 'l13', customerName: 'Rajib Das', vehicle: '2019 Dzire', region: 'East', tlId: 'tl-east-1', tlName: 'Suresh Ghosh', dealerName: 'Bhubaneswar Auto', channel: 'GS', type: 'seller', stage: 'Lost', value: 420000, hasCEP: true, hasInspection: true, hasSI: false },
   { id: 'l14', customerName: 'Vikash Tiwari', vehicle: '2021 Punch', region: 'NCR', tlId: 'tl-ncr-1', tlName: 'Rajesh Kumar', dealerName: 'Gupta Motors', channel: 'DCF', type: 'seller', stage: 'New', value: 590000, hasCEP: false, hasInspection: false, hasSI: false },
-  { id: 'l15', customerName: 'Shweta Verma', vehicle: '2020 Altroz', region: 'West', tlId: 'tl-west-1', tlName: 'Amit Sharma', dealerName: 'Western Wheels', channel: 'C2B', type: 'seller', stage: 'Inspected', value: 510000, hasCEP: true, hasInspection: true, hasSI: true },
+  { id: 'l15', customerName: 'Shweta Verma', vehicle: '2020 Altroz', region: 'West', tlId: 'tl-west-1', tlName: 'Amit Sharma', dealerName: 'Western Wheels', channel: 'NGS', type: 'seller', stage: 'Inspected', value: 510000, hasCEP: true, hasInspection: true, hasSI: true },
 ];
 
 export interface AdminLeadFilters {
@@ -220,7 +220,7 @@ export interface ChannelBreakdown {
 }
 
 export function computeChannelBreakdown(leads: AdminLeadItem[]): ChannelBreakdown[] {
-  const channels: ('C2B' | 'C2D' | 'GS' | 'DCF')[] = ['C2B', 'C2D', 'GS', 'DCF'];
+  const channels: ('NGS' | 'GS' | 'DCF')[] = ['NGS', 'GS', 'DCF'];
   return channels.map(ch => {
     const chLeads = leads.filter(l => l.channel === ch);
     const withInsp = chLeads.filter(l => l.hasInspection).length;

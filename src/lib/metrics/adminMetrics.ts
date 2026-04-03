@@ -6,8 +6,13 @@
  * All admin-level aggregations happen here.
  */
 
-import { DEALERS, DCF_LEADS, ORG } from '../../data/mockDatabase';
+import { getRuntimeDBSync } from '@/data/runtimeDB';
 import { Dealer, DCFLead, RegionKey } from '../../data/types';
+
+// Runtime DB access — no more static mock arrays
+const DEALERS = () => getRuntimeDBSync().dealers;
+const DCF_LEADS = () => getRuntimeDBSync().dcfLeads;
+const ORG = () => getRuntimeDBSync().org;
 import { MetricsEngine } from '../metricsEngine';
 import { round } from '../domain/metrics';
 import { TimePeriod } from '../domain/constants';
@@ -140,7 +145,7 @@ function filterDCFLeadsByRegion(leads: DCFLead[], regions: RegionKey[]): DCFLead
   if (regions.length === 0) return leads; // All regions
   return leads.filter(lead => {
     // Find the dealer to get region
-    const dealer = DEALERS.find(d => d.id === lead.dealerId);
+    const dealer = DEALERS().find(d => d.id === lead.dealerId);
     return dealer && regions.includes(dealer.region);
   });
 }
@@ -184,7 +189,7 @@ function computeBusinessSummary(
     .reduce((sum, lead) => sum + (lead.loanAmount || 0), 0);
   
   // SI target calculation (assume 20 SI per KAM, aggregate across all KAMs)
-  const totalKAMs = ORG.tls.reduce((sum, tl) => sum + tl.kams.length, 0);
+  const totalKAMs = (ORG().tls || []).reduce((sum: number, tl: any) => sum + (tl.kams?.length || 0), 0);
   const siTarget = totalKAMs * 20; // 20 SI per KAM per month
   
   return {
@@ -208,7 +213,7 @@ function computeRegionBreakdown(
   dcfLeads: DCFLead[],
   regions: RegionKey[]
 ): RegionPerformance[] {
-  const regionsToCompute = regions.length > 0 ? regions : ORG.regions;
+  const regionsToCompute = regions.length > 0 ? regions : (ORG().regions || []);
   
   return regionsToCompute.map(region => {
     // Filter dealers in this region
@@ -216,12 +221,12 @@ function computeRegionBreakdown(
     
     // Filter DCF leads in this region
     const regionDCFLeads = dcfLeads.filter(lead => {
-      const dealer = DEALERS.find(d => d.id === lead.dealerId);
+      const dealer = DEALERS().find(d => d.id === lead.dealerId);
       return dealer && dealer.region === region;
     });
     
     // Get TLs in this region
-    const regionTLs = ORG.tls.filter(tl => tl.region === region);
+    const regionTLs = (ORG().tls || []).filter((tl: any) => tl.region === region);
     const tlCount = regionTLs.length;
     
     // Calculate metrics
@@ -239,7 +244,7 @@ function computeRegionBreakdown(
     const inputScore = 75 + Math.random() * 10; // Mock: 75-85
     
     // SI target for this region
-    const kamCount = regionTLs.reduce((sum, tl) => sum + tl.kams.length, 0);
+    const kamCount = regionTLs.reduce((sum: number, tl: any) => sum + (tl.kams?.length || 0), 0);
     const siTarget = kamCount * 20;
     
     return {
@@ -262,7 +267,7 @@ function computeTLLeaderboard(
   dealers: Dealer[],
   dcfLeads: DCFLead[]
 ): TLLeaderboardRow[] {
-  return ORG.tls.map(tl => {
+  return (ORG().tls || []).map((tl: any) => {
     // Filter dealers managed by this TL's KAMs
     const tlDealers = dealers.filter(d => d.tlId === tl.id);
     
@@ -280,7 +285,7 @@ function computeTLLeaderboard(
     const inputScore = 70 + Math.random() * 15; // Mock: 70-85
     
     // SI target for this TL
-    const kamCount = tl.kams.length;
+    const kamCount = tl.kams?.length || 0;
     const siTarget = kamCount * 20;
     
     return {
@@ -317,8 +322,8 @@ export function getAdminHomeMetrics(
   now: Date = new Date()
 ): AdminHomeMetrics {
   // Apply region filter
-  const filteredDealers = filterDealersByRegion(DEALERS, filters.regions);
-  const filteredDCFLeads = filterDCFLeadsByRegion(DCF_LEADS, filters.regions);
+  const filteredDealers = filterDealersByRegion(DEALERS(), filters.regions);
+  const filteredDCFLeads = filterDCFLeadsByRegion(DCF_LEADS(), filters.regions);
   
   // Compute all metrics
   const summary = computeBusinessSummary(filteredDealers, filteredDCFLeads, filters.timeScope);

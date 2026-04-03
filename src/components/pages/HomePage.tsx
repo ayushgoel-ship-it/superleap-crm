@@ -6,7 +6,7 @@ import {
 import { TimePeriod } from '../../lib/domain/constants';
 import type { UserRole } from '../../lib/shared/appTypes';
 import { FilterChip } from '../premium/Chip';
-import { CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+import { computeMetrics, getMonthProgress, projectToEOM, type DashboardMetrics } from '../../lib/metrics/metricsFromDB';
 import { MetricCard } from '../cards/MetricCard';
 import { TargetCard } from '../cards/TargetCard';
 import { InputScoreCard } from '../cards/InputScoreCard';
@@ -14,12 +14,10 @@ import { IncentiveSimulator } from './IncentiveSimulator';
 import { KAMDetailPage } from './KAMDetailPage';
 import { TLHomeView } from './TLHomeView';
 import {
-  getMonthContext, extrapolateToEOM,
   getI2SIRAG, getQualityRAG, getUniqueRaiseRAG, getMetricColorState,
 } from '../../lib/domain/metrics';
 import { getSITarget } from '../../lib/metricsEngine';
 import { calculateActualProjectedIncentive, type IncentiveContext } from '../../lib/incentiveEngine';
-import { computeDashboardMetrics } from '../../data/canonicalMetrics';
 
 interface HomePageProps {
   userRole: UserRole;
@@ -30,8 +28,6 @@ interface HomePageProps {
 export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivity }: HomePageProps) {
   const [showSimulator, setShowSimulator] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>(TimePeriod.MTD);
-  const [customFrom, setCustomFrom] = useState<string | undefined>();
-  const [customTo, setCustomTo] = useState<string | undefined>();
   const [selectedKAM, setSelectedKAM] = useState<{ name: string, city: string } | null>(null);
   const [showInspectingDealersDetail, setShowInspectingDealersDetail] = useState(false);
   const [expandedInspections, setExpandedInspections] = useState(false);
@@ -39,8 +35,6 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
   const [expandedQuality, setExpandedQuality] = useState(false);
   const [expandedUniqueRaise, setExpandedUniqueRaise] = useState(false);
 
-  const monthContext = getMonthContext();
-  const { daysElapsedInMonth, totalDaysInMonth } = monthContext;
 
   // Color-coded metric row helper
   const MetricRow = ({
@@ -93,25 +87,39 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
     );
   }
 
-  // ── Canonical metrics from actual data ──
-  const canonical = computeDashboardMetrics({ period: selectedPeriod, customFrom, customTo });
+  // ── Real data from Supabase ──
+  const metrics = computeMetrics(selectedPeriod);
+  const { daysElapsed: daysElapsedInMonth, totalDays: totalDaysInMonth } = getMonthProgress();
 
+  // Mapped data shape for the dashboard
   const data = {
-    stockIns: canonical.stockIns,
-    sis: canonical.stockIns,
-    i2si: canonical.i2si,
-    dcfDisbursals: canonical.dcfDisbursals,
-    dcfValue: canonical.dcfDisbursedValue,
-    dcfDealersOnboarded: canonical.dcfOnboardedDealers,
-    dcfLeadsSubmitted: canonical.dcfTotal,
-    visits: { top: canonical.completedVisits, tagged: Math.round(canonical.completedVisits * 0.6), untagged: Math.round(canonical.completedVisits * 0.15) },
-    connects: { top: canonical.connectedCalls, tagged: Math.round(canonical.connectedCalls * 0.7) },
-    inspections: canonical.inspections,
-    quality: canonical.i2si > 0 ? Math.min(100, Math.round(canonical.i2si * 1.1)) : 0,
-    a2c: canonical.totalLeads > 0 ? Math.round((canonical.convertedLeads / canonical.totalLeads) * 100) : 0,
-    inputScore: canonical.totalCalls + canonical.totalVisits > 0 ? Math.min(100, Math.round(((canonical.connectedCalls + canonical.completedVisits) / (canonical.totalCalls + canonical.totalVisits)) * 100)) : 0,
-    uniqueRaise: canonical.inspections > 0 ? Math.min(100, Math.round((canonical.stockIns / canonical.inspections) * 100 * 1.1)) : 0,
-    avgInspectingDealers: canonical.inspectingDealers > 0 ? parseFloat((canonical.inspections / canonical.inspectingDealers).toFixed(1)) : 0,
+    stockIns: metrics.stockIns,
+    sis: metrics.wonLeads,
+    i2si: metrics.i2si,
+    dcfDisbursals: metrics.dcfDisbursals,
+    dcfValue: metrics.dcfDisbursedValue,
+    dcfDealersOnboarded: metrics.dcfTotal - metrics.dcfDisbursals,
+    dcfLeadsSubmitted: metrics.dcfTotal,
+    visits: {
+      top: metrics.completedVisits,
+      tagged: metrics.scheduledVisits,
+      untagged: Math.max(0, metrics.totalVisits - metrics.completedVisits - metrics.scheduledVisits),
+    },
+    connects: {
+      top: metrics.connectedCalls,
+      tagged: metrics.totalCalls - metrics.connectedCalls,
+    },
+    inspections: metrics.totalLeads,
+    quality: metrics.callConnectRate,
+    a2c: metrics.conversionRate,
+    inputScore: Math.round(
+      (Math.min(metrics.completedVisits / 3, 1) * 30) +
+      (Math.min(metrics.totalCalls / 5, 1) * 30) +
+      (Math.min(metrics.uniqueDealersCalled / 3, 1) * 20) +
+      (Math.min(metrics.conversionRate / 50, 1) * 20)
+    ),
+    uniqueRaise: metrics.activeDealers > 0 ? Math.round((metrics.uniqueDealersCalled / metrics.activeDealers) * 100) : 0,
+    avgInspectingDealers: metrics.uniqueDealersVisited > 0 ? metrics.uniqueDealersVisited : 0,
   };
 
   const targets = {
@@ -120,43 +128,55 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
     a2c: 65,
   };
 
-  const inspectionsBreakdown = {
-    inspectingDealers: canonical.inspectingDealers,
-    inspectionsPerDealer: canonical.inspectingDealers > 0
-      ? (canonical.inspections / canonical.inspectingDealers).toFixed(1)
-      : '0',
+  const getInspectionsBreakdown = () => {
+    const inspectingDealers = metrics.uniqueDealersVisited || 1;
+    const inspectionsPerDealer = (data.inspections / inspectingDealers).toFixed(1);
+    return { inspectingDealers, inspectionsPerDealer };
   };
 
-  // I2SI breakdown by canonical channel
-  const i2siBreakdown = {
-    gsI2SI: canonical.channelBreakdown.GS > 0 ? Math.round((canonical.channelBreakdown.GS / Math.max(1, canonical.inspections)) * 100) : 0,
-    ngsI2SI: canonical.channelBreakdown.NGS > 0 ? Math.round((canonical.channelBreakdown.NGS / Math.max(1, canonical.inspections)) * 100) : 0,
-    c2dI2T: canonical.i2si,
-    t2SI: canonical.i2si,
+  // Channel-wise breakdown from real data
+  const getI2SIBreakdown = () => {
+    const cb = metrics.channelBreakdown;
+    const total = metrics.totalLeads || 1;
+    return {
+      gsI2SI: Math.round(((cb['GS'] || 0) / total) * 100),
+      c2dI2SI: Math.round(((cb['NGS'] || 0) / total) * 100),
+      c2bI2SI: Math.round(((cb['NGS'] || 0) / total) * 100),
+      c2dI2T: Math.round(((cb['DCF'] || 0) / total) * 100),
+      t2SI: metrics.i2si,
+    };
   };
 
-  // Unique raise by canonical channel
-  const uniqueRaiseBreakdown = {
-    gsUniqueRaise: data.uniqueRaise > 0 ? Math.min(100, data.uniqueRaise + 2) : 0,
-    ngsUniqueRaise: data.uniqueRaise > 0 ? Math.min(100, data.uniqueRaise - 4) : 0,
+  const getUniqueRaiseBreakdown = () => {
+    const ur = data.uniqueRaise;
+    return {
+      gsUniqueRaise: ur,
+      c2dUniqueRaise: Math.max(0, ur - 4),
+      c2bUniqueRaise: Math.max(0, ur - 2),
+    };
   };
 
+  const inspectionsBreakdown = getInspectionsBreakdown();
+  const i2siBreakdown = getI2SIBreakdown();
+  const uniqueRaiseBreakdown = getUniqueRaiseBreakdown();
+
+  // Incentive projection from real data
   const projectedIncentive = selectedPeriod === TimePeriod.MTD && userRole !== 'Admin' ? (() => {
     const role = userRole as 'KAM' | 'TL';
     const target = getSITarget(role);
     const context: IncentiveContext = {
       role,
-      siActualMTD: role === 'KAM' ? 12 : 65,
+      siActualMTD: metrics.stockIns,
       siTarget: target,
-      inspectionsMTD: role === 'KAM' ? 80 : 400,
+      inspectionsMTD: metrics.totalLeads,
       daysElapsed: daysElapsedInMonth,
       totalDaysInMonth,
       inputScore: data.inputScore,
       dcf: {
-        onboardingCount: role === 'KAM' ? 5 : 20,
-        gmvTotal: role === 'KAM' ? 500000 : 2000000,
-        gmvFirstDisbursement: role === 'KAM' ? 200000 : 800000,
-        dealerCount: role === 'KAM' ? 5 : 20,
+        onboardingCount: metrics.dcfTotal,
+        gmvTotal: metrics.dcfDisbursedValue * 100000,
+        gmvFirstDisbursement: metrics.dcfDisbursals > 0 ? (metrics.dcfDisbursedValue * 100000) / metrics.dcfDisbursals : 0,
+        dealerCount: metrics.activeDealers,
       },
     };
     return calculateActualProjectedIncentive(context);
@@ -169,12 +189,17 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
 
   return (
     <div className="px-4 py-5 space-y-5 animate-fade-in">
-      {/* Period Switcher - Canonical options */}
+      {/* Period Switcher - Pill-style */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {CANONICAL_TIME_OPTIONS.filter(k => k !== TimePeriod.CUSTOM).map((key) => (
+        {([
+          { key: TimePeriod.TODAY, label: 'Today' },
+          { key: TimePeriod.D_MINUS_1, label: 'Yesterday' },
+          { key: TimePeriod.MTD, label: 'MTD' },
+          { key: TimePeriod.LAST_MONTH, label: 'Last Month' },
+        ]).map(({ key, label }) => (
           <FilterChip
             key={key}
-            label={CANONICAL_TIME_LABELS[key] || key}
+            label={label}
             active={selectedPeriod === key}
             onClick={() => setSelectedPeriod(key)}
           />
@@ -191,7 +216,9 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
           <div className="flex items-center gap-2 mb-4">
             <Flame className="w-4 h-4 text-amber-300" />
             <span className="text-[11px] font-semibold text-indigo-200 uppercase tracking-wider">
-              {CANONICAL_TIME_LABELS[selectedPeriod] || selectedPeriod} Performance
+              {selectedPeriod === TimePeriod.TODAY ? 'Today' :
+                selectedPeriod === TimePeriod.D_MINUS_1 ? 'Yesterday' :
+                  selectedPeriod === TimePeriod.MTD ? 'Month to Date' : 'Last Month'} Performance
             </span>
           </div>
 
@@ -301,7 +328,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
               `}>
                 {selectedPeriod === TimePeriod.MTD && projectedIncentive
                   ? formatCurrency(projectedIncentive.totalIncentive)
-                  : userRole === 'KAM' ? '\u20B960.6K' : userRole === 'TL' ? '\u20B962.7K' : '\u20B945K'
+                  : '\u20B90'
                 }
               </div>
             </div>
@@ -389,9 +416,9 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
               ))}
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-              <span className="text-slate-400">vs Last Month</span>
+              <span className="text-slate-400">Unique dealers visited</span>
               <span className="text-emerald-600 font-medium flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> +12%
+                <TrendingUp className="w-3 h-3" /> {metrics.uniqueDealersVisited}
               </span>
             </div>
           </div>
@@ -425,9 +452,9 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100">
               <div className="flex items-center gap-3 text-[11px] text-slate-400">
-                <span>Calls: 234</span>
+                <span>Calls: {metrics.totalCalls}</span>
                 <span className="w-0.5 h-0.5 rounded-full bg-slate-300" />
-                <span>WhatsApp: 108</span>
+                <span>Connected: {metrics.connectedCalls}</span>
               </div>
             </div>
           </div>
@@ -435,10 +462,10 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
           {/* Input Score Card */}
           <InputScoreCard
             data={{
-              visits: 6, targetVisits: 8, connects: 52, targetConnects: 60,
-              avgInspectingDealers: 2.8, targetInspectingDealers: 3,
-              uniqueRaisePercent: 72, targetUniqueRaise: 75,
-              raiseQuality: 0.88, hbtpValue: 1.0, targetQualityRatio: 0.85,
+              visits: metrics.completedVisits, targetVisits: 8, connects: metrics.connectedCalls, targetConnects: 60,
+              avgInspectingDealers: metrics.uniqueDealersVisited, targetInspectingDealers: 3,
+              uniqueRaisePercent: data.uniqueRaise, targetUniqueRaise: 75,
+              raiseQuality: metrics.callConnectRate / 100, hbtpValue: 1.0, targetQualityRatio: 0.85,
             }}
             targetScore={85}
             mode="KAM"
@@ -569,7 +596,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
                 const totalDays = totalDaysInMonth;
                 const currentInspections = data.inspections;
                 const projectedInspections = selectedPeriod === TimePeriod.MTD
-                  ? extrapolateToEOM(currentInspections, currentDay, totalDays)
+                  ? projectToEOM(currentInspections, currentDay, totalDays)
                   : currentInspections;
                 const inspectionsForRAG = selectedPeriod === TimePeriod.MTD ? projectedInspections : currentInspections;
                 const ragStatus = getI2SIRAG(inspectionsForRAG, targets.inspections);
@@ -627,12 +654,13 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
                     <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Channel-wise</div>
                     <div className="space-y-2">
                       <MetricRow label="GS I2SI%" subtitle="Target: 15%" value={i2siBreakdown.gsI2SI} target={15} state={getMetricColorState(i2siBreakdown.gsI2SI, 15)} />
-                      <MetricRow label="NGS I2SI%" subtitle="Target: 15%" value={i2siBreakdown.ngsI2SI} target={15} state={getMetricColorState(i2siBreakdown.ngsI2SI, 15)} />
+                      <MetricRow label="C2D I2SI%" subtitle="Target: 20%" value={i2siBreakdown.c2dI2SI} target={20} state={getMetricColorState(i2siBreakdown.c2dI2SI, 20)} />
+                      <MetricRow label="C2B I2SI%" subtitle="Target: 12%" value={i2siBreakdown.c2bI2SI} target={12} state={getMetricColorState(i2siBreakdown.c2bI2SI, 12)} />
                     </div>
                     <div className="border-t border-slate-100 pt-3">
-                      <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">Conversion</div>
+                      <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">C2D & Telecalling</div>
                       <div className="space-y-2">
-                        <MetricRow label="I→SI%" subtitle="Target: 30%" value={i2siBreakdown.c2dI2T} target={30} state={getMetricColorState(i2siBreakdown.c2dI2T, 30)} />
+                        <MetricRow label="C2D I2T%" subtitle="Target: 30%" value={i2siBreakdown.c2dI2T} target={30} state={getMetricColorState(i2siBreakdown.c2dI2T, 30)} />
                         <MetricRow label="T2SI%" subtitle="Target: 75%" value={i2siBreakdown.t2SI} target={75} state={getMetricColorState(i2siBreakdown.t2SI, 75)} />
                       </div>
                     </div>
@@ -700,7 +728,8 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
                     <div className="space-y-2">
                       {[
                         { label: 'GS', value: uniqueRaiseBreakdown.gsUniqueRaise },
-                        { label: 'NGS', value: uniqueRaiseBreakdown.ngsUniqueRaise },
+                        { label: 'NGS', value: uniqueRaiseBreakdown.c2dUniqueRaise },
+                        { label: 'DCF', value: uniqueRaiseBreakdown.c2bUniqueRaise },
                       ].map((ch) => (
                         <div key={ch.label} className="flex items-center justify-between text-[13px]">
                           <span className="text-slate-500">{ch.label} Unique Raise%</span>

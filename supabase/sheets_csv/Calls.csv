@@ -1,0 +1,31 @@
+call_id,lead_id,dealer_name,customer_phone,kam_id,kam_name,direction,start_time,end_time,duration,outcome,disposition_code,notes
+call-01,a0000001-0000-0000-0000-000000000001,Sharma Motors,+919876000001,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-10 10:00,2026-02-10 10:05,300,interested,FOLLOW_UP,Initial call to Ravi Sharma about Swift
+call-02,a0000001-0000-0000-0000-000000000002,Kapoor Cars,+919876000002,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-10 11:00,2026-02-10 11:08,480,interested,CALLBACK,i20 pricing discussed with Suresh
+call-03,a0000001-0000-0000-0000-000000000003,Delhi Auto Hub,+919876000003,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-11 09:30,2026-02-11 09:38,480,interested,FOLLOW_UP,Honda City specs shared
+call-04,a0000001-0000-0000-0000-000000000004,Sharma Motors,+919876000004,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-12 14:00,2026-02-12 14:06,360,converted,DEAL_CLOSED,Tata Nexon deal finalized
+call-05,a0000001-0000-0000-0000-000000000005,Patel Wheels,+919876000005,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-13 10:00,2026-02-13 10:07,420,converted,DEAL_CLOSED,Kia Seltos stock-in confirmed
+call-06,a0000001-0000-0000-0000-000000000006,Kapoor Cars,+919876000006,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,inbound,2026-02-14 11:00,2026-02-14 11:10,600,converted,DEAL_CLOSED,MG Hector deal closed
+call-07,a0000001-0000-0000-0000-000000000011,Delhi Auto Hub,+919876000011,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-14 15:00,2026-02-14 15:08,480,converted,DEAL_CLOSED,Innova stock-in done
+call-08,b0000001-0000-0000-0000-000000000001,Singh Auto Palace,+919876100001,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-10 10:30,2026-02-10 10:36,360,interested,FOLLOW_UP,Baleno pricing shared
+call-09,b0000001-0000-0000-0000-000000000002,Agarwal Motors,+919876100002,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-11 11:00,2026-02-11 11:08,480,interested,CALLBACK,Venue test drive scheduled
+call-10,b0000001-0000-0000-0000-000000000003,RK Car World,+919876100003,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-12 14:00,2026-02-12 14:06,360,interested,FOLLOW_UP,Punch pricing discussed
+call-11,b0000001-0000-0000-0000-000000000004,Verma Auto Sales,+919876100004,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-13 10:00,2026-02-13 10:08,480,converted,DEAL_CLOSED,Kushaq deal closed
+call-12,b0000001-0000-0000-0000-000000000005,Verma Auto Sales,+919876100005,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-14 14:00,2026-02-14 14:06,360,converted,DEAL_CLOSED,Honda Amaze stock-in
+call-13,b0000001-0000-0000-0000-000000000006,Agarwal Motors,+919876100006,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-15 09:00,2026-02-15 09:05,300,converted,DEAL_CLOSED,Kwid deal done
+call-14,b0000001-0000-0000-0000-000000000011,RK Car World,+919876100011,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,inbound,2026-02-15 16:00,2026-02-15 16:08,480,converted,DEAL_CLOSED,Citroen C3 stock-in confirmed
+call-15,new-01,Sharma Motors,+919900110011,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-15 10:00,2026-02-15 10:08,480,interested,FOLLOW_UP,Swift discussion with Vikram
+call-16,new-02,Kapoor Cars,+919900110012,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-16 11:30,2026-02-16 11:35,300,converted,DEAL_CLOSED,i20 deal closed
+call-17,new-03,Bharat Auto World,+919900110013,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-18 09:00,2026-02-18 09:12,720,interested,FOLLOW_UP,Honda Amaze pricing
+call-18,new-04,National Motors,+919900110014,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-20 14:30,2026-02-20 14:36,360,converted,DEAL_CLOSED,Seltos confirmed
+call-19,new-06,Metro Wheels Hub,+919900110016,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-24 15:00,2026-02-24 15:10,600,converted,DEAL_CLOSED,Innova finalized
+call-20,new-07,Jai Shree Cars,+919900110017,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-25 11:00,2026-02-25 11:07,420,interested,CALLBACK,Nexon financing talk
+call-21,new-09,United Car Emporium,+919900110019,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,inbound,2026-02-27 12:30,2026-02-27 12:40,600,converted,DEAL_CLOSED,Honda City confirmed
+call-22,new-15,Metro Wheels Hub,+919900110025,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-28 10:00,2026-02-28 10:05,300,converted,DEAL_CLOSED,Venue stock-in
+call-23,new-16,Singh Auto Palace,+919900120001,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-14 10:30,2026-02-14 10:42,720,converted,DEAL_CLOSED,Swift closed
+call-24,new-17,Agarwal Motors,+919900120002,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-16 13:00,2026-02-16 13:06,360,interested,FOLLOW_UP,WagonR pricing
+call-25,new-18,RK Car World,+919900120003,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-17 09:30,2026-02-17 09:38,480,converted,DEAL_CLOSED,Sonet stock-in
+call-26,new-19,Royal Auto Gallery,+919900120004,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-19 14:30,2026-02-19 14:38,480,converted,DEAL_CLOSED,Creta deal done
+call-27,new-13,Sharma Motors,+919900110023,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,outbound,2026-02-22 16:00,2026-02-22 16:04,240,not_interested,REJECTED,Customer not ready
+call-28,new-14,Kapoor Cars,+919876000006,3656270b-918e-4333-8f04-a4b4cf9e7d44,Amit Verma,inbound,2026-02-23 10:00,2026-02-23 10:06,360,interested,RNR,Documentation query
+call-29,new-25,Verma Auto Sales,+919876100005,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-25 14:00,2026-02-25 14:08,480,interested,CALLBACK,Pricing negotiation
+call-30,new-26,Agarwal Motors,+919876100006,14edef99-b500-4101-a30d-ea863293d47e,Sneha Kapoor,outbound,2026-02-26 11:00,2026-02-26 11:05,300,converted,DEAL_CLOSED,Stock-in completed

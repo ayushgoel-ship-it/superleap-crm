@@ -472,18 +472,18 @@ export function getKAMPerformanceFlag(params: {
 /**
  * Calculate channel-specific I2SI targets and status
  */
-export function getChannelI2SIStatus(channel: 'GS' | 'C2D' | 'C2B', i2siPercent: number): {
+export function getChannelI2SIStatus(channel: 'GS' | 'NGS' | 'DCF' | string, i2siPercent: number): {
   target: number;
   rag: RAGStatus;
   achievementPercent: number;
 } {
-  const targets: Record<'GS' | 'C2D' | 'C2B', number> = {
+  const targets: Record<string, number> = {
     GS: 15,
-    C2D: 20,
-    C2B: 12,
+    NGS: 12,
+    DCF: 20,
   };
-  
-  const target = targets[channel];
+
+  const target = targets[channel] ?? 15;
   const achievementPercent = getAchievementPercent(i2siPercent, target);
   const rag = getRAGStatusByAchievement(achievementPercent);
   
