@@ -31,18 +31,14 @@ export type {
 } from './types';
 
 // ============================================================================
-// ID HELPERS (still from mockDatabase for backward compat)
+// ID HELPERS (canonical — no mock dependency)
 // ============================================================================
 export {
-  makeDealerId,
-  makeKAMId,
-  makeTLId,
-  makeCallId,
-  makeVisitId,
-  makeLeadId,
   normalizeDealerId,
-  LEGACY_ID_MAP,
-} from './mockDatabase';
+  normalizeKAMId,
+  normalizeTLId,
+  makeUntaggedDealerId,
+} from './idUtils';
 
 // ============================================================================
 // RUNTIME DB (Supabase-backed, replaces mock arrays)

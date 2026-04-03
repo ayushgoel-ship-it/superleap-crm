@@ -44,14 +44,7 @@ import {
   daysSinceLabel,
 } from "./crm_utils.tsx";
 import type { AuthContext, UserRole } from "./crm_utils.tsx";
-import {
-  findMockLeadById,
-  updateMockLeadCEP,
-  filterMockLeads,
-  formatMockLeadForList,
-  formatMockLeadForDetail,
-} from "./mock_leads.tsx";
-import type { MockLead } from "./mock_leads.tsx";
+// Mock leads removed — all data from Supabase only
 import { requireAuth, requireRole, type AuthResult } from "./auth_middleware.tsx";
 
 // ---------------------------------------------------------------------------
@@ -650,23 +643,10 @@ crm.get("/v1/leads/list", async (c) => {
         };
       });
     } catch (dataErr: unknown) {
-      console.log("[Leads/list] data query failed, returning mock fallback:", dataErr instanceof Error ? dataErr.message : String(dataErr));
-
-      // ── Mock fallback — shared MOCK_LEADS (consistent with detail/CEP) ──
-      const filteredMock = filterMockLeads({
-        channel: query.channel,
-        stage: query.stage,
-        kam_id: query.kam_id,
-        dealer_id: query.dealer_id,
-        cep_status: query.cep_status,
-        status: query.status,
-        search: query.search,
-      });
-
-      total = filteredMock.length;
-      items = filteredMock
-        .slice(offset, offset + pageSize)
-        .map(formatMockLeadForList);
+      console.error("[Leads/list] data query failed:", dataErr instanceof Error ? dataErr.message : String(dataErr));
+      // No mock fallback — return empty result set
+      total = 0;
+      items = [];
     }
 
     return c.json(
@@ -695,17 +675,10 @@ crm.get("/v1/leads/:lead_id", async (c) => {
         return c.json(successEnvelope(formatDbRowForDetail(row)));
       }
     } catch (dbErr: unknown) {
-      console.log("[Leads] DB detail lookup failed, falling back to mock:", dbErr instanceof Error ? dbErr.message : String(dbErr));
+      console.error("[Leads] DB detail lookup failed:", dbErr instanceof Error ? dbErr.message : String(dbErr));
     }
 
-    // ── Step 2: Mock read fallback (DB miss / DB unavailable) ──
-    const mockLead = findMockLeadById(lead_id);
-    if (mockLead) {
-      console.log(`[Leads] mock_read | lead_id=${lead_id} | cep=${mockLead.cep} | updated_at=${mockLead.updated_at}`);
-      return c.json(successEnvelope(formatMockLeadForDetail(mockLead)));
-    }
-
-    // ── Step 3: Not found anywhere ──
+    // ── Not found ──
     return c.json(errorEnvelope("NOT_FOUND", `Lead '${lead_id}' not found`), 404);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -1058,9 +1031,8 @@ crm.patch("/v1/leads/:lead_id/cep", async (c) => {
     const now = new Date().toISOString();
     const confidence = cepValue != null ? "confirmed" : null;
 
-    // ── Step 1: Resolve lead — DB first, then mock ──
-    let source: "db" | "mock" | null = null;
-    let mockLead: MockLead | null = null;
+    // ── Step 1: Resolve lead — DB only ──
+    let source: "db" | null = null;
 
     try {
       const existing = await db.queryOne<Record<string, unknown>>(
@@ -1075,14 +1047,7 @@ crm.patch("/v1/leads/:lead_id/cep", async (c) => {
     }
 
     if (!source) {
-      mockLead = findMockLeadById(lead_id);
-      if (mockLead) {
-        source = "mock";
-      }
-    }
-
-    if (!source) {
-      return c.json(errorEnvelope("NOT_FOUND", `Lead '${lead_id}' not found in DB or mock data`), 404);
+      return c.json(errorEnvelope("NOT_FOUND", `Lead '${lead_id}' not found`), 404);
     }
 
     // ── Step 2: Write to DB ──
@@ -1098,18 +1063,12 @@ crm.patch("/v1/leads/:lead_id/cep", async (c) => {
         if (!updated) {
           return c.json(errorEnvelope("CEP_UPDATE_ERROR", `DB UPDATE returned 0 rows for lead '${lead_id}'`), 500);
         }
-      } else {
-        // source === "mock" → promote mock lead into DB with CEP applied
-        await upsertMockLeadToDB(mockLead!, cepValue, now);
       }
 
       // ── Step 3: Re-fetch persisted record ──
       const row = await db.queryOne<Record<string, unknown>>(LEAD_DETAIL_SQL, [lead_id]);
       if (row) {
         console.log(`[CEP] db_write | lead_id=${lead_id} | new_cep=${cepValue} | source=${source} | updated_at=${row.updated_at}`);
-        // Sync in-memory mock (if this lead_id exists there) so the list
-        // endpoint's mock-fallback path stays consistent within this isolate.
-        updateMockLeadCEP(lead_id, cepValue);
         return c.json(successEnvelope(formatDbRowForDetail(row)));
       }
 
@@ -1119,15 +1078,6 @@ crm.patch("/v1/leads/:lead_id/cep", async (c) => {
     } catch (dbWriteErr: unknown) {
       const errMsg = dbWriteErr instanceof Error ? dbWriteErr.message : String(dbWriteErr);
       console.log(`[CEP] DB write failed (source=${source}), graceful-degrade to mock | error: ${errMsg}`);
-
-      // ── Graceful degradation: update in-memory mock if available ──
-      if (source === "mock" && mockLead) {
-        const updatedMock = updateMockLeadCEP(lead_id, cepValue);
-        if (updatedMock) {
-          console.log(`[CEP] mock_fallback_write | lead_id=${lead_id} | new_cep=${cepValue} | updated_at=${updatedMock.updated_at}`);
-          return c.json(successEnvelope(formatMockLeadForDetail(updatedMock)));
-        }
-      }
 
       return c.json(errorEnvelope("CEP_UPDATE_ERROR", `Failed to persist CEP update for lead '${lead_id}': ${errMsg}`), 500);
     }

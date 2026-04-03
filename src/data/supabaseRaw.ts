@@ -1,21 +1,27 @@
 import { supabase } from '@/lib/supabase/client';
-import type { Dealer, CallLog, VisitLog, Lead, DCFLead, AdminOrg, LocationChangeRequest, DealerMetricPeriod } from './types';
+import type { Dealer, CallLog, VisitLog, Lead, DCFLead, AdminOrg, LocationChangeRequest, DealerMetricPeriod, UntaggedDealer } from './types';
 
 /**
  * DATA ADAPTER — Maps canonical Supabase tables to frontend types.
  *
- * Canonical tables:
- *   sell_leads_master   — 85 cols, all sell leads (from company backend)
- *   dcf_leads_master    — 90 cols, all DCF leads
- *   dealers_master      — derived from unique dealer_codes
+ * Canonical tables (source of truth):
+ *   dealers_master      — canonical dealer identity + KAM/TL mapping + onboarding
+ *   sell_leads_master    — 85 cols, all sell leads
+ *   dcf_leads_master     — 90 cols, all DCF leads
  *
- * Legacy tables still used:
- *   call_events, visits  — activity data (not in canonical source)
- *   org_raw              — org hierarchy
- *   location_requests    — location changes
+ * Operational tables:
+ *   call_events          — call activity logs
+ *   visits               — visit activity logs (tagged + untagged dealers)
+ *   untagged_dealers     — visit-only untagged dealer registry
+ *   users                — KAM/TL/Admin identity
+ *   teams                — team structure
+ *   location_requests    — dealer location changes
+ *
+ * ALL dealer ownership flows from dealers_master.kam_id / tl_id.
+ * KAM/TL on leads and DCF are derived from dealer ownership, not stored separately.
  */
 
-// ── Region mapping ──
+// ── Region mapping (source region codes → frontend RegionKey) ──
 const REGION_MAP: Record<string, string> = {
   NDL: 'NCR', NRJ: 'NCR', NHP: 'NCR', NHR: 'NCR', UPW: 'NCR', UPE: 'NCR',
   MUM: 'West', PUN: 'West', GJN: 'West', GJS: 'West', AMD: 'West', WMH: 'West', WMP: 'West', EWB: 'West',
@@ -28,14 +34,14 @@ function toRegionKey(raw: string | null): 'NCR' | 'West' | 'South' | 'East' {
   return (REGION_MAP[raw] || 'NCR') as any;
 }
 
-// ── Paginated fetch ──
+// ── Paginated fetch helper ──
 async function fetchAll<T = any>(table: string, select: string, pageSize = 1000): Promise<T[]> {
   const all: T[] = [];
   let from = 0;
   while (true) {
     const { data, error } = await supabase.from(table).select(select).range(from, from + pageSize - 1);
     if (error) {
-      console.error(`Supabase: Failed to fetch ${table} (offset ${from}).`, error.message);
+      console.error(`[SupabaseRaw] Failed to fetch ${table} (offset ${from}):`, error.message);
       break;
     }
     if (!data || data.length === 0) break;
@@ -63,10 +69,44 @@ function deriveStatus(row: any): string {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// DEALERS — from dealers_master
+// USER MAP — built once, shared across adapters for KAM/TL name resolution
+// ════════════════════════════════════════════════════════════════════
+
+let _userMap: Map<string, { name: string; teamId: string; role: string }> | null = null;
+let _teamTlMap: Map<string, string> | null = null; // teamId → tl_user_id
+
+async function ensureUserMap() {
+  if (_userMap) return;
+  const [users, teams] = await Promise.all([
+    fetchAll('users', 'user_id,name,team_id,role'),
+    fetchAll('teams', 'team_id,tl_user_id'),
+  ]);
+  _userMap = new Map();
+  _teamTlMap = new Map();
+  for (const u of users) {
+    _userMap.set(u.user_id, { name: u.name || '', teamId: u.team_id || '', role: u.role || '' });
+  }
+  for (const t of teams) {
+    _teamTlMap.set(t.team_id, t.tl_user_id || '');
+  }
+}
+
+function getUserName(userId: string | null): string {
+  if (!userId || !_userMap) return '';
+  return _userMap.get(userId)?.name || '';
+}
+
+function getUserTeamId(userId: string | null): string {
+  if (!userId || !_userMap) return '';
+  return _userMap.get(userId)?.teamId || '';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// DEALERS — from dealers_master (canonical dealer identity + mapping)
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchDealersRaw(): Promise<Dealer[]> {
+  await ensureUserMap();
   const data = await fetchAll('dealers_master', '*');
   if (data.length === 0) return [];
 
@@ -77,32 +117,52 @@ export async function fetchDealersRaw(): Promise<Dealer[]> {
     'last-6m': { ...emptyMetric }, lifetime: { ...emptyMetric },
   });
 
-  return data.map((d: any) => ({
-    id: String(d.dealer_code),
-    name: d.dealer_name || `Dealer-${d.dealer_code}`,
-    code: String(d.dealer_code),
-    city: d.dealer_city || 'Unknown',
-    region: toRegionKey(d.dealer_region),
-    kamId: 'unassigned',
-    kamName: 'Unassigned KAM',
-    tlId: 'tl-default',
-    lastVisit: new Date().toISOString(),
-    lastContact: new Date().toISOString(),
-    lastVisitDaysAgo: 0,
-    lastContactDaysAgo: 0,
-    phone: d.phone || '',
-    email: d.email || '',
-    latitude: d.latitude || 28.5 + Math.random() * 0.3,
-    longitude: d.longitude || 77.0 + Math.random() * 0.5,
-    metrics: emptyMetrics(),
-    tags: [],
-    segment: (d.segment || 'B') as const,
-    status: (d.status || 'active') as const,
-  }));
+  return data.map((d: any) => {
+    const kamId = d.kam_id || '';
+    const tlId = d.tl_id || '';
+    const kamName = getUserName(kamId) || 'Unassigned KAM';
+
+    // Derive tags from onboarding flags
+    const tags: string[] = [];
+    if (d.dcf_onboarded === 'Y') tags.push('DCF Onboarded');
+    if (d.sell_onboarded === 'Y' && d.dcf_onboarded !== 'Y') tags.push('Sell Only');
+
+    return {
+      id: String(d.dealer_code),
+      name: d.dealer_name || `Dealer-${d.dealer_code}`,
+      code: String(d.dealer_code),
+      city: d.dealer_city || 'Unknown',
+      region: toRegionKey(d.dealer_region),
+      kamId,
+      kamName,
+      tlId,
+      lastVisit: new Date().toISOString(),
+      lastContact: new Date().toISOString(),
+      lastVisitDaysAgo: 0,
+      lastContactDaysAgo: 0,
+      phone: d.phone || '',
+      email: d.email || '',
+      latitude: d.latitude || 28.5 + Math.random() * 0.3,
+      longitude: d.longitude || 77.0 + Math.random() * 0.5,
+      metrics: emptyMetrics(),
+      tags,
+      segment: (d.segment || 'B') as any,
+      status: (d.status || 'active') as any,
+
+      // Onboarding fields
+      sellOnboarded: d.sell_onboarded || 'N',
+      dcfOnboarded: d.dcf_onboarded || 'N',
+      sellOnboardingDate: d.sell_onboarding_date || undefined,
+      dcfOnboardingDate: d.dcf_onboarding_date || undefined,
+      onboardingStatus: d.onboarding_status || 'Soft onboarded',
+      bankAccountStatus: d.bank_account_status || 'Not verified',
+    };
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════
-// LEADS — from sell_leads_master (canonical 85-col table)
+// LEADS — from sell_leads_master
+// KAM/TL derived from dealer ownership in dealers_master
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchLeadsRaw(): Promise<Lead[]> {
@@ -118,12 +178,12 @@ export async function fetchLeadsRaw(): Promise<Lead[]> {
     return {
       id: String(l.lead_id),
       dealerId: String(l.dealer_code || ''),
-      dealerName: '', // Will be enriched in runtimeDB
+      dealerName: '', // Enriched in runtimeDB from dealers_master
       dealerCode: String(l.dealer_code || ''),
-      kamId: 'unassigned',
-      kamName: 'Unassigned',
+      kamId: '', // Enriched in runtimeDB from dealer ownership
+      kamName: '',
       kamPhone: '',
-      tlId: 'tl-default',
+      tlId: '',
 
       customerName: 'Customer',
       customerPhone: '',
@@ -189,66 +249,87 @@ export async function fetchLeadsRaw(): Promise<Lead[]> {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// CALLS — from call_events (unchanged legacy table)
+// CALLS — from call_events
+// Uses kam_id from call_events (the KAM who made the call)
+// dealer_code added for canonical dealer reference
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchCallsRaw(): Promise<CallLog[]> {
+  await ensureUserMap();
   const data = await fetchAll('call_events', '*');
   if (data.length === 0) return [];
 
-  return data.map((c: any) => ({
-    id: c.call_id,
-    dealerId: c.dealer_id || 'unknown',
-    dealerName: '', // Enriched from dealers_master via runtimeDB
-    dealerCode: String(c.dealer_id || 'DLR-UN'),
-    callDate: c.start_time,
-    callTime: new Date(c.start_time).toLocaleTimeString(),
-    duration: c.duration ? `${Math.floor(c.duration / 60)}m ${c.duration % 60}s` : '0s',
-    durationSec: c.duration || 0,
-    kamId: c.kam_id || 'unassigned',
-    kamName: 'KAM', // Enriched from users via runtimeDB
-    tlId: 'tl-default',
-    outcome: c.outcome || 'Connected',
-    isProductive: c.is_productive ?? ['converted', 'interested'].includes(c.outcome),
-    productivitySource: 'AI',
-    phone: c.customer_phone || '',
-    callStatus: c.outcome === 'not_interested' ? 'NOT_CONNECTED' : 'CONNECTED',
-    recordingStatus: 'AVAILABLE',
-    feedbackStatus: c.notes ? 'SUBMITTED' : 'PENDING',
-  }));
+  return data.map((c: any) => {
+    const kamId = c.kam_id || '';
+    const kamName = getUserName(kamId) || 'KAM';
+    const tlId = getUserTeamId(kamId); // derive TL from KAM's team
+
+    return {
+      id: c.call_id,
+      dealerId: c.dealer_code ? String(c.dealer_code) : (c.dealer_id || ''),
+      dealerName: '', // Enriched from dealers_master via runtimeDB
+      dealerCode: c.dealer_code ? String(c.dealer_code) : (c.dealer_id || ''),
+      callDate: c.start_time,
+      callTime: c.start_time ? new Date(c.start_time).toLocaleTimeString() : '',
+      duration: c.duration ? `${Math.floor(c.duration / 60)}m ${c.duration % 60}s` : '0s',
+      durationSec: c.duration || 0,
+      kamId,
+      kamName,
+      tlId,
+      outcome: c.outcome || 'Connected',
+      isProductive: c.is_productive ?? ['converted', 'interested'].includes(c.outcome),
+      productivitySource: 'AI' as const,
+      phone: c.customer_phone || '',
+      callStatus: c.outcome === 'not_interested' ? 'NOT_REACHABLE' : 'CONNECTED' as any,
+      recordingStatus: 'AVAILABLE' as any,
+      feedbackStatus: c.notes ? 'SUBMITTED' : 'PENDING' as any,
+    };
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════
-// VISITS — from visits (unchanged legacy table)
+// VISITS — from visits table
+// Supports both tagged (dealer_code) and untagged (untagged_dealer_id) dealers
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchVisitsRaw(): Promise<VisitLog[]> {
+  await ensureUserMap();
   const data = await fetchAll('visits', '*');
   if (data.length === 0) return [];
 
-  return data.map((v: any) => ({
-    id: v.visit_id,
-    dealerId: v.dealer_id,
-    dealerName: '', // Enriched from dealers_master via runtimeDB
-    dealerCode: String(v.dealer_id || 'DLR-UN'),
-    visitDate: v.scheduled_at,
-    visitTime: new Date(v.scheduled_at).toLocaleTimeString(),
-    duration: v.duration_minutes ? `${v.duration_minutes}m` : '30m',
-    kamId: v.kam_id || 'unassigned',
-    kamName: 'KAM', // Enriched from users via runtimeDB
-    tlId: 'tl-default',
-    checkInLocation: { latitude: Number(v.geo_lat) || 28.5, longitude: Number(v.geo_lng) || 77.2 },
-    isProductive: v.is_productive ?? v.status === 'completed',
-    productivitySource: 'Geofence',
-    visitType: v.visit_type || 'Planned',
-    status: v.status === 'completed' ? 'COMPLETED' : v.status === 'cancelled' ? 'CANCELLED' : 'NOT_STARTED',
-    checkInAt: v.check_in_at || undefined,
-    completedAt: v.check_out_at || undefined,
-  }));
+  return data.map((v: any) => {
+    const kamId = v.kam_id || '';
+    const kamName = getUserName(kamId) || 'KAM';
+    const tlId = getUserTeamId(kamId);
+
+    // Use dealer_code if available, fall back to dealer_id (UUID from old data)
+    const dealerRef = v.dealer_code ? String(v.dealer_code) : (v.untagged_dealer_id || v.dealer_id || '');
+
+    return {
+      id: v.visit_id,
+      dealerId: dealerRef,
+      dealerName: '', // Enriched from dealers_master via runtimeDB
+      dealerCode: dealerRef,
+      visitDate: v.scheduled_at,
+      visitTime: v.scheduled_at ? new Date(v.scheduled_at).toLocaleTimeString() : '',
+      duration: v.duration_minutes ? `${v.duration_minutes}m` : '30m',
+      kamId,
+      kamName,
+      tlId,
+      checkInLocation: { latitude: Number(v.geo_lat) || 28.5, longitude: Number(v.geo_lng) || 77.2 },
+      isProductive: v.is_productive ?? v.status === 'completed',
+      productivitySource: 'Geofence' as const,
+      visitType: v.visit_type || 'Planned',
+      status: v.status === 'completed' ? 'COMPLETED' : v.status === 'cancelled' ? 'CANCELLED' : 'NOT_STARTED',
+      checkInAt: v.check_in_at || undefined,
+      completedAt: v.check_out_at || undefined,
+    };
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════
-// DCF — from dcf_leads_master (canonical 90-col table)
+// DCF — from dcf_leads_master
+// KAM/TL derived from dealer ownership in dealers_master
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
@@ -289,9 +370,9 @@ export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
       roi,
       tenure,
       emi: loanAmt > 0 && tenure > 0 ? Math.round(loanAmt / tenure) : 0,
-      dealerId: String(dcf.dealer_code || 'unknown'),
+      dealerId: String(dcf.dealer_code || ''),
       dealerName: dcf.dealer_name || 'Unknown',
-      dealerCode: String(dcf.dealer_code || 'DLR'),
+      dealerCode: String(dcf.dealer_code || ''),
       dealerCity: dcf.dealer_city || 'Unknown',
       channel: 'DCF',
       ragStatus: ragStatus as 'green' | 'amber' | 'red',
@@ -300,9 +381,9 @@ export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
       conversionOwner: dcf.rm_mapping || 'KAM',
       conversionEmail: '',
       conversionPhone: '',
-      kamId: 'unassigned',
-      kamName: dcf.tl_mapping || 'KAM',
-      tlId: 'tl-default',
+      kamId: '', // Enriched in runtimeDB from dealer ownership
+      kamName: '',
+      tlId: '',
       firstDisbursalForDealer: false,
       commissionEligible: !!dcf.disbursal_datetime,
       baseCommission: 5000,
@@ -321,13 +402,38 @@ export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// LOCATION REQUESTS — unchanged
+// UNTAGGED DEALERS — from untagged_dealers table
+// ════════════════════════════════════════════════════════════════════
+
+export async function fetchUntaggedDealersRaw(): Promise<UntaggedDealer[]> {
+  const { data, error } = await supabase.from('untagged_dealers').select('*');
+  if (error) {
+    console.error('[SupabaseRaw] Failed to fetch untagged_dealers:', error.message);
+    return [];
+  }
+  if (!data || data.length === 0) return [];
+
+  return data.map((ud: any) => ({
+    id: ud.id,
+    phone: ud.phone,
+    name: ud.name || undefined,
+    city: ud.city || undefined,
+    region: ud.region || undefined,
+    address: ud.address || undefined,
+    notes: ud.notes || undefined,
+    createdBy: ud.created_by || undefined,
+    createdAt: ud.created_at || new Date().toISOString(),
+  }));
+}
+
+// ════════════════════════════════════════════════════════════════════
+// LOCATION REQUESTS
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchLocationRequestsRaw(): Promise<LocationChangeRequest[]> {
   const { data, error } = await supabase.from('location_requests').select('*');
   if (error) {
-    console.error('Supabase: Failed to fetch location requests.', error.message);
+    console.error('[SupabaseRaw] Failed to fetch location_requests:', error.message);
     return [];
   }
   if (!data || data.length === 0) return [];
@@ -335,27 +441,26 @@ export async function fetchLocationRequestsRaw(): Promise<LocationChangeRequest[
   return data.map((lr: any) => ({
     id: lr.request_id,
     dealerId: lr.dealer_id,
+    dealerName: '',
     requestedBy: lr.requested_by,
-    oldLat: lr.old_lat,
-    oldLng: lr.old_lng,
-    newLat: lr.new_lat,
-    newLng: lr.new_lng,
+    requestedByName: '',
+    oldLocation: lr.old_lat ? { latitude: lr.old_lat, longitude: lr.old_lng } : null,
+    newLocation: { latitude: lr.new_lat, longitude: lr.new_lng },
     reason: lr.reason,
     status: lr.status,
     decidedAt: lr.decided_at,
     decidedBy: lr.decided_by,
     rejectionReason: lr.rejection_reason,
     createdAt: lr.created_at,
-    updatedAt: lr.updated_at,
   }));
 }
 
 // ════════════════════════════════════════════════════════════════════
-// ORG — unchanged
+// ORG — built from users + teams tables
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchOrgRaw(): Promise<AdminOrg | null> {
-  // Build org from users + teams tables
+  await ensureUserMap();
   const [usersData, teamsData] = await Promise.all([
     fetchAll('users', '*'),
     fetchAll('teams', '*'),
@@ -363,12 +468,12 @@ export async function fetchOrgRaw(): Promise<AdminOrg | null> {
 
   if (usersData.length === 0 && teamsData.length === 0) return null;
 
-  // Build TL → KAMs hierarchy from users
+  // Build TL → KAMs hierarchy
   const tls: any[] = [];
   const tlMap = new Map<string, any>();
 
   for (const u of usersData) {
-    if (u.role === 'tl') {
+    if (u.role === 'TL' || u.role === 'tl') {
       const tl = {
         id: u.user_id,
         name: u.name || 'TL',
@@ -378,12 +483,15 @@ export async function fetchOrgRaw(): Promise<AdminOrg | null> {
         kams: [] as any[],
       };
       tlMap.set(u.user_id, tl);
+      // Also map by team_id for KAM lookups
+      const team = teamsData.find((t: any) => t.tl_user_id === u.user_id);
+      if (team) tlMap.set(team.team_id, tl);
       tls.push(tl);
     }
   }
 
   for (const u of usersData) {
-    if (u.role === 'kam') {
+    if (u.role === 'KAM' || u.role === 'kam') {
       const kam = {
         id: u.user_id,
         name: u.name || 'KAM',
@@ -391,7 +499,7 @@ export async function fetchOrgRaw(): Promise<AdminOrg | null> {
         city: u.city || '',
         phone: u.phone || '',
         email: u.email || '',
-        tlId: u.team_id || 'tl-default',
+        tlId: u.team_id || '',
       };
       const tl = tlMap.get(u.team_id);
       if (tl) tl.kams.push(kam);

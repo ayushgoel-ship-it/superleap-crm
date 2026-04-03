@@ -1,4 +1,4 @@
-import type { Dealer, CallLog, VisitLog, Lead, DCFLead, AdminOrg, LocationChangeRequest, DealerMetricPeriod } from '@/data/types';
+import type { Dealer, CallLog, VisitLog, Lead, DCFLead, AdminOrg, LocationChangeRequest, DealerMetricPeriod, UntaggedDealer } from '@/data/types';
 
 import {
   fetchDealersRaw,
@@ -8,6 +8,7 @@ import {
   fetchDcfLeadsRaw,
   fetchLocationRequestsRaw,
   fetchOrgRaw,
+  fetchUntaggedDealersRaw,
 } from '@/data/supabaseRaw';
 
 type RuntimeDB = {
@@ -17,6 +18,7 @@ type RuntimeDB = {
   leads: Lead[];
   dcfLeads: DCFLead[];
   locationRequests: LocationChangeRequest[];
+  untaggedDealers: UntaggedDealer[];
   org: AdminOrg;
 };
 
@@ -46,11 +48,8 @@ function computeDealerPeriodMetrics(leads: Lead[], dcfLeads: DCFLead[], from: Da
   let totalLeads = 0;
 
   for (const l of leads) {
-    // Count leads created in period
     if (isInPeriod(l.createdAt, from, to)) totalLeads++;
-    // Inspections: rank-1 only
     if ((l.regInspRank === 1) && l.inspectionDate && isInPeriod(l.inspectionDate, from, to)) inspections++;
-    // Stock-ins: rank-1 only
     const siDate = l.finalSiDate || l.stockinDate;
     if ((l.regStockinRank === 1) && siDate && isInPeriod(siDate, from, to)) sis++;
   }
@@ -61,7 +60,7 @@ function computeDealerPeriodMetrics(leads: Lead[], dcfLeads: DCFLead[], from: Da
 }
 
 function enrichDealerMetrics(dealers: Dealer[], leads: Lead[], dcfLeads: DCFLead[]): Dealer[] {
-  // Group leads by dealer code
+  // Group leads and DCF by dealer code
   const leadsByDealer = new Map<string, Lead[]>();
   const dcfByDealer = new Map<string, DCFLead[]>();
 
@@ -123,17 +122,67 @@ function enrichDealerMetrics(dealers: Dealer[], leads: Lead[], dcfLeads: DCFLead
   });
 }
 
-// Enrich leads with dealer names
-function enrichLeadDealerNames(leads: Lead[], dealers: Dealer[]): Lead[] {
+// ── Enrich leads/DCF with dealer ownership (KAM/TL from dealers_master) ──
+
+function enrichFromDealerOwnership(leads: Lead[], dcfLeads: DCFLead[], dealers: Dealer[]): { leads: Lead[]; dcfLeads: DCFLead[] } {
+  // Build dealer → ownership map
+  const dealerMap = new Map<string, { name: string; kamId: string; kamName: string; tlId: string }>();
+  for (const d of dealers) {
+    dealerMap.set(d.code, { name: d.name, kamId: d.kamId, kamName: d.kamName, tlId: d.tlId });
+  }
+
+  const enrichedLeads = leads.map(l => {
+    const owner = dealerMap.get(l.dealerCode);
+    if (owner) {
+      return {
+        ...l,
+        dealerName: owner.name || l.dealerName || `Dealer-${l.dealerCode}`,
+        kamId: owner.kamId,
+        kamName: owner.kamName,
+        tlId: owner.tlId,
+      };
+    }
+    return { ...l, dealerName: l.dealerName || `Dealer-${l.dealerCode}` };
+  });
+
+  const enrichedDcf = dcfLeads.map(d => {
+    const owner = dealerMap.get(d.dealerCode);
+    if (owner) {
+      return {
+        ...d,
+        kamId: owner.kamId,
+        kamName: owner.kamName,
+        tlId: owner.tlId,
+      };
+    }
+    return d;
+  });
+
+  return { leads: enrichedLeads, dcfLeads: enrichedDcf };
+}
+
+// ── Enrich calls/visits with dealer names from dealers ──
+
+function enrichCallsVisits(calls: CallLog[], visits: VisitLog[], dealers: Dealer[]): { calls: CallLog[]; visits: VisitLog[] } {
   const dealerMap = new Map<string, string>();
   for (const d of dealers) {
     dealerMap.set(d.code, d.name);
   }
-  return leads.map(l => ({
-    ...l,
-    dealerName: dealerMap.get(l.dealerCode) || l.dealerName || `Dealer-${l.dealerCode}`,
+
+  const enrichedCalls = calls.map(c => ({
+    ...c,
+    dealerName: dealerMap.get(c.dealerCode) || c.dealerName || '',
   }));
+
+  const enrichedVisits = visits.map(v => ({
+    ...v,
+    dealerName: dealerMap.get(v.dealerCode) || v.dealerName || '',
+  }));
+
+  return { calls: enrichedCalls, visits: enrichedVisits };
 }
+
+// ── Main load function ──
 
 export async function loadRuntimeDB(): Promise<RuntimeDB> {
   console.log('[RuntimeDB] loadRuntimeDB called, cache exists:', !!cache);
@@ -148,24 +197,34 @@ export async function loadRuntimeDB(): Promise<RuntimeDB> {
     fetchDcfLeadsRaw(),
     fetchLocationRequestsRaw(),
     fetchOrgRaw(),
+    fetchUntaggedDealersRaw(),
   ]);
 
   const getValue = <T>(r: PromiseSettledResult<T>, fallback: T): T =>
     r.status === 'fulfilled' ? r.value : fallback;
 
   let dealers = getValue(results[0], []);
-  const calls = getValue(results[1], []);
-  const visits = getValue(results[2], []);
+  let calls = getValue(results[1], []);
+  let visits = getValue(results[2], []);
   let leads = getValue(results[3], []);
-  const dcfLeads = getValue(results[4], []);
+  let dcfLeads = getValue(results[4], []);
   const locationRequests = getValue(results[5], []);
   const org = getValue(results[6], null) || DEFAULT_ORG;
+  const untaggedDealers = getValue(results[7], []);
 
-  // Enrich leads with dealer names
-  leads = enrichLeadDealerNames(leads, dealers);
+  // ENRICHMENT PIPELINE (order matters):
+  // 1. Enrich leads/DCF with dealer ownership (KAM/TL from dealers_master)
+  const enriched = enrichFromDealerOwnership(leads, dcfLeads, dealers);
+  leads = enriched.leads;
+  dcfLeads = enriched.dcfLeads;
 
-  // Enrich dealers with metrics computed from leads (using rank-based logic)
+  // 2. Enrich dealers with metrics computed from leads
   dealers = enrichDealerMetrics(dealers, leads, dcfLeads);
+
+  // 3. Enrich calls/visits with dealer names
+  const enrichedCV = enrichCallsVisits(calls, visits, dealers);
+  calls = enrichedCV.calls;
+  visits = enrichedCV.visits;
 
   cache = {
     dealers,
@@ -174,17 +233,18 @@ export async function loadRuntimeDB(): Promise<RuntimeDB> {
     leads,
     dcfLeads,
     locationRequests,
+    untaggedDealers,
     org,
   };
 
   const failures = results.filter(r => r.status === 'rejected');
   if (failures.length > 0) {
-    console.warn(`Runtime DB: ${failures.length}/${results.length} fetches failed. App will show partial data.`);
+    console.warn(`[RuntimeDB] ${failures.length}/${results.length} fetches failed. App will show partial data.`);
     results.forEach((r, i) => {
-      if (r.status === 'rejected') console.error(`  Fetch ${i} rejected:`, r.reason);
+      if (r.status === 'rejected') console.error(`  Fetch ${i} rejected:`, (r as PromiseRejectedResult).reason);
     });
   }
-  console.log(`[RuntimeDB] Loaded: ${cache.dealers.length} dealers, ${cache.leads.length} leads, ${cache.dcfLeads.length} dcf, ${cache.calls.length} calls, ${cache.visits.length} visits`);
+  console.log(`[RuntimeDB] Loaded: ${cache.dealers.length} dealers, ${cache.leads.length} leads, ${cache.dcfLeads.length} dcf, ${cache.calls.length} calls, ${cache.visits.length} visits, ${cache.untaggedDealers.length} untagged`);
 
   return cache;
 }
@@ -202,12 +262,13 @@ const EMPTY_DB: RuntimeDB = {
   leads: [],
   dcfLeads: [],
   locationRequests: [],
+  untaggedDealers: [],
   org: DEFAULT_ORG,
 };
 
 export function getRuntimeDBSync(): RuntimeDB {
   if (!cache) {
-    console.warn('Runtime DB not loaded yet — returning empty defaults.');
+    console.warn('[RuntimeDB] Not loaded yet — returning empty defaults.');
     return EMPTY_DB;
   }
   return cache;

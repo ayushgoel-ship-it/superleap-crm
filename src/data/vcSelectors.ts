@@ -6,7 +6,7 @@
 
 import { getRuntimeDBSync } from '@/data/runtimeDB';
 import { CallLog, VisitLog } from './types';
-import { normalizeKAMId, normalizeTLId, normalizeDealerId } from './mockDatabase';
+import { normalizeKAMId, normalizeTLId, normalizeDealerId } from './idUtils';
 
 // Runtime DB access — no more static mock arrays
 const CALLS = () => getRuntimeDBSync().calls;

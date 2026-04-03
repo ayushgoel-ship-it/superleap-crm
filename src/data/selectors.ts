@@ -3,7 +3,7 @@
  * All data access should go through these selectors
  */
 
-import { normalizeDealerId, normalizeTLId, normalizeKAMId } from './mockDatabase';
+import { normalizeDealerId, normalizeTLId, normalizeKAMId } from './idUtils';
 import { getRuntimeDBSync } from '@/data/runtimeDB';
 import { Dealer, CallLog, VisitLog, DCFLead, TeamLead, KAM, RegionKey, Lead } from './types';
 

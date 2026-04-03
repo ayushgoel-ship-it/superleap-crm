@@ -79,6 +79,30 @@ export interface Dealer {
   tags: string[];
   segment: DealerSegment;
   status: 'active' | 'inactive' | 'churned';
+
+  // Onboarding fields (from dealers_master canonical)
+  sellOnboarded: 'Y' | 'N';
+  dcfOnboarded: 'Y' | 'N';
+  sellOnboardingDate?: string;
+  dcfOnboardingDate?: string;
+  onboardingStatus: 'Fully onboarded' | 'Dlite only' | 'Soft onboarded';
+  bankAccountStatus: 'Verified' | 'Not verified';
+}
+
+// ============================================================================
+// UNTAGGED DEALER (visit-only, not yet onboarded)
+// ============================================================================
+
+export interface UntaggedDealer {
+  id: string;        // Format: UT-<phone_last10>
+  phone: string;     // Unique key
+  name?: string;
+  city?: string;
+  region?: string;
+  address?: string;
+  notes?: string;
+  createdBy?: string; // KAM user_id who first visited
+  createdAt: string;
 }
 
 // ============================================================================
