@@ -141,8 +141,8 @@ function computeRegionMetrics(region: Region): RegionMetrics {
     dcfDisbValueAch: dcfLeads
       .filter(l => l.overallStatus === 'DISBURSED')
       .reduce((acc, l) => acc + (l.loanAmount || 0), 0) / 100000, // Convert to lakhs
-    c2dInventory: leads.filter(l => l.channel === 'C2D' && l.leadType === 'Inventory').length,
-    c2dBuyers: leads.filter(l => l.channel === 'C2D' && l.leadType === 'Seller').length,
+    c2dInventory: leads.filter(l => l.channel === 'NGS' && l.leadType === 'Inventory').length,
+    c2dBuyers: leads.filter(l => l.channel === 'NGS' && l.leadType === 'Seller').length,
     c2dI2BPercent: 0,
     dcfLeads: dcfLeads.length,
     dcfOnboardings: dcfLeads.filter(l => l.currentFunnel === 'Onboarded').length,

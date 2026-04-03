@@ -1,8 +1,13 @@
 /**
- * METRICS FROM DB — Computes all dashboard KPIs from real Supabase data
+ * METRICS FROM DB — Computes all dashboard KPIs from canonical Supabase data
  *
- * This replaces all hardcoded mock data in HomePage, TLHomeView, and KAMDetailPage.
- * All metrics are derived from the runtime DB (leads, calls, visits, dcf_cases, dealers).
+ * All metrics use RANK-BASED FILTERING:
+ *   - Inspections: reg_insp_rank = 1 AND inspection_date IS NOT NULL
+ *   - Tokens/PR:   reg_token_rank = 1 AND (token_date OR final_token_date) IS NOT NULL
+ *   - Stock-ins:   reg_stockin_rank = 1 AND (stockin_date OR final_si_date) IS NOT NULL
+ *   - I2SI:        stock-ins / inspections * 100
+ *
+ * Channel derivation: gs_flag=1 → GS, gs_flag=0 → NGS (already done in adapter)
  */
 
 import { getRuntimeDBSync } from '../../data/runtimeDB';
@@ -51,6 +56,8 @@ function isInRange(dateStr: string | undefined, from: Date, to: Date): boolean {
 
 export interface DashboardMetrics {
     stockIns: number;
+    inspections: number; // rank-1 inspections
+    tokens: number; // rank-1 tokens/PR
     totalLeads: number;
     openLeads: number;
     wonLeads: number;
@@ -106,73 +113,95 @@ export function computeMetrics(
     const db = getRuntimeDBSync();
     const { from, to } = getDateRange(period);
 
-    // Filter by KAM
+    // Filter by KAM (dealer-based scoping: lead.dealerCode belongs to KAM's dealers)
     const allLeadsForKam: Lead[] = db.leads.filter((l: Lead) => kamId ? l.kamId === kamId : true);
-    const periodLeads: Lead[] = allLeadsForKam.filter((l: Lead) => isInRange(l.createdAt, from, to));
 
+    // ── RANK-BASED METRIC COMPUTATION ──
+
+    // Inspections: reg_insp_rank=1 AND inspection_date in period
+    const inspections = allLeadsForKam.filter((l: Lead) =>
+        l.regInspRank === 1 && l.inspectionDate && isInRange(l.inspectionDate, from, to)
+    ).length;
+
+    // Tokens/PR: reg_token_rank=1 AND (token_date OR final_token_date) in period
+    const tokens = allLeadsForKam.filter((l: Lead) => {
+        if (l.regTokenRank !== 1) return false;
+        const tDate = l.finalTokenDate || l.tokenDate;
+        return tDate && isInRange(tDate, from, to);
+    }).length;
+
+    // Stock-ins: reg_stockin_rank=1 AND (stockin_date OR final_si_date) in period
+    const stockIns = allLeadsForKam.filter((l: Lead) => {
+        if (l.regStockinRank !== 1) return false;
+        const siDate = l.finalSiDate || l.stockinDate;
+        return siDate && isInRange(siDate, from, to);
+    }).length;
+
+    // Total leads created in period (all ranks)
+    const periodLeads = allLeadsForKam.filter((l: Lead) => isInRange(l.createdAt, from, to));
+    const totalLeadsCount = allLeadsForKam.length;
+
+    // Status counts (derived from dates)
+    const wonLeads = allLeadsForKam.filter((l: Lead) => l.status === 'Won');
+    const lostLeads = allLeadsForKam.filter((l: Lead) => l.status === 'Lost');
+    const openLeads = allLeadsForKam.filter((l: Lead) => l.status === 'Active');
+
+    // I2SI = stock-ins / inspections * 100
+    const i2si = inspections > 0 ? Math.round((stockIns / inspections) * 100) : 0;
+    const conversionRate = inspections > 0 ? Math.round((stockIns / inspections) * 100) : 0;
+
+    // ── CALLS ──
     const calls: CallLog[] = db.calls.filter((c: CallLog) => {
         const inPeriod = isInRange(c.callDate, from, to);
         const matchesKam = kamId ? c.kamId === kamId : true;
         return inPeriod && matchesKam;
     });
+    const connectedCalls = calls.filter((c: CallLog) => c.callStatus === 'CONNECTED' || c.outcome === 'Connected');
+    const avgCallDuration = calls.length > 0
+        ? calls.reduce((sum: number, c: CallLog) => sum + (c.durationSec || 0), 0) / calls.length
+        : 0;
+    const callConnectRate = calls.length > 0 ? Math.round((connectedCalls.length / calls.length) * 100) : 0;
 
+    // ── VISITS ──
     const visits: VisitLog[] = db.visits.filter((v: VisitLog) => {
         const inPeriod = isInRange(v.visitDate, from, to);
         const matchesKam = kamId ? v.kamId === kamId : true;
         return inPeriod && matchesKam;
     });
-
-    const allDcfForKam: DCFLead[] = db.dcfLeads.filter((d: DCFLead) => kamId ? d.kamId === kamId : true);
-    const dealers: Dealer[] = db.dealers.filter((d: Dealer) => kamId ? d.kamId === kamId : true);
-
-    // Status counts
-    const wonLeads = allLeadsForKam.filter((l: Lead) => l.status === 'won' || l.status === 'Won' || l.stage === 'Stock-in' || l.stage === 'Closed Won');
-    const wonLeadsPeriod = periodLeads.filter((l: Lead) => l.status === 'won' || l.status === 'Won' || l.stage === 'Stock-in' || l.stage === 'Closed Won');
-    const lostLeads = allLeadsForKam.filter((l: Lead) => l.status === 'lost' || l.status === 'Lost' || l.stage === 'Closed Lost');
-    const openLeads = allLeadsForKam.filter((l: Lead) => l.status === 'Active' || l.status === 'open');
-
-    // DCF metrics
-    const dcfDisbursed = allDcfForKam.filter((d: DCFLead) => d.currentFunnel === 'disbursed' || d.overallStatus === 'disbursed');
-    const dcfInProgress = allDcfForKam.filter((d: DCFLead) => d.currentFunnel === 'in_progress' || d.overallStatus === 'in_progress');
-    const dcfApproved = allDcfForKam.filter((d: DCFLead) => d.currentFunnel === 'approved' || d.overallStatus === 'approved');
-    const dcfRejected = allDcfForKam.filter((d: DCFLead) => d.currentFunnel === 'rejected' || d.overallStatus === 'rejected');
-    const dcfDisbursedValue = dcfDisbursed.reduce((sum: number, d: DCFLead) => sum + (d.loanAmount || 0), 0) / 100000;
-
-    // Call metrics
-    const connectedCalls = calls.filter((c: CallLog) => c.callStatus === 'CONNECTED' || c.outcome === 'Connected');
-    const avgCallDuration = calls.length > 0
-        ? calls.reduce((sum: number, c: CallLog) => sum + (c.durationSec || 0), 0) / calls.length
-        : 0;
-
-    // Visit metrics
     const completedVisits = visits.filter((v: VisitLog) => v.status === 'COMPLETED');
     const scheduledVisits = visits.filter((v: VisitLog) => v.status === 'NOT_STARTED');
 
-    // Unique dealers
+    // ── DCF ──
+    const allDcfForKam: DCFLead[] = db.dcfLeads.filter((d: DCFLead) => kamId ? d.kamId === kamId : true);
+    const dcfDisbursed = allDcfForKam.filter((d: DCFLead) => d.overallStatus === 'disbursed' || !!d.disbursalDate);
+    const dcfInProgress = allDcfForKam.filter((d: DCFLead) => d.overallStatus === 'in_progress');
+    const dcfApproved = allDcfForKam.filter((d: DCFLead) => d.overallStatus === 'approved');
+    const dcfRejected = allDcfForKam.filter((d: DCFLead) => d.currentFunnel === 'REJECTED' || d.overallStatus === 'rejected');
+    const dcfDisbursedValue = dcfDisbursed.reduce((sum: number, d: DCFLead) => sum + (d.loanAmount || 0), 0) / 100000;
+
+    // ── DEALERS ──
+    const dealers: Dealer[] = db.dealers.filter((d: Dealer) => kamId ? d.kamId === kamId : true);
+    const activeDealers = dealers.filter((d: Dealer) => d.status === 'active').length;
+    const inactiveDealers = dealers.filter((d: Dealer) => d.status !== 'active').length;
+
+    // ── UNIQUE DEALERS ──
     const uniqueDealersVisited = new Set(visits.map((v: VisitLog) => v.dealerId)).size;
     const uniqueDealersCalled = new Set(calls.map((c: CallLog) => c.dealerId)).size;
 
-    // Channel breakdown
+    // ── CHANNEL BREAKDOWN ──
     const channelBreakdown: Record<string, number> = {};
     allLeadsForKam.forEach((l: Lead) => {
         const ch = l.channel || 'Other';
         channelBreakdown[ch] = (channelBreakdown[ch] || 0) + 1;
     });
 
-    // RAG breakdown
+    // ── RAG ──
     const ragBreakdown = { green: openLeads.length, amber: 0, red: lostLeads.length };
 
-    // Percentages
-    const totalLeadsCount = allLeadsForKam.length;
-    const i2si = totalLeadsCount > 0 ? Math.round((wonLeads.length / totalLeadsCount) * 100) : 0;
-    const conversionRate = totalLeadsCount > 0 ? Math.round((wonLeads.length / totalLeadsCount) * 100) : 0;
-    const callConnectRate = calls.length > 0 ? Math.round((connectedCalls.length / calls.length) * 100) : 0;
-
-    const activeDealers = dealers.filter((d: Dealer) => d.status === 'active').length;
-    const inactiveDealers = dealers.filter((d: Dealer) => d.status !== 'active').length;
-
     return {
-        stockIns: wonLeadsPeriod.length || wonLeads.length,
+        stockIns,
+        inspections,
+        tokens,
         totalLeads: totalLeadsCount,
         openLeads: openLeads.length,
         wonLeads: wonLeads.length,

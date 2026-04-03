@@ -237,13 +237,13 @@ export interface LocationChangeRequest {
 // ============================================================================
 
 export interface Lead {
-  id: string; // Format: lead-<region>-<seq>
-  dealerId: string; // Foreign key to Dealer
+  id: string; // LEAD_ID from source
+  dealerId: string; // DEALER_CODE (string form)
   dealerName: string;
-  dealerCode: string;
+  dealerCode: string; // DEALER_CODE
   kamId: string;
   kamName: string;
-  kamPhone?: string; // Added for UI display
+  kamPhone?: string;
   tlId: string;
 
   // Customer info
@@ -251,37 +251,68 @@ export interface Lead {
   customerPhone: string;
 
   // Vehicle info
-  regNo?: string; // Registration number
-  registrationNumber?: string; // Alias for regNo (backward compatibility)
-  make: string; // Brand (Maruti, Hyundai, etc)
-  model: string; // Model name (Swift, i20, etc)
-  year: number;
-  variant?: string;
+  regNo?: string; // CX_REG_NO
+  registrationNumber?: string; // Alias
+  make: string; // MAKE
+  model: string; // MODEL
+  year: number; // YEAR
+  variant?: string; // VARIANT
 
   // Business info
-  channel: 'C2B' | 'C2D' | 'GS';
-  leadType: 'Seller' | 'Inventory';
-  stage: string; // PR, PLL, Stock-in, Inspection Scheduled, etc
-  currentStage?: string; // Alias for stage (backward compatibility)
-  status: string; // Active, Converted, Lost, etc
+  channel: 'NGS' | 'GS' | 'DCF';
+  leadType: 'Seller' | 'Inventory'; // DL_TYPE
+  stage: string; // Derived from dates
+  currentStage?: string; // Alias
+  status: string; // Active, Won, Lost
+  appointmentStatus?: string; // APPOINTMENT_STATUS from source
 
   // Financial
-  expectedRevenue: number; // Expected payout in rupees
-  actualRevenue: number; // Actual payout earned (0 if not yet paid)
-  cep?: number | null; // Customer Expected Price (for C2B/C2D/GS)
+  expectedRevenue: number;
+  actualRevenue: number;
+  cep?: number | null;
   cepConfidence?: 'confirmed' | 'estimated' | 'dealer_told' | 'approximate';
   cepNotes?: string;
-  c24Quote?: number | null; // C24 internal quote (for pricing alignment)
+  c24Quote?: number | null; // LATEST_C24Q
+  maxC24Quote?: number | null; // MAX_C24_QUOTE
+  targetPrice?: number | null; // TARGET_PRICE
+  sellerAgreedPrice?: number | null; // SELLERAGREEDPRICE
+  bidAmount?: number | null; // BID_AMOUNT
 
-  // Dates
-  createdAt: string; // ISO string
-  updatedAt: string; // ISO string
-  inspectionDate?: string; // ISO string
-  convertedAt?: string; // ISO string when deal closed
+  // Rank columns (from source — used for dedup in metrics)
+  regApptRank?: number;
+  regInspRank?: number;
+  regTokenRank?: number;
+  regStockinRank?: number;
+
+  // Key dates
+  createdAt: string; // LEAD_DATE
+  updatedAt: string;
+  leadDate?: string; // LEAD_DATE
+  dealCreationDate?: string;
+  originalApptDate?: string;
+  currentApptDate?: string;
+  inspectionDate?: string; // INSPECTION_DATE
+  tokenDate?: string; // TOKEN_DATE
+  stockinDate?: string; // STOCKIN_DATE
+  stockOutDate?: string;
+  finalTokenDate?: string; // FINAL_TOKEN_DATE
+  finalSiDate?: string; // FINAL_SI_DATE
+  latestOcbRaisedAt?: string;
+  convertedAt?: string;
+
+  // Flags
+  gsFlag?: number;
+  franchiseFlag?: number;
+  ocbRunCount?: number;
+  verified?: string;
 
   // Metadata
   city: string;
   region: RegionKey;
+  inspectionCity?: string;
+  inspectionRegion?: string;
+  dealerRegion?: string;
+  growthZone?: string;
 }
 
 // ============================================================================

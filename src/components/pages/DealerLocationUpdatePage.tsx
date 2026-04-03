@@ -92,11 +92,10 @@ export function DealerLocationUpdatePage({
         }
       } else {
         // Direct update (first time)
-        const { error } = await supabase.from('dealers').update({
+        const { error } = await supabase.from('dealers_master').update({
           latitude: currentLocation.lat,
           longitude: currentLocation.lng,
-          address: address || null,
-        }).eq('dealer_id', dealerId);
+        }).eq('dealer_code', Number(dealerId));
 
         if (error) {
           toast.error('Failed to update location: ' + error.message);

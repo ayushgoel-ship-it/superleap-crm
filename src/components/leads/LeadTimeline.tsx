@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, Circle, Clock, ChevronDown, ChevronUp, DollarSign, User, Building2, MapPin, FileText, TrendingUp, CreditCard, Phone, Play, Mail, ExternalLink, AlertTriangle } from 'lucide-react';
 
-type Channel = 'C2B' | 'GS' | 'C2D' | 'DCF';
+type Channel = 'NGS' | 'GS' | 'DCF' | string;
 
 interface TimelineStage {
   id: string;
@@ -33,10 +33,8 @@ export function LeadTimeline({ channel, currentStage, leadData = {}, ocbStatus, 
 
   // Generate timeline stages based on channel
   const getTimelineStages = (): TimelineStage[] => {
-    if (channel === 'C2B' || channel === 'GS') {
+    if (channel === 'NGS' || channel === 'GS') {
       return getC2BTimeline();
-    } else if (channel === 'C2D') {
-      return getC2DTimeline();
     } else if (channel === 'DCF') {
       return getDCFTimeline();
     }
@@ -424,9 +422,8 @@ export function LeadTimeline({ channel, currentStage, leadData = {}, ocbStatus, 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-gray-900">Lead Journey</h2>
         <span className={`px-3 py-1 rounded-lg text-xs ${
-          channel === 'C2B' ? 'bg-blue-100 text-blue-700' :
-          channel === 'GS' ? 'bg-purple-100 text-purple-700' :
-          channel === 'C2D' ? 'bg-green-100 text-green-700' :
+          channel === 'NGS' ? 'bg-violet-100 text-violet-700' :
+          channel === 'GS' ? 'bg-emerald-100 text-emerald-700' :
           'bg-amber-100 text-amber-700'
         }`}>
           {channel} Flow
@@ -447,7 +444,8 @@ export function LeadTimeline({ channel, currentStage, leadData = {}, ocbStatus, 
       )}
 
       {/* Seller Backout Notice (C2D only) */}
-      {channel === 'C2D' && sellerBackout && (
+      {/* Seller Backout Notice - kept for legacy compatibility */}
+      {false && sellerBackout && (
         <div className="mb-4 p-3 bg-red-50 border-2 border-red-200 rounded-lg">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-red-700 flex-shrink-0 mt-0.5" />

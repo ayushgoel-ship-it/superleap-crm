@@ -30,20 +30,17 @@ export async function fetchLeadById(leadId: string): Promise<ApiResponse<LeadDTO
 
 export async function createLead(leadData: any): Promise<ApiResponse<LeadDTO>> {
   const { data, error } = await supabase
-    .from('leads')
+    .from('sell_leads_master')
     .insert({
-      dealer_id: leadData.dealerId,
-      customer_name: leadData.ownerName,
-      customer_phone: leadData.ownerPhone,
-      channel: leadData.channel === 'C2B' ? 'DealerReferral' : 'GS',
-      pricing_fields: {
-        make: leadData.vehicleMake,
-        model: leadData.vehicleModel,
-        year: leadData.vehicleYear,
-        expectedRevenue: leadData.expectedPrice || 0
-      },
-      stage: 'created',
-      status: 'open'
+      dealer_code: leadData.dealerId ? Number(leadData.dealerId) : null,
+      cx_reg_no: leadData.regNo || null,
+      dl_type: leadData.leadType === 'Seller' ? 'seller' : 'inventory',
+      gs_flag: leadData.channel === 'GS' ? 1 : 0,
+      make: leadData.vehicleMake,
+      model: leadData.vehicleModel,
+      year: leadData.vehicleYear,
+      target_price: leadData.expectedPrice || 0,
+      lead_date: new Date().toISOString(),
     })
     .select('*')
     .single();
@@ -54,17 +51,11 @@ export async function createLead(leadData: any): Promise<ApiResponse<LeadDTO>> {
   }
 
   // Update audit log
-  await supabase.from('lead_timeline_events').insert({
-    lead_id: data.lead_id,
-    event_type: 'lead_created',
-    event_payload: leadData
-  });
-
   return {
     success: true,
     data: {
       ...leadData,
-      id: data.lead_id,
+      id: data.id || data.lead_id,
       kamId: 'kam-assigned',
       status: 'Active',
       createdAt: data.created_at,
@@ -79,20 +70,14 @@ export async function updateLeadStatus(
   notes?: string
 ): Promise<ApiResponse<LeadDTO>> {
   const { error } = await supabase
-    .from('leads')
-    .update({ stage: status, updated_at: new Date().toISOString() })
+    .from('sell_leads_master')
+    .update({ appointment_status: status })
     .eq('lead_id', leadId);
 
   if (error) {
     console.error(error);
     return { success: false, error: { code: 'UPDATE_FAILED', message: error.message } };
   }
-
-  await supabase.from('lead_timeline_events').insert({
-    lead_id: leadId,
-    event_type: 'stage_changed',
-    event_payload: { newStage: status, notes }
-  });
 
   return { success: true, data: getLeadById(leadId)! };
 }
@@ -105,20 +90,13 @@ export async function addLeadCEP(
   }
 ): Promise<ApiResponse<LeadDTO>> {
   const { error } = await supabase
-    .from('leads')
+    .from('sell_leads_master')
     .update({
-      pricing_fields: { cep: cepData.amount, cepNotes: cepData.notes },
-      updated_at: new Date().toISOString()
+      target_price: cepData.amount,
     })
     .eq('lead_id', leadId);
 
   if (error) console.error(error);
-
-  await supabase.from('lead_timeline_events').insert({
-    lead_id: leadId,
-    event_type: 'cep_added',
-    event_payload: cepData
-  });
 
   return { success: true, data: getLeadById(leadId)! };
 }

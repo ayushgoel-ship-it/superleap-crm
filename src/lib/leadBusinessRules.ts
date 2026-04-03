@@ -90,7 +90,7 @@ export function getOCBBadgeStyle(
  * @returns Validation result with error message if invalid
  */
 export function validateCEPForAction(
-  channel: 'C2B' | 'GS' | 'C2D' | 'DCF',
+  channel: 'NGS' | 'GS' | 'DCF' | string,
   cepValue: string | null,
   action: 'create_appointment' | 'move_to_negotiation'
 ): { valid: boolean; error?: string } {
@@ -129,7 +129,7 @@ export function validateCEPForAction(
  * @returns true if CEP chip should be shown
  */
 export function shouldShowCEP(
-  channel: 'C2B' | 'GS' | 'C2D' | 'DCF',
+  channel: 'NGS' | 'GS' | 'DCF' | string,
   leadType: 'Seller' | 'Inventory'
 ): boolean {
   // CEP is only shown for non-DCF Seller leads

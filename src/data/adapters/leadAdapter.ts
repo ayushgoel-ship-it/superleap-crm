@@ -43,10 +43,12 @@ export interface LeadCardVM {
 
 function channelColor(ch: string): 'purple' | 'green' | 'blue' | 'amber' | 'red' | 'gray' {
   switch (ch) {
-    case 'C2B': return 'blue';
-    case 'C2D': return 'purple';
+    case 'NGS': return 'purple';
     case 'GS':  return 'green';
     case 'DCF': return 'amber';
+    // Legacy fallbacks
+    case 'C2B': return 'blue';
+    case 'C2D': return 'purple';
     default:    return 'gray';
   }
 }

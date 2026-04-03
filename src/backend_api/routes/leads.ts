@@ -149,9 +149,9 @@ router.get('/', async (req: Request, res: Response) => {
          COUNT(*) FILTER (WHERE l.status = 'Won') AS won,
          COUNT(*) FILTER (WHERE l.status = 'Lost') AS lost,
          COUNT(*) FILTER (WHERE l.status = 'Expired') AS expired,
-         COUNT(*) FILTER (WHERE l.channel = 'C2B') AS c2b,
-         COUNT(*) FILTER (WHERE l.channel = 'C2D') AS c2d,
-         COUNT(*) FILTER (WHERE l.channel = 'GS') AS gs
+         COUNT(*) FILTER (WHERE l.channel = 'NGS') AS ngs,
+         COUNT(*) FILTER (WHERE l.channel = 'GS') AS gs,
+         COUNT(*) FILTER (WHERE l.channel = 'DCF') AS dcf
        FROM leads l
        LEFT JOIN dealers d ON l.dealer_id = d.dealer_id
        WHERE ${whereClause}`,

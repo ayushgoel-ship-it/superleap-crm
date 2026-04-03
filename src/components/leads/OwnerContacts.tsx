@@ -1,6 +1,6 @@
 import { Phone, User } from 'lucide-react';
 
-type Channel = 'C2B' | 'GS' | 'C2D' | 'DCF';
+type Channel = 'NGS' | 'GS' | 'DCF' | string;
 
 interface OwnerContactsProps {
   channel: Channel;

@@ -3,7 +3,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-import { loadRuntimeDB } from "@/data/runtimeDB";
+import { loadRuntimeDB, clearRuntimeDBCache } from "@/data/runtimeDB";
+
+console.log('[MAIN] main.tsx loaded');
 
 function Boot() {
   const [ready, setReady] = React.useState(false);
@@ -12,6 +14,8 @@ function Boot() {
   React.useEffect(() => {
     (async () => {
       try {
+        console.log('[BOOT] Starting loadRuntimeDB...');
+        clearRuntimeDBCache(); // Force fresh load
         await loadRuntimeDB();
         setReady(true);
       } catch (e: any) {

@@ -172,8 +172,7 @@ export const PRODUCTIVITY_WINDOWS = {
  * Business verticals/channels
  */
 export enum BusinessChannel {
-  C2B = 'C2B',
-  C2D = 'C2D',
+  NGS = 'NGS',
   GS = 'GS',
   DCF = 'DCF',
 }

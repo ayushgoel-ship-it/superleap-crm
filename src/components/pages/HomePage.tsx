@@ -140,9 +140,9 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
     const total = metrics.totalLeads || 1;
     return {
       gsI2SI: Math.round(((cb['GS'] || 0) / total) * 100),
-      c2dI2SI: Math.round(((cb['C2D'] || 0) / total) * 100),
-      c2bI2SI: Math.round(((cb['C2B'] || 0) / total) * 100),
-      c2dI2T: Math.round(((cb['C2D'] || 0) / total) * 100),
+      c2dI2SI: Math.round(((cb['NGS'] || 0) / total) * 100),
+      c2bI2SI: Math.round(((cb['NGS'] || 0) / total) * 100),
+      c2dI2T: Math.round(((cb['DCF'] || 0) / total) * 100),
       t2SI: metrics.i2si,
     };
   };
@@ -728,8 +728,8 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
                     <div className="space-y-2">
                       {[
                         { label: 'GS', value: uniqueRaiseBreakdown.gsUniqueRaise },
-                        { label: 'C2D', value: uniqueRaiseBreakdown.c2dUniqueRaise },
-                        { label: 'C2B', value: uniqueRaiseBreakdown.c2bUniqueRaise },
+                        { label: 'NGS', value: uniqueRaiseBreakdown.c2dUniqueRaise },
+                        { label: 'DCF', value: uniqueRaiseBreakdown.c2bUniqueRaise },
                       ].map((ch) => (
                         <div key={ch.label} className="flex items-center justify-between text-[13px]">
                           <span className="text-slate-500">{ch.label} Unique Raise%</span>

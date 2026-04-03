@@ -448,7 +448,7 @@ export function getLeadsByTL(tlId: string): Lead[] {
   return LEADS().filter(l => l.tlId === normalizedTLId);
 }
 
-export function getLeadsByChannel(channel: 'C2B' | 'C2D' | 'GS'): Lead[] {
+export function getLeadsByChannel(channel: 'NGS' | 'GS' | 'DCF' | string): Lead[] {
   return LEADS().filter(l => l.channel === channel);
 }
 
