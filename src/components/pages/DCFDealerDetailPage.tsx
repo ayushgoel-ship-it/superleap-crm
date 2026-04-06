@@ -3,7 +3,7 @@ import { ArrowLeft, IndianRupee, TrendingUp, ChevronRight } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { getDealerById } from '../../data/selectors';
-import { getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { getFilteredDCFLeads, getDealerLeadMetrics, deriveDealerActivityStage } from '../../data/canonicalMetrics';
 import { TimePeriod } from '../../lib/domain/constants';
 
 interface DCFDealerDetailPageProps {
@@ -50,13 +50,15 @@ export function DCFDealerDetailPage({ onBack, dealerId, dateRange }: DCFDealerDe
     const dcfLeads = getFilteredDCFLeads({ period }).filter(l => l.dealerId === dealerId);
     const disbursed = dcfLeads.filter(l => l.overallStatus === 'DISBURSED');
     const totalDisbursalAmount = disbursed.reduce((s, l) => s + (l.loanAmount ?? 0), 0);
+    const metrics = getDealerLeadMetrics(dealerId, { period });
+    const activityStage = deriveDealerActivityStage(metrics, rawDealer?.status);
 
     const dealerData = {
       id: dealerId,
       name: rawDealer?.name ?? 'Unknown Dealer',
       code: rawDealer?.code ?? '–',
       city: rawDealer?.city ?? '–',
-      status: rawDealer?.status === 'active' ? 'Active' : rawDealer?.status === 'dormant' ? 'Dormant' : 'Inactive',
+      status: activityStage === 'Inactive' ? 'Inactive' : activityStage === 'Dormant' ? 'Dormant' : 'Active',
       leads: dcfLeads.length,
       leadsTarget: 20,
       approvals: dcfLeads.filter(l => !['REJECTED', 'DELAYED'].includes(l.overallStatus.toUpperCase())).length,

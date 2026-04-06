@@ -61,12 +61,20 @@ import { MobileTopBar } from "./components/MobileTopBar";
 import { BottomNav } from "./components/BottomNav";
 import { LoginPage } from "./components/pages/auth/LoginPage";
 import { ForgotPasswordPage } from "./components/pages/auth/ForgotPasswordPage";
+import { ResetPasswordPage } from "./components/pages/auth/ResetPasswordPage";
 import { SignupPage } from "./components/pages/auth/SignupPage";
 import { ProfileCompletePage } from "./components/pages/profile/ProfileCompletePage";
 import { ProfilePage } from "./components/pages/profile/ProfilePage";
+import { ForcePasswordResetScreen } from "./components/auth/ForcePasswordResetScreen";
 import { RequireAuth } from "./components/auth/RequireAuth";
 import { RequireProfileComplete } from "./components/auth/RequireProfileComplete";
 import { AdminApprovalPanel } from "./components/admin/AdminApprovalPanel";
+import { AdminDesktopShell } from "./components/admin/desktop/AdminDesktopShell";
+import { AdminUsersPage } from "./components/admin/desktop/AdminUsersPage";
+import { AdminTargetsPage } from "./components/admin/desktop/AdminTargetsPage";
+import { AdminHierarchyPage } from "./components/admin/desktop/AdminHierarchyPage";
+import { AdminReportsPage } from "./components/admin/desktop/AdminReportsPage";
+import { AdminSettingsPage } from "./components/admin/desktop/AdminSettingsPage";
 
 // Initialize feedback retry queue auto-retry listeners
 startAutoRetry();
@@ -151,6 +159,14 @@ function AppContent() {
       setCurrentPage("admin-home");
     }
   }, [currentPage]);
+
+  // Detect Supabase password recovery redirect (hash contains type=recovery)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery')) {
+      setCurrentPage('auth-reset-password' as any);
+    }
+  }, []);
 
   // DCF navigation states
   const [dcfDealersFilterType, setDcfDealersFilterType] =
@@ -421,6 +437,30 @@ function AppContent() {
     );
   }
 
+  if (currentPage === ("auth-reset-password" as any)) {
+    return (
+      <>
+        <ResetPasswordPage
+          onSuccess={() => setCurrentPage("auth-login")}
+        />
+        <Toaster position="top-center" />
+      </>
+    );
+  }
+
+  // FORCE PASSWORD RESET — must run before any other authed screen
+  if (session && profile?.mustResetPassword) {
+    return (
+      <>
+        <ForcePasswordResetScreen
+          email={profile.email}
+          onComplete={() => window.location.reload()}
+        />
+        <Toaster position="top-center" />
+      </>
+    );
+  }
+
   // PROFILE COMPLETE ROUTE - Requires auth but not profile complete
   if (currentPage === "profile-complete") {
     return (
@@ -552,8 +592,49 @@ function AppContent() {
             </>
           )}
 
-          {/* Main App */}
-          {!showTLIncentive && (
+          {/* Desktop Admin Console */}
+          {!showTLIncentive && adminViewMode === 'desktop' && currentPage.startsWith('admin') && (
+            <AdminDesktopShell
+              currentPage={currentPage}
+              onNavigate={(page) => setCurrentPage(page as PageView)}
+              onSwitchToMobile={() => setAdminViewMode('mobile')}
+            >
+              {(() => {
+                switch (currentPage) {
+                  case "admin-home":
+                    return <AdminHomePage onNavigate={(page: AdminPage) => setCurrentPage(page as PageView)} onViewTLDetail={(tlId) => { setSelectedTLId(tlId); setCurrentPage("admin-tl-detail" as PageView); }} />;
+                  case "admin-tl-detail":
+                    return <TLDetailPage tlId={selectedTLId} onBack={() => setCurrentPage("admin-home")} onAdjustTargets={() => setShowTargetsModal(true)} onExport={() => setShowExportModal(true)} onViewKAM={(kamId) => console.log("View KAM:", kamId)} />;
+                  case "admin-dealers":
+                    return <AdminDealersPage onNavigate={(page: AdminPage) => setCurrentPage(page as PageView)} />;
+                  case "admin-leads":
+                    return <AdminLeadsPage onNavigate={(page: AdminPage) => setCurrentPage(page as PageView)} />;
+                  case "admin-vc":
+                    return <AdminVCPage onNavigate={(page: AdminPage) => setCurrentPage(page as PageView)} />;
+                  case "admin-dcf":
+                    return <AdminDCFPage onNavigate={(page: AdminPage) => setCurrentPage(page as PageView)} />;
+                  case "admin-users":
+                    return <AdminUsersPage />;
+                  case "admin-targets":
+                    return <AdminTargetsPage />;
+                  case "admin-hierarchy":
+                    return <AdminHierarchyPage />;
+                  case "admin-reports":
+                    return <AdminReportsPage />;
+                  case "admin-settings":
+                    return <AdminSettingsPage />;
+                  case "admin-approvals":
+                    return <AdminApprovalPanel onBack={() => setCurrentPage("admin-home")} />;
+                  default:
+                    return <AdminHomePage onNavigate={(page: AdminPage) => setCurrentPage(page as PageView)} onViewTLDetail={(tlId) => { setSelectedTLId(tlId); setCurrentPage("admin-tl-detail" as PageView); }} />;
+                }
+              })()}
+              <Toaster position="top-center" />
+            </AdminDesktopShell>
+          )}
+
+          {/* Main App (Mobile) */}
+          {!showTLIncentive && !(adminViewMode === 'desktop' && currentPage.startsWith('admin')) && (
             <div className="flex flex-col h-screen bg-[#f7f8fa] max-w-md mx-auto">
               <MobileTopBar
                 currentPage={currentPage}
@@ -783,6 +864,10 @@ function AppContent() {
                           onNavigate={(page: AdminPage) =>
                             setCurrentPage(page as PageView)
                           }
+                          onViewTLDetail={(tlId) => {
+                            setSelectedTLId(tlId);
+                            setCurrentPage("admin-tl-detail" as PageView);
+                          }}
                         />
                       );
                     case "admin-dealers":

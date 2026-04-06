@@ -307,12 +307,6 @@ export enum AppRoute {
   LEAD_DETAIL = 'lead-detail',
   LEAD_CREATE = 'lead-create',
   VISITS = 'visits',
-  /** @deprecated Unmounted — detail handled inline by VisitsPage. Kept for type compat. Phase 4.5 */
-  VISIT_DETAIL = 'visit-detail',
-  /** @deprecated Unmounted — detail handled inline by VisitsPage. Kept for type compat. Phase 4.5 */
-  CALL_DETAIL = 'call-detail',
-  /** @deprecated Unmounted — planned but never implemented. Kept for type compat. Phase 4.5 */
-  TL_CALL_DETAIL = 'tl-call-detail',
   NOTIFICATIONS = 'notifications',
   PERFORMANCE = 'performance',
   PRODUCTIVITY = 'productivity',
@@ -327,14 +321,10 @@ export enum AppRoute {
   DCF_LEAD_DETAIL = 'dcf-lead-detail',
   DCF_ONBOARDING_DETAIL = 'dcf-onboarding-detail',
   DCF_ONBOARDING = 'dcf-onboarding',
-  /** @deprecated Unmounted — 'dcf-onboarding' is the live route. Kept for type compat. Phase 4.5 */
-  DCF_ONBOARDING_FORM = 'dcf-onboarding-form',
   
   // Feedback Pages
   CALL_FEEDBACK = 'call-feedback',
   VISIT_FEEDBACK = 'visit-feedback',
-  /** @deprecated Unmounted — check-in handled inline by VisitsPage. Kept for type compat. Phase 4.5 */
-  VISIT_CHECKIN = 'visit-checkin',
   
   // Tools
   INCENTIVE_SIMULATOR = 'incentive-simulator',
@@ -453,11 +443,11 @@ export const STOCK_CHANNEL_STAGE_FILTERS = [
  * Stage filter definitions for DCF channel.
  */
 export const DCF_STAGE_FILTERS = [
-  { key: 'lead-dropped', label: 'Lead Dropped', patterns: ['pr', 'lead created', 'lead_created', 'dropped'] },
-  { key: 'offer-gen', label: 'Offer Gen.', patterns: ['offer', 'generated', 'pll', 'in progress', 'in_progress', 'approval_pending'] },
-  { key: 'in-nego', label: 'In Nego', patterns: ['nego', 'inspection'] },
-  { key: 'disbursed', label: 'Disbursed', patterns: ['stock-in', 'stockin', 'disburse', 'payout', 'disbursed'] },
-  { key: 'doc-pending', label: 'Doc Pending', patterns: ['doc', 'post-disbursal', 'pending'] },
+  { key: 'sourcing', label: 'Sourcing', patterns: ['sourcing'] },
+  { key: 'credit', label: 'Credit', patterns: ['credit'] },
+  { key: 'conversion', label: 'Conversion', patterns: ['conversion'] },
+  { key: 'disbursal', label: 'Disbursal', patterns: ['disbursal', 'disbursed'] },
+  { key: 'rejected', label: 'Rejected', patterns: ['rejected', 'delayed'] },
 ] as const;
 
 // ============================================================================

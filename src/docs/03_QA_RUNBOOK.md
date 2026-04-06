@@ -479,14 +479,14 @@ localStorage.clear()
 1. **Check ID normalization:**
    ```javascript
    // In browser console
-   import { normalizeDealerId } from './data/mockDatabase';
+   import { normalizeDealerId } from './data/idUtils';
    console.log(normalizeDealerId('DLR001')); // Should return canonical ID
    ```
 
 2. **Verify lead exists in mock DB:**
    ```javascript
-   import { LEADS } from './data/mockDatabase';
-   console.log(LEADS.find(l => l.id === 'lead-ncr-001'));
+   import { getLeadById } from './data/selectors';
+   console.log(getLeadById('lead-ncr-001'));
    ```
 
 3. **Check selector call:**
@@ -501,7 +501,7 @@ localStorage.clear()
 
 **Fix:**
 - If ID mismatch → Normalize ID in selector call
-- If lead doesn't exist → Add to LEADS array in mockDatabase.ts
+- If lead doesn't exist → Verify data is loaded in runtimeDB (check Supabase)
 - If navigation broken → Check ROUTES constant and navigate function
 
 ---
@@ -622,8 +622,8 @@ localStorage.clear()
 
 1. **Check if mock data updated:**
    ```javascript
-   import { TEAM_LEADS } from './data/mockDatabase';
-   console.log(TEAM_LEADS);
+   import { getAllTLs } from './data/selectors';
+   console.log(getAllTLs());
    ```
 
 2. **Verify selectors called:**
@@ -635,7 +635,7 @@ localStorage.clear()
    - Verify component re-renders after data change
 
 **Fix:**
-- If mock data not updated → Update TEAM_LEADS in mockDatabase.ts
+- If data not updated → Verify runtimeDB cache is fresh (check Supabase connection)
 - If selectors not re-called → Add dependency array to useEffect
 - If component not re-rendering → Force re-render with key prop
 
@@ -709,7 +709,7 @@ localStorage.clear()
 
 ### Mock Leads
 
-- **DL1CAC1234** - Maruti Swift 2020, Dealer: Daily Motoz, Channel: C2B, Stage: Stock-in
+- **DL1CAC1234** - Maruti Swift 2020, Dealer: Daily Motoz, Channel: NGS, Stage: Stock-in
 - **HR26DK5678** - Hyundai i20 2019, Dealer: Gupta Auto World, Channel: GS, Stage: Inspection
 
 ### Mock DCF Leads

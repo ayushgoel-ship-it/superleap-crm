@@ -417,7 +417,7 @@ export function getUnproductiveVisits(): VisitLog[] {
 }
 
 /**
- * Lead Selectors (C2B/C2D/GS)
+ * Lead Selectors (NGS/GS/DCF)
  */
 
 export function getLeadById(id: string): Lead | undefined {
@@ -632,4 +632,25 @@ export function getTLMetrics(tlId: string) {
     totalDCFLeads: dcfLeads.length,
     disbursedDCFLeads: dcfLeads.filter(l => l.overallStatus === 'DISBURSED').length,
   };
+}
+
+/**
+ * Toggle top dealer status (in-memory only)
+ */
+export function toggleTopDealer(dealerCode: string): boolean {
+  const dealer = getDealerByCode(dealerCode);
+  if (!dealer) return false;
+  dealer.isTopDealer = !dealer.isTopDealer;
+  return dealer.isTopDealer;
+}
+
+/**
+ * Look up a lead by ID across both regular leads and DCF leads
+ */
+export function getAnyLeadById(id: string): { source: 'lead' | 'dcf'; data: Lead | DCFLead } | null {
+  const lead = LEADS().find(l => l.id === id);
+  if (lead) return { source: 'lead', data: lead };
+  const dcf = DCF_LEADS().find(d => d.id === id || d.loanId === id);
+  if (dcf) return { source: 'dcf', data: dcf };
+  return null;
 }

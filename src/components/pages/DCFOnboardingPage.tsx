@@ -297,7 +297,7 @@ function DealerInfoStep({
           </div>
 
           <div>
-            <label className="block text-sm text-gray-700 mb-1">C2B Dealer Code</label>
+            <label className="block text-sm text-gray-700 mb-1">Dealer Code</label>
             <input
               type="text"
               value={formData.dealerCode}
@@ -397,7 +397,7 @@ function OwnerDetailsStep({
               <option value="">Select...</option>
               <option value="Counter Dealer">Counter Dealer</option>
               <option value="Freelancer">Freelancer</option>
-              <option value="C2B DSA">C2B DSA</option>
+              <option value="NGS DSA">NGS DSA</option>
             </select>
           </div>
 

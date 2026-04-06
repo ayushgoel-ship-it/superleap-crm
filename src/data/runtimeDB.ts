@@ -9,6 +9,12 @@ import {
   fetchLocationRequestsRaw,
   fetchOrgRaw,
   fetchUntaggedDealersRaw,
+  fetchTargetsRaw,
+  fetchIncentiveSlabsRaw,
+  fetchIncentiveRulesRaw,
+  type TargetRow,
+  type IncentiveSlabRow,
+  type IncentiveRuleRow,
 } from '@/data/supabaseRaw';
 
 type RuntimeDB = {
@@ -20,6 +26,9 @@ type RuntimeDB = {
   locationRequests: LocationChangeRequest[];
   untaggedDealers: UntaggedDealer[];
   org: AdminOrg;
+  targets: TargetRow[];
+  incentiveSlabs: IncentiveSlabRow[];
+  incentiveRules: IncentiveRuleRow[];
 };
 
 let cache: RuntimeDB | null = null;
@@ -198,6 +207,9 @@ export async function loadRuntimeDB(): Promise<RuntimeDB> {
     fetchLocationRequestsRaw(),
     fetchOrgRaw(),
     fetchUntaggedDealersRaw(),
+    fetchTargetsRaw(),
+    fetchIncentiveSlabsRaw(),
+    fetchIncentiveRulesRaw(),
   ]);
 
   const getValue = <T>(r: PromiseSettledResult<T>, fallback: T): T =>
@@ -211,6 +223,9 @@ export async function loadRuntimeDB(): Promise<RuntimeDB> {
   const locationRequests = getValue(results[5], []);
   const org = getValue(results[6], null) || DEFAULT_ORG;
   const untaggedDealers = getValue(results[7], []);
+  const targets = getValue(results[8], []);
+  const incentiveSlabs = getValue(results[9], []);
+  const incentiveRules = getValue(results[10], []);
 
   // ENRICHMENT PIPELINE (order matters):
   // 1. Enrich leads/DCF with dealer ownership (KAM/TL from dealers_master)
@@ -235,6 +250,9 @@ export async function loadRuntimeDB(): Promise<RuntimeDB> {
     locationRequests,
     untaggedDealers,
     org,
+    targets,
+    incentiveSlabs,
+    incentiveRules,
   };
 
   const failures = results.filter(r => r.status === 'rejected');
@@ -264,6 +282,9 @@ const EMPTY_DB: RuntimeDB = {
   locationRequests: [],
   untaggedDealers: [],
   org: DEFAULT_ORG,
+  targets: [],
+  incentiveSlabs: [],
+  incentiveRules: [],
 };
 
 export function getRuntimeDBSync(): RuntimeDB {

@@ -84,7 +84,7 @@ export function getOCBBadgeStyle(
  * - CEP is NOT required for DCF leads
  * - Must be validated before creating appointments
  * 
- * @param channel - Lead channel (C2B, GS, C2D, DCF)
+ * @param channel - Lead channel (NGS, GS, DCF)
  * @param cepValue - Current CEP value (string or null)
  * @param action - Action being performed (e.g., 'create_appointment')
  * @returns Validation result with error message if invalid

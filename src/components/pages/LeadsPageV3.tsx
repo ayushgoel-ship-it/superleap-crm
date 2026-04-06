@@ -45,7 +45,7 @@ import { toast } from 'sonner@2.0.3';
 // ── Types ──
 
 import { TimePeriod, STOCK_CHANNEL_STAGE_FILTERS, DCF_STAGE_FILTERS } from '../../lib/domain/constants';
-import { CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 import { toDCFLeadListVM } from '../../data/adapters/dcfAdapter';
 
 type ViewMode = 'cards' | 'table';
@@ -63,10 +63,8 @@ interface StageGroup {
 
 // ── Constants ──
 
-// Use canonical time options (excluding Custom for now)
-const TIME_FILTERS = CANONICAL_TIME_OPTIONS
-  .filter(k => k !== TimePeriod.CUSTOM)
-  .map(k => ({ key: k, label: CANONICAL_TIME_LABELS[k] || k }));
+/** Look up short label for a TimePeriod */
+const getTimeLabel = (p: TimePeriod): string => CANONICAL_TIME_LABELS[p] || p;
 
 const CHANNEL_PILLS: { key: ChannelKey; label: string; dot?: string }[] = [
   { key: 'all', label: 'All' },
@@ -156,6 +154,8 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
   const [selectedChannel, setSelectedChannel] = useState<ChannelKey>('all');
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -543,25 +543,18 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
         </div>
 
         {/* ── Time filter row ── */}
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-0.5">
-          {TIME_FILTERS.map(({ key, label }) => {
-            const isActive = timeFilter === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setTimeFilter(key)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all duration-150
-                  ${isActive
-                    ? 'bg-slate-800 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
-                  }
-                `}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <TimeFilterControl
+          mode="chips"
+          chipStyle="pill"
+          value={timeFilter}
+          onChange={setTimeFilter}
+          options={CANONICAL_TIME_OPTIONS}
+          labelOverrides={CANONICAL_TIME_LABELS}
+          allowCustom
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+        />
 
         {/* ── Channel pills + Pending indicator (same row) ── */}
         <div className="flex items-center gap-2 pb-1">
@@ -696,7 +689,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
           <div className="mx-4 mt-3 flex items-center justify-between px-3.5 py-2 bg-slate-100/70 rounded-xl">
             <span className="text-[11px] font-medium text-slate-500">
               {filteredVMs.length} result{filteredVMs.length !== 1 ? 's' : ''}
-              {timeFilter !== TimePeriod.MTD && ` \u00b7 ${TIME_FILTERS.find(t => t.key === timeFilter)?.label}`}
+              {timeFilter !== TimePeriod.MTD && ` \u00b7 ${getTimeLabel(timeFilter)}`}
               {selectedChannel !== 'all' && ` \u00b7 ${selectedChannel}`}
               {selectedStage && activeStages && ` \u00b7 ${activeStages.find(s => s.key === selectedStage)?.label}`}
               {searchQuery && ` \u00b7 "${searchQuery}"`}
@@ -746,7 +739,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
                       [
                         selectedChannel !== 'all' ? selectedChannel : '',
                         selectedStage && activeStages ? activeStages.find(s => s.key === selectedStage)?.label : '',
-                        timeFilter !== TimePeriod.MTD ? TIME_FILTERS.find(t => t.key === timeFilter)?.label : '',
+                        timeFilter !== TimePeriod.MTD ? getTimeLabel(timeFilter) : '',
                       ].filter(Boolean).join(' + ') || 'current filters'
                     }. Try adjusting your filters.`
                   : 'Leads will appear here once they are created or assigned to you.'

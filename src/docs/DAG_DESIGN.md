@@ -142,7 +142,7 @@ load_dealers_staging = GCSToBigQueryOperator(
 | **Uniqueness** | `dealer_id` unique within batch (dedup if needed) |
 | **Referential** | `kam_user_id` in leads exists in users staging |
 | **Range** | `latitude` between -90 and 90; `duration_sec >= 0` |
-| **Enum** | `channel IN ('C2B', 'C2D', 'GS')`; `status IN ('Active', 'Won', 'Lost', 'Expired')` |
+| **Enum** | `channel IN ('NGS', 'GS')`; `status IN ('Active', 'Won', 'Lost', 'Expired')` |
 | **Freshness** | At least 1 row with `_ingested_at` within last 2 hours (for hourly tabs) |
 | **Volume** | Row count within 2x of previous day (detect mass deletes or duplicates) |
 
@@ -225,8 +225,7 @@ SELECT
   u.region,
   l.tl_user_id,
   COUNT(*) AS leads_created,
-  COUNTIF(l.channel = 'C2B') AS leads_c2b,
-  COUNTIF(l.channel = 'C2D') AS leads_c2d,
+  COUNTIF(l.channel = 'NGS') AS leads_ngs,
   COUNTIF(l.channel = 'GS') AS leads_gs,
   COUNTIF(l.stage IN ('Inspection Scheduled', 'Inspection Done', 'Stock-in')) AS inspections,
   COUNTIF(l.stage = 'Stock-in' AND l.status = 'Won') AS stock_ins,

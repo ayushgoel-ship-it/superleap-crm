@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Zap, TrendingUp } from 'lucide-react';
+import { getSITarget, getDCFTargets } from '../../lib/metricsEngine';
+
+// Default input score target — display threshold only, not a business rule from config
+const DEFAULT_SCORE_TARGET = 85;
 
 interface InputScoreData {
   visits: number;
@@ -26,7 +30,7 @@ interface InputScoreCardProps {
   mode?: 'KAM' | 'TL';
 }
 
-export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputScoreCardProps) {
+export function InputScoreCard({ data, targetScore = DEFAULT_SCORE_TARGET, mode = 'KAM' }: InputScoreCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // ── INPUT SCORE: 2 components × 50 pts each = 100 total ──
@@ -41,8 +45,8 @@ export function InputScoreCard({ data, targetScore = 85, mode = 'KAM' }: InputSc
     if (!data.sis || !data.sisTarget || !data.dcfDisbursalsValue || !data.dcfDisbursalsTarget) {
       return calculateVisitsConnectsScore();
     }
-    const siThreshold = 20;
-    const dcfThreshold = 15;
+    const siThreshold = getSITarget('KAM');
+    const dcfThreshold = getDCFTargets('KAM').disbursement;
     const sisRatio = data.sis / siThreshold;
     const dcfRatio = data.dcfDisbursalsValue / dcfThreshold;
     if (sisRatio >= 1 && dcfRatio >= 1) return 50;

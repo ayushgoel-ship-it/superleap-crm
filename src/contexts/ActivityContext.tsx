@@ -4,8 +4,6 @@ import {
   ProductivityEvaluationResult,
   DealerMetricsSnapshot
 } from '../lib/productivityEngine';
-import { CALLS as CANONICAL_CALLS, VISITS as CANONICAL_VISITS } from '../data/mockDatabase';
-import type { CallLog, VisitLog } from '../data/types';
 
 export type CallStatus = 'pending-feedback' | 'completed' | 'no-answer' | 'busy';
 export type VisitStatus = 'not-started' | 'in-progress' | 'completed' | 'incomplete';
@@ -350,36 +348,11 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
     };
     setCalls(prev => [newCall, ...prev]);
 
-    // Sync to canonical CALLS array so dashboard metrics include this call
-    if (!CANONICAL_CALLS.some(c => c.id === newCall.id)) {
-      CANONICAL_CALLS.push({
-        id: newCall.id,
-        dealerId: newCall.dealerId,
-        dealerName: newCall.dealerName,
-        dealerCode: newCall.dealerCode,
-        phone: '',
-        callDate: newCall.date,
-        callTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        duration: newCall.duration ? `${Math.floor(newCall.duration / 60)}m ${newCall.duration % 60}s` : '0m 0s',
-        kamId: 'kam-ncr-001', // Current user
-        kamName: newCall.kamName,
-        tlId: 'tl-ncr-01',
-        outcome: newCall.outcome || 'Connected',
-        isProductive: newCall.connected,
-        productivitySource: 'KAM',
-      } as CallLog);
-    }
-
     return newCall;
   };
 
   const updateCall = (id: string, updates: Partial<CallAttempt>) => {
     setCalls(prev => prev.map(call => call.id === id ? { ...call, ...updates } : call));
-    // Sync productive status to canonical
-    const canonicalCall = CANONICAL_CALLS.find(c => c.id === id);
-    if (canonicalCall && updates.connected !== undefined) {
-      canonicalCall.isProductive = updates.connected;
-    }
   };
 
   const addVisit = (visitData: Omit<Visit, 'id'> & { id?: string }): Visit => {
@@ -393,42 +366,11 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
       return [newVisit, ...prev];
     });
 
-    // Sync to canonical VISITS array so dashboard metrics include this visit
-    if (!CANONICAL_VISITS.some(v => v.id === newVisit.id)) {
-      const now = new Date();
-      CANONICAL_VISITS.push({
-        id: newVisit.id,
-        dealerId: newVisit.dealerId,
-        dealerName: newVisit.dealerName,
-        dealerCode: newVisit.dealerCode,
-        visitDate: now.toISOString().split('T')[0],
-        visitTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        duration: '0m',
-        kamId: 'kam-ncr-001',
-        kamName: newVisit.kamName,
-        tlId: 'tl-ncr-01',
-        checkInLocation: { latitude: newVisit.lat || 0, longitude: newVisit.lng || 0 },
-        isProductive: false, // Updated on feedback
-        productivitySource: 'KAM',
-        visitType: 'Unplanned',
-        checkInAt: newVisit.checkInTime || now.toISOString(),
-      } as VisitLog);
-    }
-
     return newVisit;
   };
 
   const updateVisit = (id: string, updates: Partial<Visit>) => {
     setVisits(prev => prev.map(visit => visit.id === id ? { ...visit, ...updates } : visit));
-    // Sync feedback/completion to canonical visits
-    const canonicalVisit = CANONICAL_VISITS.find(v => v.id === id);
-    if (canonicalVisit) {
-      if (updates.checkOutTime) canonicalVisit.completedAt = updates.checkOutTime;
-      if (updates.feedbackSubmitted) {
-        canonicalVisit.isProductive = true;
-        canonicalVisit.feedbackStatus = 'SUBMITTED';
-      }
-    }
   };
 
   const getCallsByDealer = (dealerId: string): CallAttempt[] => {

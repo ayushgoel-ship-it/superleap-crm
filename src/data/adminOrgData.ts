@@ -39,9 +39,9 @@ export interface RegionMetrics {
   dcfDisbCountAch: number;
   dcfDisbValueTarget: number;
   dcfDisbValueAch: number;
-  c2dInventory: number;
-  c2dBuyers: number;
-  c2dI2BPercent: number;
+  ngsInventory: number;
+  ngsBuyers: number;
+  ngsI2BPercent: number;
   dcfLeads: number;
   dcfOnboardings: number;
   dcfDisbursements: number;
@@ -141,9 +141,9 @@ function computeRegionMetrics(region: Region): RegionMetrics {
     dcfDisbValueAch: dcfLeads
       .filter(l => l.overallStatus === 'DISBURSED')
       .reduce((acc, l) => acc + (l.loanAmount || 0), 0) / 100000, // Convert to lakhs
-    c2dInventory: leads.filter(l => l.channel === 'NGS' && l.leadType === 'Inventory').length,
-    c2dBuyers: leads.filter(l => l.channel === 'NGS' && l.leadType === 'Seller').length,
-    c2dI2BPercent: 0,
+    ngsInventory: leads.filter(l => l.channel === 'NGS' && l.leadType === 'Inventory').length,
+    ngsBuyers: leads.filter(l => l.channel === 'NGS' && l.leadType === 'Seller').length,
+    ngsI2BPercent: 0,
     dcfLeads: dcfLeads.length,
     dcfOnboardings: dcfLeads.filter(l => l.currentFunnel === 'Onboarded').length,
     dcfDisbursements: dcfLeads.filter(l => l.overallStatus === 'DISBURSED').length,
@@ -168,8 +168,8 @@ function emptyRegionMetrics(region: Region): RegionMetrics {
     region,
     leadsTarget: 0, leadsAch: 0, inspTarget: 0, inspAch: 0,
     siTarget: 0, siAch: 0, dcfDisbCountTarget: 0, dcfDisbCountAch: 0,
-    dcfDisbValueTarget: 0, dcfDisbValueAch: 0, c2dInventory: 0,
-    c2dBuyers: 0, c2dI2BPercent: 0, dcfLeads: 0, dcfOnboardings: 0,
+    dcfDisbValueTarget: 0, dcfDisbValueAch: 0, ngsInventory: 0,
+    ngsBuyers: 0, ngsI2BPercent: 0, dcfLeads: 0, dcfOnboardings: 0,
     dcfDisbursements: 0, dcfGMV: 0, i2siPercent: 0, inputScore: 0,
     productiveVisitsPercent: 0, productiveCallsPercent: 0,
     visitsPerKAMPerDay: 0, callsPerKAMPerDay: 0,
@@ -258,9 +258,9 @@ export function getAggregatedRegionMetrics(regions: Region[]): RegionMetrics {
     dcfDisbCountAch: sum('dcfDisbCountAch'),
     dcfDisbValueTarget: sum('dcfDisbValueTarget'),
     dcfDisbValueAch: sum('dcfDisbValueAch'),
-    c2dInventory: sum('c2dInventory'),
-    c2dBuyers: sum('c2dBuyers'),
-    c2dI2BPercent: avg('c2dI2BPercent'),
+    ngsInventory: sum('ngsInventory'),
+    ngsBuyers: sum('ngsBuyers'),
+    ngsI2BPercent: avg('ngsI2BPercent'),
     dcfLeads: sum('dcfLeads'),
     dcfOnboardings: sum('dcfOnboardings'),
     dcfDisbursements: sum('dcfDisbursements'),

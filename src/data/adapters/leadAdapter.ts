@@ -2,7 +2,7 @@
  * LEAD ADAPTER — Maps raw Lead entities to LeadCardVM view-models
  *
  * Single source of truth for the LeadCardVM type and its construction.
- * Consumed by: LeadsPageV3, LeadCard, LeadCardV3, LeadList, LeadPipelineCard
+ * Consumed by: LeadsPageV3, LeadCard, LeadList, LeadPipelineCard
  *
  * DO NOT duplicate LeadCardVM elsewhere — import from here.
  */
@@ -16,7 +16,7 @@ export interface LeadCardVM {
   customerName: string;
   carDisplay: string;        // e.g. "Maruti Swift 2021"
   regNo: string;             // Registration number or 'N/A'
-  channel: string;           // C2B | C2D | GS | DCF
+  channel: string;           // NGS | GS | DCF
   leadType: string;          // Seller | Inventory
   stage: string;             // Current pipeline stage
   status: string;            // Active | Converted | Lost
@@ -46,9 +46,6 @@ function channelColor(ch: string): 'purple' | 'green' | 'blue' | 'amber' | 'red'
     case 'NGS': return 'purple';
     case 'GS':  return 'green';
     case 'DCF': return 'amber';
-    // Legacy fallbacks
-    case 'C2B': return 'blue';
-    case 'C2D': return 'purple';
     default:    return 'gray';
   }
 }
@@ -153,4 +150,36 @@ export function validateLeadIdForNavigation(leadId: string): void {
   if (!leadId || typeof leadId !== 'string') {
     console.warn('[leadAdapter] Invalid lead ID for navigation:', leadId);
   }
+}
+
+/** Map a DCFLeadCardVM to a LeadCardVM for unified pipeline display */
+export function dcfToLeadCardVM(dcf: {
+  id: string; customerName: string; car: string; phone: string;
+  channel: string; stage: string; overallStatus: string;
+  loanAmount: number | null; createdAt: string;
+  dealerName: string; dealerCode: string; dealerId: string;
+  kamName: string; city: string; disbursalDate?: string;
+}): LeadCardVM {
+  return {
+    id: dcf.id,
+    customerName: dcf.customerName,
+    carDisplay: dcf.car,
+    regNo: 'N/A',
+    channel: 'DCF',
+    leadType: 'DCF',
+    stage: dcf.stage,
+    status: dcf.overallStatus === 'disbursed' ? 'Won' : 'Active',
+    cep: null,
+    secondaryValue: dcf.loanAmount || 0,
+    revenue: dcf.loanAmount || 0,
+    createdAt: dcf.createdAt,
+    dealerName: dcf.dealerName,
+    dealerCode: dcf.dealerCode,
+    dealerId: dcf.dealerId,
+    city: dcf.city,
+    kamOwner: dcf.kamName,
+    phone: dcf.phone,
+    inspectionDate: undefined,
+    badges: [],
+  };
 }

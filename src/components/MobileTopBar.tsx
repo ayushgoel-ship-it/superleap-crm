@@ -137,14 +137,16 @@ export function MobileTopBar({ currentPage, userRole, onRoleChange, onNavigate, 
             </div>
 
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => onNavigate && onNavigate('notifications')}
-                className="relative w-10 h-10 flex items-center justify-center rounded-xl
-                           hover:bg-slate-100 active:scale-95 transition-all duration-150"
-              >
-                <Bell className="w-[18px] h-[18px] text-slate-600" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white" />
-              </button>
+              {userRole !== 'Admin' && userRole !== 'ADMIN' && (
+                <button
+                  onClick={() => onNavigate && onNavigate('notifications')}
+                  className="relative w-10 h-10 flex items-center justify-center rounded-xl
+                             hover:bg-slate-100 active:scale-95 transition-all duration-150"
+                >
+                  <Bell className="w-[18px] h-[18px] text-slate-600" />
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white" />
+                </button>
+              )}
             </div>
           </div>
 

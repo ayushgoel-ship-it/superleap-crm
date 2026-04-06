@@ -9,7 +9,7 @@
 
 1. [Architecture Overview](#architecture-overview)
 2. [Data Flow](#data-flow)
-3. [Central Mock Database](#central-mock-database)
+3. [Runtime Database](#runtime-database-data-cache)
 4. [Selectors & DTO Pattern](#selectors--dto-pattern)
 5. [Navigation System](#navigation-system)
 6. [Auth & Permissions](#auth--permissions)
@@ -39,9 +39,9 @@ State Management:
 ├── Context API (Auth only)
 └── Props drilling (intentionally simple)
 
-No Backend:
-├── Client-side only
-├── Mock data in /data/mockDatabase.ts
+Data Layer:
+├── Supabase (remote database)
+├── /data/runtimeDB.ts (cached data layer)
 └── localStorage for auth persistence
 ```
 
@@ -62,19 +62,26 @@ No Backend:
 │   ├── dcf/                         # DCF onboarding components
 │   └── shared/                      # Shared utilities
 ├── data/
-│   ├── mockDatabase.ts              # ⭐ SINGLE SOURCE: All mock data
+│   ├── runtimeDB.ts                 # ⭐ SINGLE SOURCE: Supabase data cache
+│   ├── supabaseRaw.ts               # Raw Supabase fetch layer
 │   ├── selectors.ts                 # Data access layer
+│   ├── canonicalMetrics.ts          # Stage classification & DCF metrics
 │   ├── dtoSelectors.ts              # DTO contract enforcement
 │   ├── types.ts                     # Entity type definitions
 │   ├── vcSelectors.ts               # Visit/Call specific selectors
-│   └── adapters/                    # Legacy adapters (DO NOT USE)
+│   ├── adminOrgData.ts              # Admin org data accessors
+│   ├── configFromDB.ts              # Config accessor from runtimeDB
+│   └── adapters/                    # Data adapters (dcfAdapter, leadAdapter)
 ├── lib/
 │   ├── metricsEngine.ts             # ⭐ Metric calculations
 │   ├── incentiveEngine.ts           # ⭐ Incentive logic
 │   ├── productivityEngine.ts        # ⭐ Productivity rules
+│   ├── metricsFromDB.ts             # Rank-based metrics (uses resolveTimePeriodToRange)
 │   ├── activity/
 │   │   ├── callAttemptEngine.ts     # Call attempt tracking
 │   │   └── visitEngine.ts           # Visit state machine
+│   ├── time/
+│   │   └── resolveTimePeriod.ts     # ⭐ Canonical date range resolver
 │   ├── domain/
 │   │   ├── constants.ts             # Business constants
 │   │   └── metrics.ts               # Metric definitions
@@ -99,20 +106,26 @@ No Backend:
 
 ```
 ┌──────────────┐
-│   Engine     │  Calculation logic (metrics, incentives, productivity)
-│ (lib/*.ts)   │
+│   Supabase   │  Remote database (PostgreSQL)
+│  (remote DB) │
 └──────┬───────┘
-       │
+       │  supabaseRaw.ts (fetch layer)
        ▼
 ┌──────────────┐
-│ Mock Database│  Raw entities (Dealer, Lead, Call, Visit, etc.)
-│ (data/*.ts)  │
+│  Runtime DB  │  Cached data (loadRuntimeDB → getRuntimeDBSync)
+│(runtimeDB.ts)│
 └──────┬───────┘
        │
        ▼
 ┌──────────────┐
 │  Selectors   │  Data access functions (getDealerById, etc.)
-│ (data/*.ts)  │
+│ (data/*.ts)  │  + canonicalMetrics.ts (stage classification)
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│   Engines    │  Calculation logic (metrics, incentives, productivity)
+│ (lib/*.ts)   │  + metricsFromDB.ts (rank-based metrics)
 └──────┬───────┘
        │
        ▼
@@ -124,7 +137,7 @@ No Backend:
        ▼
 ┌──────────────┐
 │ UI Components│  Consume DTOs only (NEVER raw entities)
-│ (components/)│
+│ (components/)│  + TimeFilterControl.tsx (unified time filter)
 └──────────────┘
 ```
 
@@ -143,14 +156,16 @@ No Backend:
    - ❌ `const i2si = (stockIns / inspections) * 100;`
 
 4. **NO inline mock data in components**
-   - ✅ Mock data in `/data/mockDatabase.ts` only
+   - ✅ Data accessed via selectors from `/data/runtimeDB.ts`
    - ❌ `const mockDealers = [...]` inside component
 
 ---
 
-## Central Mock Database
+## Runtime Database (Data Cache)
 
-**File:** `/data/mockDatabase.ts`
+**File:** `/data/runtimeDB.ts`
+
+Data is fetched from Supabase via `supabaseRaw.ts`, cached by `loadRuntimeDB()`, and accessed synchronously via `getRuntimeDBSync()`. The cached data includes all entity collections.
 
 ### Entity Types
 
@@ -166,18 +181,19 @@ export interface KAM { ... }
 export interface LocationChangeRequest { ... }
 ```
 
-### Mock Data Collections
+### Data Collections
 
 ```typescript
-// All exported from /data/mockDatabase.ts
-export const DEALERS: Dealer[]
-export const CALLS: CallLog[]
-export const VISITS: VisitLog[]
-export const LEADS: Lead[]
-export const DCF_LEADS: DCFLead[]
-export const TEAM_LEADS: TeamLead[]
-export const KAMS: KAM[]
-export const LOCATION_REQUESTS: LocationChangeRequest[]
+// Accessed via getRuntimeDBSync() from /data/runtimeDB.ts
+// Collections: dealers, calls, visits, leads, dcfLeads, teamLeads, kams, locationRequests
+const db = getRuntimeDBSync();
+db.dealers    // Dealer[]
+db.calls      // CallLog[]
+db.visits     // VisitLog[]
+db.leads      // Lead[]
+db.dcfLeads   // DCFLead[]
+db.teamLeads  // TeamLead[]
+db.kams       // KAM[]
 ```
 
 ### ID Generation Rules
@@ -206,7 +222,7 @@ export const LEGACY_ID_MAP: Record<string, string> = {
 export const normalizeDealerId = (id: string): string => LEGACY_ID_MAP[id] ?? id;
 ```
 
-**Rule:** ALWAYS normalize IDs when accessing mock data from components.
+**Rule:** ALWAYS normalize IDs when accessing data from components.
 
 ---
 
@@ -782,7 +798,7 @@ export function canCheckIn(visit: VisitLog, currentLocation: GeolocationCoordina
 ### Lead Rules
 
 1. **Lead types: Seller, Inventory**
-2. **Channels: C2B, C2D, GS**
+2. **Channels: NGS, GS**
 3. **Funnel stages:**
    - Submitted
    - Appointment Scheduled

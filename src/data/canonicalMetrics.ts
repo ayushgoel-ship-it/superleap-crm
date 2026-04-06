@@ -1,22 +1,69 @@
 /**
- * CANONICAL METRICS — Single source of truth for all counts and KPIs
+ * CANONICAL METRICS — Stage-based classification & DCF-focused metrics
  *
- * Every page (Home, Leads, Dealers, DCF) must derive metrics from this module.
- * No page should hard-code counts or read from dealer.metrics.mtd statics.
+ * ┌─────────────────────────────────────────────────────────────────┐
+ * │  MODULE BOUNDARY                                               │
+ * │                                                                │
+ * │  This module provides:                                         │
+ * │  1. Lead stage classification (classifyLeadStage, isStockIn,   │
+ * │     isInspection, isPastInspection)                            │
+ * │  2. Dealer activity stage derivation (deriveDealerActivityStage)│
+ * │  3. DCF lead filtering (getFilteredDCFLeads)                   │
+ * │  4. GS/NGS range comparison (deriveRangeStatus)                │
+ * │  5. Channel taxonomy (mapChannelToCanonical)                   │
+ * │  6. Dashboard metrics aggregation (computeDashboardMetrics)     │
+ * │                                                                │
+ * │  WHEN TO USE THIS MODULE:                                      │
+ * │  - Any page that needs STAGE-BASED lead classification         │
+ * │  - DCF pages (DCFPage, DCFPageTL, DCFDealersListPage, etc.)   │
+ * │  - Dealer detail pages needing dealer activity stage            │
+ * │  - Lead detail pages needing range status or channel mapping    │
+ * │                                                                │
+ * │  WHEN TO USE metricsFromDB INSTEAD:                            │
+ * │  - Pages needing RANK-BASED metrics (reg_insp_rank,            │
+ * │    reg_token_rank, reg_stockin_rank from Supabase)             │
+ * │  - HomePage, PerformancePage, TL overview dashboards           │
+ * │  - KAM-level aggregate metrics (computeKAMMetrics)             │
+ * │  - Month projection logic (getMonthProgress, projectToEOM)     │
+ * │                                                                │
+ * │  CONSUMERS:                                                    │
+ * │  - DCFPage.tsx, DCFPageTL.tsx (DCF metrics + dealer data)      │
+ * │  - DCFDealersListPage, DCFLeadsListPage, DCFDisbursalsListPage │
+ * │  - DCFDealerDetailPage                                         │
+ * │  - LeadsPageV3.tsx (stage classification)                      │
+ * │  - LeadDetailPageV2.tsx (range status, channel mapping)        │
+ * │  - DealerDetailPageV2.tsx (dealer lead metrics, activity stage) │
+ * │  - TLHomeView.tsx (filtered leads, stock-in/inspection checks) │
+ * │  - TLLeaderboardPage.tsx, LeaderboardPage.tsx                  │
+ * │  - TLIncentiveSimulator, KAMIncentiveSimulator                 │
+ * │  - NotificationCenterPage.tsx                                  │
+ * │  - DealerAccountCard.tsx (mirrors deriveDealerActivityStage)   │
+ * └─────────────────────────────────────────────────────────────────┘
  *
  * Data flow:
- *   LEADS / DCF_LEADS / CALLS / VISITS (mockDatabase)
+ *   leads / dcfLeads / calls / visits (runtimeDB)
  *     → filter by timeframe + optional KAM
+ *     → classify stages from raw stage strings
  *     → compute counts, rates, breakdowns
  *     → consume in pages
+ *
+ * TODO: Overlap with metricsFromDB.ts — both modules have:
+ *   - Time range filtering (isInTimeRange here vs isIn there)
+ *   - I2SI calculation (stockIns / inspections * 100)
+ *   - DCF disbursal value aggregation (/ 100000 to lakhs)
+ *   - Call/visit filtering by period + kamId
+ *   - A DashboardMetrics interface (different shapes)
+ *   Consider unifying shared logic into a common utility if these modules
+ *   are ever refactored together.
  */
 
-import { LEADS, DCF_LEADS, CALLS, VISITS, DEALERS } from './mockDatabase';
+import { getRuntimeDBSync } from './runtimeDB';
+import { resolveTimePeriodToRange } from '../lib/time/resolveTimePeriod';
 import type { Lead, DCFLead, CallLog, VisitLog, Dealer } from './types';
 import { TimePeriod } from '../lib/domain/constants';
 
 // ── Channel taxonomy ──
-// C2B + C2D → NGS, GS stays GS, DCF stays DCF
+// NGS (formerly C2B/C2D), GS stays GS, DCF stays DCF
 export type CanonicalChannel = 'NGS' | 'GS' | 'DCF';
 
 export function mapChannelToCanonical(raw: string): CanonicalChannel {
@@ -28,70 +75,22 @@ export function mapChannelToCanonical(raw: string): CanonicalChannel {
 }
 
 // ── Time filtering ──
+// TODO: Duplicated logic — metricsFromDB.ts has its own `isIn()` with the same semantics.
+// Consider extracting a shared `isDateInRange(dateStr, from, to)` utility.
 
 function isInTimeRange(dateStr: string | undefined, period: TimePeriod, customFrom?: string, customTo?: string): boolean {
   if (!dateStr) return false;
-  const created = new Date(dateStr);
-  if (isNaN(created.getTime())) return false;
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  switch (period) {
-    case TimePeriod.TODAY:
-      return created >= today;
-    case TimePeriod.D_MINUS_1: {
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      return created >= yesterday && created < today;
-    }
-    case TimePeriod.LAST_7D: {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 7);
-      return created >= d;
-    }
-    case TimePeriod.LAST_30D: {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 30);
-      return created >= d;
-    }
-    case TimePeriod.LAST_MONTH: {
-      const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const firstOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      return created >= firstOfLastMonth && created < firstOfThisMonth;
-    }
-    case TimePeriod.LMTD: {
-      const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const prevMonthSameDay = new Date(now.getFullYear(), now.getMonth() - 1, today.getDate() + 1);
-      return created >= prevMonthStart && created < prevMonthSameDay;
-    }
-    case TimePeriod.LAST_3M: {
-      const d = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-      return created >= d;
-    }
-    case TimePeriod.LAST_6M: {
-      const d = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-      return created >= d;
-    }
-    case TimePeriod.QTD: {
-      const q = Math.floor(now.getMonth() / 3) * 3;
-      const quarterStart = new Date(now.getFullYear(), q, 1);
-      return created >= quarterStart;
-    }
-    case TimePeriod.LIFETIME:
-      return true;
-    case TimePeriod.CUSTOM: {
-      if (!customFrom || !customTo) return false;
-      const from = new Date(customFrom);
-      const to = new Date(customTo);
-      return created >= from && created <= to;
-    }
-    case TimePeriod.MTD:
-    default: {
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      return created >= monthStart;
-    }
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  let range: { fromISO: string; toISO: string };
+  try {
+    range = resolveTimePeriodToRange(period, new Date(), customFrom, customTo);
+  } catch {
+    return false;
   }
+  const from = new Date(range.fromISO);
+  const to = new Date(range.toISO);
+  return d >= from && d < to;
 }
 
 // ── Filter options ──
@@ -106,7 +105,7 @@ export interface MetricFilters {
 // ── Filtered data getters ──
 
 export function getFilteredLeads(filters: MetricFilters): Lead[] {
-  let leads = LEADS as Lead[];
+  let leads = getRuntimeDBSync().leads;
   leads = leads.filter(l => isInTimeRange(l.createdAt, filters.period, filters.customFrom, filters.customTo));
   if (filters.kamId) {
     leads = leads.filter(l => l.kamId === filters.kamId);
@@ -115,7 +114,7 @@ export function getFilteredLeads(filters: MetricFilters): Lead[] {
 }
 
 export function getFilteredDCFLeads(filters: MetricFilters): DCFLead[] {
-  let leads = DCF_LEADS as DCFLead[];
+  let leads = getRuntimeDBSync().dcfLeads;
   leads = leads.filter(l => isInTimeRange(l.createdAt, filters.period, filters.customFrom, filters.customTo));
   if (filters.kamId) {
     leads = leads.filter(l => l.kamId === filters.kamId);
@@ -124,7 +123,7 @@ export function getFilteredDCFLeads(filters: MetricFilters): DCFLead[] {
 }
 
 export function getFilteredCalls(filters: MetricFilters): CallLog[] {
-  let calls = CALLS as CallLog[];
+  let calls = getRuntimeDBSync().calls;
   calls = calls.filter(c => isInTimeRange(c.callDate, filters.period, filters.customFrom, filters.customTo));
   if (filters.kamId) {
     calls = calls.filter(c => c.kamId === filters.kamId);
@@ -133,7 +132,7 @@ export function getFilteredCalls(filters: MetricFilters): CallLog[] {
 }
 
 export function getFilteredVisits(filters: MetricFilters): VisitLog[] {
-  let visits = VISITS as VisitLog[];
+  let visits = getRuntimeDBSync().visits;
   visits = visits.filter(v => isInTimeRange(v.checkInAt || v.visitDate, filters.period, filters.customFrom, filters.customTo));
   if (filters.kamId) {
     visits = visits.filter(v => v.kamId === filters.kamId);
@@ -292,7 +291,7 @@ export function computeDashboardMetrics(filters: MetricFilters): DashboardMetric
     dealerLeadMap.set(l.dealerId, existing);
   });
 
-  const allDealers = DEALERS as Dealer[];
+  const allDealers = getRuntimeDBSync().dealers;
   const inspectingDealers = Array.from(dealerLeadMap.values())
     .filter(dLeads => dLeads.some(l => isInspection(l.stage) || isStockIn(l.stage))).length;
   const transactingDealers = Array.from(dealerLeadMap.values())

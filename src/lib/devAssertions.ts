@@ -88,7 +88,7 @@ export function assertCanonicalId(id: string, entityType: string): void {
     console.error(`[DEV ASSERTION] ID '${id}' does not match canonical format for ${entityType}`);
     console.error(`Expected format: ${pattern.toString()}`);
     console.error('Did you forget to normalize the ID?');
-    console.error('Use: normalizeDealerId(id) from @/data/mockDatabase');
+    console.error('Use: normalizeDealerId(id) from @/data/idUtils');
     throw new Error(`Non-canonical ${entityType} ID: ${id}`);
   }
 }

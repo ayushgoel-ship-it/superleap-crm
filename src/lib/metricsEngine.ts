@@ -16,8 +16,8 @@
  * - No hard-coded thresholds (use constants.ts)
  */
 
-import { 
-  getAchievementPercent, 
+import {
+  getAchievementPercent,
   getI2SIPercent,
   safeDivide,
   round,
@@ -26,6 +26,7 @@ import {
   getMonthContext
 } from './domain/metrics';
 import { ProductivityStatus } from './domain/constants';
+import { getConfigSITarget, getConfigDCFGMVTarget, getConfigI2SITarget, getConfigKAMCount } from './configFromDB';
 
 // ============================================================================
 // A) SI & TARGET METRICS
@@ -34,13 +35,10 @@ import { ProductivityStatus } from './domain/constants';
 /**
  * Get SI target based on role
  * SINGLE SOURCE OF TRUTH for SI targets
+ * Reads from backend `targets` table via configFromDB, falls back to hardcoded.
  */
 export function getSITarget(role: 'KAM' | 'TL'): number {
-  const targets = {
-    KAM: 20,
-    TL: 100,
-  };
-  return targets[role];
+  return getConfigSITarget(role);
 }
 
 /**
@@ -264,25 +262,31 @@ export function getDCFMetrics(
 /**
  * Get DCF targets by role
  * SINGLE SOURCE OF TRUTH for DCF targets
+ * GMV target reads from backend via configFromDB.
+ *
+ * TL targets are DERIVED: KAM target * number of KAMs in the org.
  */
 export function getDCFTargets(role: 'KAM' | 'TL'): {
   onboarding: number;
   disbursement: number;
   gmv: number; // in lakhs
 } {
-  const targets = {
-    KAM: {
-      onboarding: 20,
-      disbursement: 15,
-      gmv: 1500, // ₹15L
-    },
-    TL: {
-      onboarding: 100,
-      disbursement: 75,
-      gmv: 7500, // ₹75L
-    },
+  const gmvTarget = getConfigDCFGMVTarget();
+  const kamTargets = {
+    onboarding: 20,
+    disbursement: 15,
+    gmv: gmvTarget <= 100 ? gmvTarget * 100 : 1500, // convert lakhs to absolute if small
   };
-  return targets[role];
+
+  if (role === 'KAM') return kamTargets;
+
+  // TL: sum across all KAMs
+  const kamCount = getConfigKAMCount();
+  return {
+    onboarding: kamTargets.onboarding * kamCount,
+    disbursement: kamTargets.disbursement * kamCount,
+    gmv: kamTargets.gmv * kamCount,
+  };
 }
 
 // ============================================================================

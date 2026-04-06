@@ -91,32 +91,43 @@ export const ADMIN_TIME_OPTIONS: TimePeriod[] = [
 
 /**
  * CANONICAL time filter options — the single standard set for all pages.
- * D-1, MTD, LMTD, Last 30D, Last 3M, Last 6M, Custom
+ * MTD, D-1, LMTD, LM, 30D, L3M, L6M, Custom
  */
 export const CANONICAL_TIME_OPTIONS: TimePeriod[] = [
-  TimePeriod.D_MINUS_1,
   TimePeriod.MTD,
+  TimePeriod.D_MINUS_1,
   TimePeriod.LMTD,
-  TimePeriod.LAST_30D,
-  TimePeriod.LAST_3M,
-  TimePeriod.LAST_6M,
+  TimePeriod.LAST_MONTH,
   TimePeriod.CUSTOM,
 ];
 
 /** Short labels for canonical options */
-export const CANONICAL_TIME_LABELS: Record<string, string> = {
-  [TimePeriod.D_MINUS_1]: 'D-1',
+export const CANONICAL_TIME_LABELS: Partial<Record<TimePeriod, string>> = {
   [TimePeriod.MTD]: 'MTD',
+  [TimePeriod.D_MINUS_1]: 'D-1',
   [TimePeriod.LMTD]: 'LMTD',
+  [TimePeriod.LAST_MONTH]: 'LM',
   [TimePeriod.LAST_30D]: '30D',
-  [TimePeriod.LAST_3M]: '3M',
-  [TimePeriod.LAST_6M]: '6M',
+  [TimePeriod.LAST_3M]: 'L3M',
+  [TimePeriod.LAST_6M]: 'L6M',
   [TimePeriod.CUSTOM]: 'Custom',
 };
 
 // ── Component ──
 
 // ── Custom Date Picker Inline ──
+
+const QUICK_RANGES = [
+  { label: '30D', days: 30 },
+  { label: 'L3M', days: 90 },
+  { label: 'L6M', days: 180 },
+];
+
+function subtractDays(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
 
 function CustomDateRangeInline({
   fromISO,
@@ -130,9 +141,22 @@ function CustomDateRangeInline({
   const today = new Date().toISOString().slice(0, 10);
   const [from, setFrom] = useState(fromISO?.slice(0, 10) ?? '');
   const [to, setTo] = useState(toISO?.slice(0, 10) ?? today);
+  const [activeQuick, setActiveQuick] = useState<string | null>(null);
+
+  const handleQuick = (label: string, days: number) => {
+    const f = subtractDays(days);
+    setFrom(f);
+    setTo(today);
+    setActiveQuick(label);
+    onApply({
+      fromISO: new Date(f + 'T00:00:00').toISOString(),
+      toISO: new Date(today + 'T23:59:59').toISOString(),
+    });
+  };
 
   const handleApply = () => {
     if (from && to && from <= to) {
+      setActiveQuick(null);
       onApply({
         fromISO: new Date(from + 'T00:00:00').toISOString(),
         toISO: new Date(to + 'T23:59:59').toISOString(),
@@ -141,33 +165,53 @@ function CustomDateRangeInline({
   };
 
   return (
-    <div className="flex items-center gap-2 mt-2 animate-fade-in">
-      <input
-        type="date"
-        value={from}
-        onChange={(e) => setFrom(e.target.value)}
-        max={to || today}
-        className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-[12px] text-slate-700 bg-white
-                   focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300 transition-all"
-      />
-      <span className="text-[11px] text-slate-400 font-medium">to</span>
-      <input
-        type="date"
-        value={to}
-        onChange={(e) => setTo(e.target.value)}
-        min={from}
-        max={today}
-        className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-[12px] text-slate-700 bg-white
-                   focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300 transition-all"
-      />
-      <button
-        onClick={handleApply}
-        disabled={!from || !to || from > to}
-        className="px-3 py-1.5 bg-indigo-600 text-white text-[11px] font-semibold rounded-lg
-                   hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        Apply
-      </button>
+    <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-200 animate-fade-in space-y-2.5">
+      {/* Quick presets */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mr-0.5">Quick</span>
+        {QUICK_RANGES.map(({ label, days }) => (
+          <button
+            key={label}
+            onClick={() => handleQuick(label, days)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all
+              ${activeQuick === label
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+              }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {/* Manual range */}
+      <div className="flex items-center gap-2">
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => { setFrom(e.target.value); setActiveQuick(null); }}
+          max={to || today}
+          className="flex-1 min-w-0 px-2.5 py-1.5 border border-slate-200 rounded-lg text-[12px] text-slate-700 bg-white
+                     focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300 transition-all"
+        />
+        <span className="text-[11px] text-slate-400 font-medium shrink-0">to</span>
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => { setTo(e.target.value); setActiveQuick(null); }}
+          min={from}
+          max={today}
+          className="flex-1 min-w-0 px-2.5 py-1.5 border border-slate-200 rounded-lg text-[12px] text-slate-700 bg-white
+                     focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-300 transition-all"
+        />
+        <button
+          onClick={handleApply}
+          disabled={!from || !to || from > to}
+          className="shrink-0 px-3 py-1.5 bg-indigo-600 text-white text-[11px] font-semibold rounded-lg
+                     hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Apply
+        </button>
+      </div>
     </div>
   );
 }

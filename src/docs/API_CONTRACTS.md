@@ -212,7 +212,7 @@ Production-ready paginated leads listing with full filter support.
 | page | int | `1` | Page number |
 | page_size | int | `20` | Items per page (max 100) |
 | time_scope | string | `mtd` | Time window: `mtd`, `d-1`, `last-7d`, `last-30d`, `lifetime` |
-| channel | string | — | Filter: `C2B`, `C2D`, `GS`, `DCF` |
+| channel | string | — | Filter: `NGS`, `GS`, `DCF` |
 | stage | string | — | Filter by stage (e.g. `Inspection Done`, `PLL`, `Stock-in`) |
 | kam_id | string | — | Filter by assigned KAM employee_id |
 | dealer_id | string | — | Filter by dealer |
@@ -238,7 +238,7 @@ Production-ready paginated leads listing with full filter support.
         "customer_name": "Rajesh Gupta",
         "reg_no": "DL-01-AB-1234",
         "car": "Maruti Swift 2019",
-        "channel": "C2B",
+        "channel": "NGS",
         "lead_type": "Seller",
         "stage": "Inspection Done",
         "status": "Active",
@@ -259,7 +259,7 @@ Production-ready paginated leads listing with full filter support.
 ```
 
 **Channel-correct pricing fields:**
-- C2B / C2D / GS channels → `c24_quote` (C24 internal quote)
+- NGS / GS channels → `c24_quote` (C24 internal quote)
 - DCF channel → `ltv` (Lifetime Value)
 - All channels → `cep` (Customer Expected Price)
 
@@ -285,7 +285,7 @@ Full lead detail with all pricing fields, dealer snapshot, and identifiers.
     "reg_no": "DL-01-AB-1234",
     "make": "Maruti", "model": "Swift", "year": 2019,
 
-    "channel": "C2B",
+    "channel": "NGS",
     "lead_type": "Seller",
     "stage": "Inspection Done",
     "status": "Active",

@@ -159,12 +159,11 @@ export function ComponentsPage() {
       <div className="card-premium p-5">
         <SectionHeader id="channel-chip" title="C. Channel Chip" description="Business vertical indicators" />
         <div className="flex flex-wrap gap-2">
-          <ChannelChip channel="C2B" />
+          <ChannelChip channel="NGS" />
           <ChannelChip channel="DCF" />
-          <ChannelChip channel="C2D" />
           <ChannelChip channel="GS" />
         </div>
-        <div className="mt-3 text-[11px] text-slate-400">Colors: violet (C2B) / blue (C2D) / emerald (GS) / amber (DCF)</div>
+        <div className="mt-3 text-[11px] text-slate-400">Colors: violet (NGS) / emerald (GS) / amber (DCF)</div>
       </div>
 
       {/* D) Filter Chip */}
@@ -282,7 +281,7 @@ export function ComponentsPage() {
               </div>
               <div className="flex items-center gap-1.5 mt-2.5">
                 <StatusChip label="Transacting" variant="success" dot size="sm" />
-                <ChannelChip channel="C2B" />
+                <ChannelChip channel="NGS" />
               </div>
               <div className="grid grid-cols-4 gap-3 mt-3 pt-3 border-t border-slate-100">
                 {[
@@ -306,7 +305,7 @@ export function ComponentsPage() {
             <div className="card-premium p-4">
               <div className="flex items-center gap-1.5 mb-3">
                 <span className="text-[11px] font-mono font-semibold text-slate-400">LEAD-2024-045</span>
-                <ChannelChip channel="C2B" />
+                <ChannelChip channel="NGS" />
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-500">Organic</span>
               </div>
               <div className="flex items-center gap-2 mb-1">

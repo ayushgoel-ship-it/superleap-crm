@@ -124,7 +124,7 @@ export interface LeadListItem {
   status: string;
   cep: number | null;
   cep_confidence?: string | null;
-  c24_quote?: number | null;  // C2B/C2D/GS only
+  c24_quote?: number | null;  // NGS/GS only
   ltv?: number | null;        // DCF only
   created_at: string;
   updated_at: string;

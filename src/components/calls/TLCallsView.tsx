@@ -3,7 +3,7 @@ import { Search, Phone, Filter, Clock, CheckCircle, XCircle, AlertCircle, Chevro
 
 type CallOutcome = 'connected_positive' | 'connected_neutral' | 'connected_negative' | 'not_reachable' | 'switched_off' | 'wrong_number' | 'call_back_later';
 type ProductiveStatus = 'productive' | 'non_productive' | 'unknown';
-type Channel = 'C2B' | 'C2D' | 'GS' | 'DCF';
+type Channel = 'NGS' | 'GS' | 'DCF';
 
 interface Call {
   id: string;
@@ -64,7 +64,7 @@ export function TLCallsView() {
       duration: '5m 10s',
       outcome: 'connected_positive',
       productive: 'productive',
-      channel: 'C2B',
+      channel: 'NGS',
     },
     {
       id: 'c2',
@@ -79,7 +79,7 @@ export function TLCallsView() {
       duration: '3m 40s',
       outcome: 'not_reachable',
       productive: 'non_productive',
-      channel: 'C2D',
+      channel: 'NGS',
     },
     {
       id: 'c3',
@@ -109,7 +109,7 @@ export function TLCallsView() {
       duration: '2m 10s',
       outcome: 'call_back_later',
       productive: 'unknown',
-      channel: 'C2B',
+      channel: 'NGS',
     },
     {
       id: 'c5',
@@ -124,7 +124,7 @@ export function TLCallsView() {
       duration: '6m 20s',
       outcome: 'connected_positive',
       productive: 'productive',
-      channel: 'C2B',
+      channel: 'NGS',
     },
   ];
 
@@ -508,24 +508,14 @@ export function TLCallsView() {
                 All
               </button>
               <button
-                onClick={() => setSelectedChannel('c2b')}
+                onClick={() => setSelectedChannel('ngs')}
                 className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${
-                  selectedChannel === 'c2b'
+                  selectedChannel === 'ngs'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white border border-gray-300 text-gray-700'
                 }`}
               >
-                C2B
-              </button>
-              <button
-                onClick={() => setSelectedChannel('c2d')}
-                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${
-                  selectedChannel === 'c2d'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-300 text-gray-700'
-                }`}
-              >
-                C2D
+                NGS
               </button>
               <button
                 onClick={() => setSelectedChannel('gs')}

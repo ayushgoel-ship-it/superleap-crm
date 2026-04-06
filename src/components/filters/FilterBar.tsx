@@ -23,7 +23,7 @@ import { ChevronDown, X, Search } from 'lucide-react';
 import { useFilterScope, type FilterScope, type FilterState } from '../../contexts/FilterContext';
 import { TimePeriod } from '../../lib/domain/constants';
 import { TIME_PERIOD_LABELS } from '../../lib/time/resolveTimePeriod';
-import type { Region } from '../../data/adminOrgMock';
+import type { Region } from '../../data/adminOrgData';
 
 // ============================================================================
 // CONFIGURATION TYPES

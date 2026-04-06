@@ -24,14 +24,14 @@ export function OwnerContacts({ channel, inspectionDone, tokenCollected, regNo }
   // Different PA details based on lead
   const getPADetails = () => {
     if (regNo === 'DL6CAC9999') {
-      // C2B lead
+      // NGS seller lead
       return {
         name: 'Ankit Sinha',
         email: 'ankit.sinha@cars24.com',
         phone: '+91 98200 44567',
       };
     } else if (regNo === 'HR26DK8888') {
-      // C2D lead
+      // NGS inventory lead
       return {
         name: 'Sanjay Mehta',
         email: 'sanjay.mehta@cars24.com',
@@ -87,7 +87,7 @@ export function OwnerContacts({ channel, inspectionDone, tokenCollected, regNo }
           )}
         </div>
 
-        {/* PA Row - Now shown for C2B, GS, and C2D */}
+        {/* PA Row - Now shown for NGS and GS */}
         <div className="flex items-center gap-3 pt-3 border-t border-gray-100">
           {/* Avatar */}
           <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">

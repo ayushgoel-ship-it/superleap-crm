@@ -39,7 +39,7 @@ export interface AdminBusinessSummary {
   siTarget: number;
   inspections: number;
   i2si: number; // percentage
-  c2dI2B: number; // count
+  ngsI2B: number; // count
   
   // DCF metrics
   dcfOnboarding: number; // count of dealers onboarded
@@ -163,7 +163,7 @@ function computeBusinessSummary(
   
   let siAchieved = 0;
   let inspections = 0;
-  let c2dI2B = 0; // For simplicity, we'll approximate from SIs
+  let ngsI2B = 0; // For simplicity, we'll approximate from SIs
   
   dealers.forEach(dealer => {
     siAchieved += dealer.metrics.mtd.sis;
@@ -173,8 +173,8 @@ function computeBusinessSummary(
   // I2SI calculation
   const i2si = inspections > 0 ? round((siAchieved / inspections) * 100, 1) : 0;
   
-  // C2D I2B approximation (assume 60% of SIs come from C2D channel)
-  c2dI2B = Math.round(siAchieved * 0.6);
+  // NGS I2B approximation (assume 60% of SIs come from NGS channel)
+  ngsI2B = Math.round(siAchieved * 0.6);
   
   // DCF metrics
   const dcfOnboarding = new Set(dcfLeads.map(l => l.dealerId)).size;
@@ -197,7 +197,7 @@ function computeBusinessSummary(
     siTarget,
     inspections,
     i2si,
-    c2dI2B,
+    ngsI2B,
     dcfOnboarding,
     dcfLeads: dcfLeadsCount,
     dcfGMV,

@@ -39,9 +39,13 @@ import { DealerAccountCard, type DealerCardData } from '../dealers/DealerAccount
 import { toast } from 'sonner@2.0.3';
 import { getAllDealers } from '../../data/selectors';
 import { getRuntimeDBSync } from '../../data/runtimeDB';
+import { TimePeriod } from '../../lib/domain/constants';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+import { deriveDealerActivityStage, isInspection, isStockIn } from '../../data/canonicalMetrics';
+import { resolveTimePeriodToRange } from '../../lib/time/resolveTimePeriod';
 
 // ── Filter Types ──
-type QuickFilter = 'all' | 'active' | 'dormant' | 'inactive';
+type QuickFilter = 'all' | 'active' | 'dormant' | 'inactive' | 'dcf-onboarded';
 type SortKey = 'name' | 'segment' | 'leads' | 'last-activity';
 type SummaryRange = 'mtd' | 'last-30';
 
@@ -65,6 +69,7 @@ const FILTER_CHIPS: { key: QuickFilter; label: string }[] = [
   { key: 'active', label: 'Active' },
   { key: 'dormant', label: 'Dormant' },
   { key: 'inactive', label: 'Inactive' },
+  { key: 'dcf-onboarded', label: 'DCF Onboarded' },
 ];
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -78,17 +83,19 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 function mapDBDealerToCard(d: any): DealerCardData {
   // Compute real MTD metrics from actual Supabase data
   const db = getRuntimeDBSync();
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const { fromISO: monthStartISO } = resolveTimePeriodToRange(TimePeriod.MTD);
+  const monthStart = new Date(monthStartISO);
 
   const dealerLeads = db.leads.filter(l => l.dealerId === d.id);
   const dealerLeadsMTD = dealerLeads.filter(l => new Date(l.createdAt) >= monthStart);
   const dealerCalls = db.calls.filter(c => c.dealerId === d.id && new Date(c.callDate) >= monthStart);
   const dealerVisits = db.visits.filter(v => v.dealerId === d.id && new Date(v.visitDate) >= monthStart);
-  const dealerSIs = dealerLeadsMTD.filter(l => l.status === 'won' || l.status === 'Won' || l.stage === 'stock_in');
+  const dealerDCFLeads = db.dcfLeads.filter(l => l.dealerId === d.id && new Date(l.createdAt) >= monthStart);
 
   const leadsMTD = dealerLeadsMTD.length;
-  const sisMTD = dealerSIs.length;
+  const inspectionsMTD = dealerLeadsMTD.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
+  const sisMTD = dealerLeadsMTD.filter(l => isStockIn(l.stage)).length;
+  const dcfMTD = dealerDCFLeads.length;
   const callsMTD = dealerCalls.length;
   const visitsMTD = dealerVisits.length;
   const productivityPct = leadsMTD > 0 ? Math.min(100, Math.round((sisMTD / Math.max(leadsMTD, 1)) * 100)) : 0;
@@ -106,7 +113,9 @@ function mapDBDealerToCard(d: any): DealerCardData {
     callsMTD,
     visitsMTD,
     leadsMTD,
+    inspectionsMTD,
     sisMTD,
+    dcfMTD,
     productivityPct,
     hasLocation: !!d.latitude,
     distanceKm: undefined,
@@ -162,6 +171,9 @@ export function DealersPage({
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showContextBanner, setShowContextBanner] = useState(!!navigationContext);
   const [summaryRange, setSummaryRange] = useState<SummaryRange>('mtd');
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   // ── Data loading ──
   const [rawDealers, setRawDealers] = useState<any[]>([]);
@@ -192,9 +204,15 @@ export function DealersPage({
     return { totalTagged, inspecting, transacting, dcfOnboarded, dcfLeadGiving };
   }, [dealers, summaryRange]);
 
-  // ── Dormant count ──
+  // ── Dormant count (canonical: deriveDealerActivityStage) ──
   const dormantCount = useMemo(
-    () => dealers.filter(d => d.status === 'dormant' || (d.leadsMTD === 0 && d.sisMTD === 0)).length,
+    () => dealers.filter(d => {
+      const stage = deriveDealerActivityStage(
+        { leadsMTD: d.leadsMTD, inspectionsMTD: d.inspectionsMTD, sisMTD: d.sisMTD, dcfMTD: d.dcfMTD },
+        d.status,
+      );
+      return stage === 'Dormant';
+    }).length,
     [dealers]
   );
 
@@ -210,19 +228,25 @@ export function DealersPage({
       );
     }
 
-    // Quick filter
-    switch (activeFilter) {
-      case 'active':
-        result = result.filter(d => d.status === 'active' && (d.leadsMTD > 0 || d.sisMTD > 0));
-        break;
-      case 'dormant':
-        result = result.filter(d => d.status === 'dormant' || (d.leadsMTD === 0 && d.sisMTD === 0));
-        break;
-      case 'inactive':
-        result = result.filter(d => d.status === 'inactive');
-        break;
-      default:
-        break;
+    // Quick filter — uses canonical deriveDealerActivityStage for consistency
+    if (activeFilter !== 'all') {
+      result = result.filter(d => {
+        if (activeFilter === 'dcf-onboarded') return d.tags.includes('DCF Onboarded');
+        const stage = deriveDealerActivityStage(
+          { leadsMTD: d.leadsMTD, inspectionsMTD: d.inspectionsMTD, sisMTD: d.sisMTD, dcfMTD: d.dcfMTD },
+          d.status,
+        );
+        switch (activeFilter) {
+          case 'active':
+            return stage === 'Transacting' || stage === 'Inspecting' || stage === 'Lead Giving';
+          case 'dormant':
+            return stage === 'Dormant';
+          case 'inactive':
+            return stage === 'Inactive';
+          default:
+            return true;
+        }
+      });
     }
 
     // Sort
@@ -387,6 +411,22 @@ export function DealersPage({
         </div>
       </div>
 
+      {/* ── Time Filter ── */}
+      <div className="px-4 pt-2">
+        <TimeFilterControl
+          mode="chips"
+          chipStyle="pill"
+          value={timePeriod}
+          onChange={setTimePeriod}
+          options={CANONICAL_TIME_OPTIONS}
+          labelOverrides={CANONICAL_TIME_LABELS}
+          allowCustom
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+        />
+      </div>
+
       {/* ── Portfolio Summary Section ── */}
       <div className="mx-4 mt-3 space-y-2.5">
         {/* Range toggle */}
@@ -457,10 +497,21 @@ export function DealersPage({
               : chip.key === 'dormant'
                 ? dormantCount
                 : chip.key === 'active'
-                  ? dealers.filter(d => d.status === 'active' && (d.leadsMTD > 0 || d.sisMTD > 0)).length
+                  ? dealers.filter(d => {
+                      const st = deriveDealerActivityStage(
+                        { leadsMTD: d.leadsMTD, inspectionsMTD: d.inspectionsMTD, sisMTD: d.sisMTD, dcfMTD: d.dcfMTD },
+                        d.status,
+                      );
+                      return st === 'Transacting' || st === 'Inspecting' || st === 'Lead Giving';
+                    }).length
                   : chip.key === 'inactive'
-                    ? dealers.filter(d => d.status === 'inactive').length
-                    : undefined;
+                    ? dealers.filter(d => deriveDealerActivityStage(
+                        { leadsMTD: d.leadsMTD, inspectionsMTD: d.inspectionsMTD, sisMTD: d.sisMTD, dcfMTD: d.dcfMTD },
+                        d.status,
+                      ) === 'Inactive').length
+                    : chip.key === 'dcf-onboarded'
+                      ? dealers.filter(d => d.tags.includes('DCF Onboarded')).length
+                      : undefined;
 
             return (
               <button

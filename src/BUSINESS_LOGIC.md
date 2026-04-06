@@ -18,7 +18,7 @@ SuperLeap is a comprehensive CRM for CARS24's Dealer Referral business where:
 - **Key Account Managers (KAMs)** manage panels of used-car dealers
 - **Team Leads (TLs)** oversee multiple KAMs
 - Dealers share seller leads and inventory leads in exchange for commissions
-- System handles multiple verticals: C2B, C2D, GS, and DCF (loans to customers buying cars from dealers)
+- System handles multiple verticals: NGS, GS, and DCF (loans to customers buying cars from dealers)
 
 ---
 
@@ -414,7 +414,7 @@ All cards and metrics update based on selected time period:
 
 ### Conversion Funnels
 
-#### C2B Funnel (KAM)
+#### NGS Funnel (KAM)
 ```
 Appointments → Inspections → Stock-ins → Revenue
 ```

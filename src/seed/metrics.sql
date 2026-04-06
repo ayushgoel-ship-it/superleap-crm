@@ -14,12 +14,8 @@ INSERT INTO metric_definitions (metric_key, display_name, description, unit, cal
  '{"green_min": 90, "amber_min": 70}',
  'targets.si_target', NULL),
 
-('si_c2b', 'SI — C2B', 'Stock-ins from C2B channel only', 'count', 'count',
- 'SELECT COUNT(*) FROM leads WHERE kam_user_id = :user_id AND stage = ''Stock-in'' AND status = ''Won'' AND channel = ''C2B'' AND converted_at BETWEEN :start_date AND :end_date',
- '{"region"}', '{}', 'mtd', FALSE, NULL, NULL, NULL),
-
-('si_c2d', 'SI — C2D', 'Stock-ins from C2D channel only', 'count', 'count',
- 'SELECT COUNT(*) FROM leads WHERE kam_user_id = :user_id AND stage = ''Stock-in'' AND status = ''Won'' AND channel = ''C2D'' AND converted_at BETWEEN :start_date AND :end_date',
+('si_ngs', 'SI — NGS', 'Stock-ins from NGS channel only', 'count', 'count',
+ 'SELECT COUNT(*) FROM leads WHERE kam_user_id = :user_id AND stage = ''Stock-in'' AND status = ''Won'' AND channel = ''NGS'' AND converted_at BETWEEN :start_date AND :end_date',
  '{"region"}', '{}', 'mtd', FALSE, NULL, NULL, NULL),
 
 ('si_gs', 'SI — GS', 'Stock-ins from GS channel only', 'count', 'count',

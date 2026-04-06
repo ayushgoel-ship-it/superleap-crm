@@ -46,6 +46,7 @@ import { getDealerLeadMetrics, getFilteredCalls, getFilteredVisits, deriveDealer
 import { TimePeriod } from '../../lib/domain/constants';
 import type { UserRole } from '../../lib/shared/appTypes';
 import { StatusChip, FilterChip } from '../premium/Chip';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 import { EmptyState, InlineEmpty } from '../premium/EmptyState';
 import { CardSkeleton } from '../premium/SkeletonLoader';
 import { DCFOnboardingFlow, DCFOnboardingStatus } from '../dcf/DCFOnboardingFlow';
@@ -151,6 +152,8 @@ export function DealerDetailPageV2({
 }: DealerDetailPageV2Props) {
   const [activeSection, setActiveSection] = useState<Section>('overview');
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [noteText, setNoteText] = useState('');
@@ -625,19 +628,21 @@ export function DealerDetailPageV2({
                 <div className="card-premium p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-[13px] font-semibold text-slate-800">Performance</h3>
-                    <div className="flex gap-1">
-                      {([
-                        { key: TimePeriod.MTD, label: 'MTD' },
-                        { key: TimePeriod.LAST_30D, label: '30D' },
-                        { key: TimePeriod.LAST_3M, label: '3M' },
-                      ] as const).map(({ key, label }) => (
-                        <button key={key} onClick={() => setTimePeriod(key)}
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all
-                            ${timePeriod === key ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                    <TimeFilterControl
+                      mode="chips"
+                      chipStyle="pill"
+                      value={timePeriod}
+                      onChange={setTimePeriod}
+                      options={CANONICAL_TIME_OPTIONS}
+                      labelOverrides={CANONICAL_TIME_LABELS}
+                      allowCustom
+                      customFrom={customFrom}
+                      customTo={customTo}
+                      onCustomRangeChange={({ fromISO, toISO }) => {
+                        setCustomFrom(fromISO);
+                        setCustomTo(toISO);
+                      }}
+                    />
                   </div>
                   <div className="space-y-3">
                     {[

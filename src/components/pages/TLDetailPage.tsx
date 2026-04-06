@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { ArrowLeft, Download, Target, Calendar, TrendingUp, TrendingDown, Lock, Unlock } from 'lucide-react';
 import { AdminKPICard } from '../admin/AdminKPICard';
 import { TimePeriod } from '../../lib/domain/constants';
-import { useFilterScope } from '../../contexts/FilterContext';
-import { computeMetrics, computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
+import { computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
+import { getConfigSITarget, getConfigDCFGMVTarget } from '../../lib/configFromDB';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 
 interface KAMData {
   id: string;
@@ -24,21 +26,57 @@ interface TLDetailPageProps {
   onViewKAM?: (kamId: string) => void;
 }
 
-// Build TL details from real data
-function buildTLDetails() {
-  const kamMetrics = computeKAMMetrics(TimePeriod.MTD);
-  const totalMetrics = computeMetrics(TimePeriod.MTD);
+// Build TL details from real data, scoped to the selected TL
+function buildTLDetails(tlId: string) {
+  const db = getRuntimeDBSync();
+  const allKamMetrics = computeKAMMetrics(TimePeriod.MTD);
 
-  const siTarget = 150;
-  const siAch = totalMetrics.stockIns;
+  // Find this TL in org hierarchy
+  const tlInfo = db.org?.tls?.find(t => t.id === tlId);
+  const tlKamIds = new Set(tlInfo?.kams?.map(k => k.id) || []);
+
+  // Filter KAM metrics to only this TL's KAMs
+  const kamMetrics = tlKamIds.size > 0
+    ? allKamMetrics.filter(km => tlKamIds.has(km.kamId))
+    : allKamMetrics;
+
+  // Compute scoped metrics by summing this TL's KAMs
+  const siAch = kamMetrics.reduce((s, km) => s + km.stockIns, 0);
+  const inspections = kamMetrics.reduce((s, km) => s + km.inspections, 0);
+  const totalVisits = kamMetrics.reduce((s, km) => s + km.totalVisits, 0);
+  const completedVisits = kamMetrics.reduce((s, km) => s + km.completedVisits, 0);
+  const totalCalls = kamMetrics.reduce((s, km) => s + km.totalCalls, 0);
+  const connectedCalls = kamMetrics.reduce((s, km) => s + km.connectedCalls, 0);
+  const dcfTotal = kamMetrics.reduce((s, km) => s + km.dcfTotal, 0);
+  const dcfDisbursedValue = kamMetrics.reduce((s, km) => s + km.dcfDisbursedValue, 0);
+
+  const siTarget = getConfigSITarget('TL');
   const achievement = siTarget > 0 ? Math.round((siAch / siTarget) * 100) : 0;
+
+  // DCF target: use config-driven value scaled per TL
+  const dcfGmvTarget = getConfigDCFGMVTarget();
+  const totalTLs = db.org?.tls?.length || 1;
+  const dcfTarget = Math.max(1, Math.round(dcfGmvTarget / totalTLs));
+
+  // Compute channel breakdown from this TL's leads
+  const tlLeads = db.leads.filter(l => tlKamIds.size > 0 ? tlKamIds.has(l.kamId) : true);
+  const channelBreakdown: Record<string, number> = {};
+  tlLeads.forEach(l => {
+    const ch = l.channel || 'Unknown';
+    channelBreakdown[ch] = (channelBreakdown[ch] || 0) + 1;
+  });
+
+  // Lead breakdown by type
+  const sellerLeads = tlLeads.filter(l => l.leadType === 'Seller').length;
+  const inventoryLeads = tlLeads.filter(l => l.leadType === 'Inventory').length;
+  const totalLeads = sellerLeads + inventoryLeads;
 
   // Create daily trend from available data
   const daysInWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const avgDaily = Math.round(siAch / 7);
   const dailySITrend = daysInWeek.map(day => ({
     day,
-    actual: avgDaily + Math.round((Math.random() - 0.5) * 4),
+    actual: avgDaily,
     target: Math.round(siTarget / 30),
   }));
 
@@ -46,41 +84,59 @@ function buildTLDetails() {
     id: km.kamId,
     name: km.kamName,
     stockinsActual: km.stockIns,
-    stockinsTarget: 20,
+    stockinsTarget: getConfigSITarget('KAM'),
     i2si: km.i2si,
     inputScore: km.inputScore,
     productiveCallsPercent: km.callConnectRate,
     productiveVisitsPercent: km.completedVisits > 0 ? Math.round((km.completedVisits / Math.max(km.totalVisits, 1)) * 100) : 0,
   }));
 
+  const avgInputScore = kams.length > 0
+    ? Math.round(kams.reduce((s, k) => s + k.inputScore, 0) / kams.length)
+    : 0;
+  const productiveVisitsPercent = completedVisits > 0
+    ? Math.round((completedVisits / Math.max(totalVisits, 1)) * 100)
+    : 0;
+  const productiveCallsPercent = connectedCalls > 0
+    ? Math.round((connectedCalls / Math.max(totalCalls, 1)) * 100)
+    : 0;
+
   return {
-    name: 'Team Lead',
-    region: 'NCR',
+    name: tlInfo?.name || 'Team Lead',
+    region: (tlInfo?.region || 'NCR') as any,
     kamCount: kamMetrics.length,
     stockinsActual: siAch,
     stockinsTarget: siTarget,
     stockinsAchievement: achievement,
-    dcfCount: totalMetrics.dcfTotal,
-    dcfTarget: 25,
-    dcfValue: totalMetrics.dcfDisbursedValue * 100000,
-    dcfValueTarget: 1500000,
+    stockinsTrend: undefined,
+    dcfCount: dcfTotal,
+    dcfTarget,
+    dcfValue: dcfDisbursedValue * 100000,
+    dcfValueTarget: dcfGmvTarget * 100000,
+    avgInputScore,
+    productiveVisitsPercent,
+    productiveCallsPercent,
+    timeSeriesStockins: dailySITrend,
     dailySITrend,
     i2siByChannel: {
-      GS: { value: totalMetrics.channelBreakdown['GS'] || 0, target: 15 },
-      C2D: { value: totalMetrics.channelBreakdown['C2D'] || 0, target: 20 },
-      C2B: { value: totalMetrics.channelBreakdown['C2B'] || 0, target: 12 },
+      GS: { value: channelBreakdown['GS'] || 0, target: 15 },
+      NGS: { value: channelBreakdown['NGS'] || 0, target: 12 },
     },
+    sellerLeads,
+    inventoryLeads,
+    totalLeads,
     kams,
   };
 }
 
 export function TLDetailPage({ tlId, onBack, onAdjustTargets, onExport, onViewKAM }: TLDetailPageProps) {
-  const { state } = useFilterScope('admin-home');
-  const timePeriod = state.time ?? TimePeriod.LAST_7D;
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [adminNote, setAdminNote] = useState('');
 
   // Get TL details (fallback to tl1 if not found)
-  const tlDetails = buildTLDetails();
+  const tlDetails = buildTLDetails(tlId);
 
   const getValueColor = (value: number, greenThreshold: number, redThreshold: number) => {
     if (value >= greenThreshold) return 'text-green-700';
@@ -88,9 +144,9 @@ export function TLDetailPage({ tlId, onBack, onAdjustTargets, onExport, onViewKA
     return 'text-amber-700';
   };
 
-  const getI2SIStatus = (channel: 'GS' | 'C2D' | 'C2B', value: number) => {
-    const targets = { GS: 15, C2D: 20, C2B: 12 };
-    const target = targets[channel];
+  const getI2SIStatus = (channel: 'GS' | 'NGS', value: number) => {
+    const targets: Record<string, number> = { GS: 15, NGS: 12 };
+    const target = targets[channel] || 15;
     if (value >= target) return 'green';
     if (value >= target * 0.8) return 'amber';
     return 'red';
@@ -126,24 +182,21 @@ export function TLDetailPage({ tlId, onBack, onAdjustTargets, onExport, onViewKA
         </div>
 
         {/* Time period toggle */}
-        <div className="flex items-center gap-2 mb-3">
-          {[
-            { period: TimePeriod.LAST_7D, label: '7 days' },
-            { period: TimePeriod.LAST_30D, label: '30 days' },
-            { period: TimePeriod.QTD, label: 'QTD' },
-          ].map(({ period, label }) => (
-            <button
-              key={period}
-              onClick={() => {/* Time period managed by FilterContext for admin scope */ }}
-              className={`px-4 py-2 rounded-lg text-sm ${timePeriod === period
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700'
-                }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <TimeFilterControl
+          mode="chips"
+          chipStyle="pill"
+          value={timePeriod}
+          onChange={setTimePeriod}
+          options={CANONICAL_TIME_OPTIONS}
+          labelOverrides={CANONICAL_TIME_LABELS}
+          allowCustom
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomRangeChange={({ fromISO, toISO }) => {
+            setCustomFrom(fromISO);
+            setCustomTo(toISO);
+          }}
+        />
       </div>
 
       {/* Summary KPI Cards */}
@@ -283,7 +336,7 @@ export function TLDetailPage({ tlId, onBack, onAdjustTargets, onExport, onViewKA
 
           <div className="space-y-2">
             {Object.entries(tlDetails.i2siByChannel).map(([channel, data]) => {
-              const status = getI2SIStatus(channel as 'GS' | 'C2D' | 'C2B', data.value);
+              const status = getI2SIStatus(channel as 'GS' | 'NGS', data.value);
               return (
                 <div
                   key={channel}
@@ -311,11 +364,11 @@ export function TLDetailPage({ tlId, onBack, onAdjustTargets, onExport, onViewKA
           <div className="space-y-2">
             <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
               <span className="text-sm text-gray-600">Seller Leads</span>
-              <span className="text-sm">248 (59%)</span>
+              <span className="text-sm">{tlDetails.sellerLeads} ({tlDetails.totalLeads > 0 ? Math.round((tlDetails.sellerLeads / tlDetails.totalLeads) * 100) : 0}%)</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
               <span className="text-sm text-gray-600">Inventory Leads</span>
-              <span className="text-sm">172 (41%)</span>
+              <span className="text-sm">{tlDetails.inventoryLeads} ({tlDetails.totalLeads > 0 ? Math.round((tlDetails.inventoryLeads / tlDetails.totalLeads) * 100) : 0}%)</span>
             </div>
           </div>
         </div>

@@ -65,13 +65,19 @@ function ragToColor(rag: string): 'green' | 'amber' | 'red' {
 }
 
 function deriveStage(lead: DCFLead): string {
-  const s = lead.overallStatus.toUpperCase();
-  if (s === 'DISBURSED') return 'Disbursed';
-  if (s === 'REJECTED') return 'Rejected';
-  if (s.includes('PENDING')) return 'Approval Pending';
-  if (s === 'IN_PROGRESS') return 'In Progress';
-  if (s === 'DELAYED') return 'Delayed';
-  return lead.currentSubStage || 'Unknown';
+  // Terminal states take priority
+  const s = (lead.overallStatus || '').toUpperCase();
+  if (s === 'DISBURSED') return 'Disbursal';
+  if (s === 'REJECTED' || s === 'DELAYED') return 'Rejected';
+  // Bucket by funnel so every lead maps to one of the canonical DCF stages.
+  // Keeps filter-chip counts in sync with the DCF channel pill total.
+  const funnel = (lead.currentFunnel || '').toUpperCase();
+  if (funnel === 'SOURCING') return 'Sourcing';
+  if (funnel === 'CREDIT') return 'Credit';
+  if (funnel === 'CONVERSION') return 'Conversion';
+  if (funnel === 'DISBURSAL') return 'Disbursal';
+  if (funnel === 'REJECTED') return 'Rejected';
+  return 'Sourcing';
 }
 
 function buildDCFBadges(lead: DCFLead): DCFLeadCardVM['badges'] {

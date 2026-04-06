@@ -36,16 +36,16 @@
 - `LEADS` → `/leads`
 - `LEAD_DETAIL` → `/leads/:id`
 - `VISITS` → `/visits`
-- `VISIT_DETAIL` → `/visits/:id/detail`
+- `VISIT_DETAIL` → `/visits/:id/detail` (REMOVED in Wave 2)
 
 ### Call Routes (3)
-- `CALL_DETAIL` → `/calls/:id/detail`
+- `CALL_DETAIL` → `/calls/:id/detail` (REMOVED in Wave 2)
 - `CALL_FEEDBACK` → `/calls/:id/feedback`
-- `TL_CALL_DETAIL` → `/tl/calls/:id`
+- `TL_CALL_DETAIL` → `/tl/calls/:id` (REMOVED in Wave 2)
 
 ### Visit Routes (2)
 - `VISIT_FEEDBACK` → `/visits/:id/feedback`
-- `VISIT_CHECKIN` → `/visits/:id/checkin`
+- `VISIT_CHECKIN` → `/visits/:id/checkin` (REMOVED in Wave 2)
 
 ### DCF Routes (8)
 - `DCF` → `/dcf`
@@ -55,7 +55,7 @@
 - `DCF_DEALER_DETAIL` → `/dcf/dealers/:id`
 - `DCF_LEAD_DETAIL` → `/dcf/leads/:id`
 - `DCF_ONBOARDING_DETAIL` → `/dcf/dealers/:id/onboarding`
-- `DCF_ONBOARDING_FORM` → `/dcf/onboarding/:id`
+- `DCF_ONBOARDING_FORM` → `/dcf/onboarding/:id` (REMOVED in Wave 2)
 
 ### Other Routes (3)
 - `PERFORMANCE` → `/performance`
@@ -327,14 +327,14 @@
 ### Data Files
 
 **Data Layer (`/data/`):**
-- mockDatabase.ts ⭐ (SINGLE SOURCE OF TRUTH)
+- runtimeDB.ts ⭐ (SINGLE SOURCE OF TRUTH)
 - selectors.ts ⭐ (DATA ACCESS LAYER)
 - dtoSelectors.ts ⭐ (DTO TRANSFORMATIONS)
 - types.ts ⭐ (ENTITY DEFINITIONS)
 - vcSelectors.ts
-- testValidation.ts
-- validateMockDB.ts
-- adminOrgMock.ts
+- testValidation.ts (DELETED in Wave 2)
+- validateMockDB.ts (DELETED in Wave 2)
+- adminOrgMock.ts (RENAMED to adminOrgData.ts in Wave 2)
 - README.md
 
 **Adapters (Legacy - Flagged for Archive):**
@@ -445,7 +445,7 @@
 
 **Protected Files (DO NOT ARCHIVE):**
 - `/components/figma/ImageWithFallback.tsx`
-- `/data/mockDatabase.ts`
+- `/data/runtimeDB.ts`
 - `/lib/metricsEngine.ts`
 - `/lib/incentiveEngine.ts`
 - `/lib/productivityEngine.ts`

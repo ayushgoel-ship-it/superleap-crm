@@ -270,11 +270,11 @@ function TimeFilterStateDemo() {
 
 /* ── Multi-Filter Summary ── */
 function MultiFilterSummary() {
-  const [channel, setChannel] = useState<string[]>(['C2B']);
+  const [channel, setChannel] = useState<string[]>(['NGS']);
   const [status, setStatus] = useState<string[]>(['Active']);
   const [segment, setSegment] = useState<string[]>([]);
 
-  const channels = ['C2B', 'C2D', 'GS', 'DCF'];
+  const channels = ['NGS', 'GS', 'DCF'];
   const statuses = ['Active', 'Dormant', 'New', 'Churned'];
   const segments = ['A', 'B', 'C'];
 

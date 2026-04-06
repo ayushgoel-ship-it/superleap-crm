@@ -223,28 +223,21 @@
 
 ## 3. Orphan Routes (Defined but Never Reachable)
 
-### 3.1 ROUTES.VISIT_DETAIL
-- **Path:** `/navigation/routes.ts` - `VISIT_DETAIL: '/visits/:id/detail'`
-- **Why Orphan:** No component renders this route in App.tsx
-- **Current Usage:** Visits use VISIT_FEEDBACK, not VISIT_DETAIL
-- **Risk:** LOW
-- **Action:** REMOVE from routes.ts (not a file, just constant)
+### 3.1 ROUTES.VISIT_DETAIL — REMOVED
+- **Status:** REMOVED (Wave 2 cleanup)
+- **Former Path:** `/navigation/routes.ts` - `VISIT_DETAIL: '/visits/:id/detail'`
 
 ---
 
-### 3.2 ROUTES.CALL_DETAIL
-- **Path:** `/navigation/routes.ts` - `CALL_DETAIL: '/calls/:id/detail'`
-- **Why Orphan:** Same as above - feedback route used instead
-- **Risk:** LOW
-- **Action:** REVIEW then REMOVE from routes.ts
+### 3.2 ROUTES.CALL_DETAIL — REMOVED
+- **Status:** REMOVED (Wave 2 cleanup)
+- **Former Path:** `/navigation/routes.ts` - `CALL_DETAIL: '/calls/:id/detail'`
 
 ---
 
-### 3.3 ROUTES.DCF_ONBOARDING_FORM
-- **Path:** `/navigation/routes.ts` - `DCF_ONBOARDING_FORM: '/dcf/onboarding/:id'`
-- **Why Orphan:** DCF onboarding moved to inline component in DealerDetailPageV2
-- **Risk:** LOW
-- **Action:** REMOVE from routes.ts if confirmed unused
+### 3.3 ROUTES.DCF_ONBOARDING_FORM — REMOVED
+- **Status:** REMOVED (Wave 2 cleanup)
+- **Former Path:** `/navigation/routes.ts` - `DCF_ONBOARDING_FORM: '/dcf/onboarding/:id'`
 
 ---
 
@@ -348,7 +341,7 @@ These files are >500 lines and could benefit from splitting in future refactors.
 These files are system-protected and must NEVER be archived:
 
 - `/components/figma/ImageWithFallback.tsx` (Figma integration)
-- `/data/mockDatabase.ts` (single source of truth)
+- `/data/runtimeDB.ts` (single source of truth - Supabase cache)
 - `/lib/metricsEngine.ts` (canonical metrics)
 - `/lib/incentiveEngine.ts` (canonical incentives)
 - `/lib/productivityEngine.ts` (canonical productivity)
@@ -372,10 +365,10 @@ These files are system-protected and must NEVER be archived:
 8. `/components/pages/DCFOnboardingPage.tsx`
 9. `/data/adapters/` (entire folder)
 
-**Route Constants to Remove:**
-1. `ROUTES.VISIT_DETAIL` (verify first)
-2. `ROUTES.CALL_DETAIL` (verify first)
-3. `ROUTES.DCF_ONBOARDING_FORM` (verify first)
+**Route Constants — COMPLETED:**
+1. `ROUTES.VISIT_DETAIL` — REMOVED
+2. `ROUTES.CALL_DETAIL` — REMOVED
+3. `ROUTES.DCF_ONBOARDING_FORM` — REMOVED
 
 **Total:** 9 files + 1 folder
 

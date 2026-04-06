@@ -31,17 +31,27 @@ import { LeadDetailV2AdapterForNotifications } from './LeadDetailV2AdapterForNot
 import { FilterChip, StatusChip } from '../premium/Chip';
 import { EmptyState } from '../premium/EmptyState';
 import { toast } from 'sonner@2.0.3';
+import {
+  getFilteredLeads,
+  getFilteredDCFLeads,
+  getFilteredCalls,
+  classifyLeadStage,
+  isStockIn,
+  isInspection,
+} from '../../data/canonicalMetrics';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
+import { TimePeriod } from '../../lib/domain/constants';
 
 // ── Types ──
 
-type Channel = 'C2B' | 'C2D' | 'GS' | 'DCF';
+type Channel = 'NGS' | 'GS' | 'DCF';
 type NotifGroup = 'action' | 'feedback' | 'dealer' | 'system';
 type TabFilter = 'unread' | 'all';
 
 interface SelectedLead {
   regNo: string;
   customer: string;
-  channel: Channel;
+  channel: Channel | string;
   leadType: 'Seller' | 'Inventory';
   currentStage: string;
 }
@@ -132,153 +142,159 @@ export function NotificationCenterPage({ userRole }: NotificationCenterPageProps
     );
   }
 
-  // ── Mock notifications ──
-  const now = new Date();
-  const notifications: Notification[] = useMemo(() => [
-    // Action Required
-    {
-      id: 'n1',
-      group: 'action',
-      icon: AlertTriangle,
-      iconBg: 'bg-rose-50',
-      iconColor: 'text-rose-600',
-      title: 'Lead Purchased \u2014 Put PR immediately',
-      description: 'Priya Singh \u00b7 C24-876542 accepted 3 days ago. No PR raised yet.',
-      timestamp: new Date(now.getTime() - 2 * 3600000).toISOString(),
-      isRead: false,
-      lead: { regNo: 'C24-876542', customer: 'Priya Singh', channel: 'C2D', leadType: 'Inventory', currentStage: 'lead_created' },
-      cta: { label: 'View Lead', action: () => {} },
-      meta: [{ label: 'Potential', value: '\u20B912,300' }],
-    },
-    {
-      id: 'n2',
-      group: 'action',
-      icon: AlertTriangle,
-      iconBg: 'bg-rose-50',
-      iconColor: 'text-rose-600',
-      title: 'OCB Not Raised',
-      description: 'Rahul Gupta \u00b7 C24-876541 \u2014 Inspection done 2 days ago, OCB still missing.',
-      timestamp: new Date(now.getTime() - 5 * 3600000).toISOString(),
-      isRead: false,
-      lead: { regNo: 'C24-876541', customer: 'Rahul Gupta', channel: 'C2B', leadType: 'Inventory', currentStage: 'inspection_done' },
-      cta: { label: 'View Lead', action: () => {} },
-      meta: [{ label: 'Potential', value: '\u20B910,500' }],
-    },
-    {
-      id: 'n3',
-      group: 'action',
-      icon: Clock,
-      iconBg: 'bg-amber-50',
-      iconColor: 'text-amber-600',
-      title: 'PLL Aging \u2014 5 days',
-      description: 'Neha Sharma \u00b7 C24-876540 stuck in PLL for 5 days. Follow up required.',
-      timestamp: new Date(now.getTime() - 8 * 3600000).toISOString(),
-      isRead: false,
-      lead: { regNo: 'C24-876540', customer: 'Neha Sharma', channel: 'GS', leadType: 'Inventory', currentStage: 'lead_purchased' },
-      cta: { label: 'View Lead', action: () => {} },
-      meta: [{ label: 'Potential', value: '\u20B99,200' }],
-    },
+  // ── Dynamic notifications from canonical data ──
+  const notifications: Notification[] = useMemo(() => {
+    const items: Notification[] = [];
+    const now = new Date();
+    const twoDaysMs = 2 * 24 * 3600000;
 
-    // Feedback Pending
-    {
-      id: 'n4',
-      group: 'feedback',
-      icon: MessageSquare,
-      iconBg: 'bg-indigo-50',
-      iconColor: 'text-indigo-600',
-      title: '3CA Pending \u2014 No RA call',
-      description: 'C24-876538 created 72 hours ago. No RA call logged.',
-      timestamp: new Date(now.getTime() - 12 * 3600000).toISOString(),
-      isRead: false,
-      cta: { label: 'Call RA', action: () => toast.info('Calling RA Suresh...') },
-    },
-    {
-      id: 'n5',
-      group: 'feedback',
-      icon: Phone,
-      iconBg: 'bg-indigo-50',
-      iconColor: 'text-indigo-600',
-      title: 'Call feedback incomplete',
-      description: 'Daily Motoz call 2h ago \u2014 add your feedback to track productivity.',
-      timestamp: new Date(now.getTime() - 2.5 * 3600000).toISOString(),
-      isRead: false,
-      cta: { label: 'Add Feedback', action: () => toast.info('Opening feedback form') },
-    },
-    {
-      id: 'n6',
-      group: 'feedback',
-      icon: Clock,
-      iconBg: 'bg-amber-50',
-      iconColor: 'text-amber-600',
-      title: 'Low Call Volume this week',
-      description: 'Only 8 calls in last 7 days (target: 25). Step up outreach.',
-      timestamp: new Date(now.getTime() - 24 * 3600000).toISOString(),
-      isRead: true,
-      cta: { label: 'View Activity', action: () => toast.info('Navigate to Activity') },
-    },
+    // Fetch recent data (last 7 days = notification expiry window)
+    const recentLeads = getFilteredLeads({ period: TimePeriod.LAST_7D });
+    const recentDCF = getFilteredDCFLeads({ period: TimePeriod.LAST_7D });
+    const recentCalls = getFilteredCalls({ period: TimePeriod.LAST_7D });
+    const allLeads30d = getFilteredLeads({ period: TimePeriod.LAST_30D });
 
-    // Dealer Updates
-    {
-      id: 'n7',
-      group: 'dealer',
-      icon: TrendingDown,
-      iconBg: 'bg-amber-50',
-      iconColor: 'text-amber-600',
-      title: 'Top Dealer \u2014 Zero Leads',
-      description: 'Gupta Auto World (GGN-001) \u2014 no leads in last 10 days.',
-      timestamp: new Date(now.getTime() - 18 * 3600000).toISOString(),
-      isRead: false,
-      cta: { label: 'Call Dealer', action: () => toast.info('Calling Gupta Auto World...') },
-    },
-    {
-      id: 'n8',
-      group: 'dealer',
-      icon: Users,
-      iconBg: 'bg-amber-50',
-      iconColor: 'text-amber-600',
-      title: 'DCF \u2014 No Leads',
-      description: 'Sharma Motors onboarded 15 days ago, zero DCF leads so far.',
-      timestamp: new Date(now.getTime() - 36 * 3600000).toISOString(),
-      isRead: true,
-      cta: { label: 'Review', action: () => toast.info('Opening Sharma Motors DCF') },
-    },
-    {
-      id: 'n9',
-      group: 'dealer',
-      icon: TrendingDown,
-      iconBg: 'bg-rose-50',
-      iconColor: 'text-rose-600',
-      title: 'Declining Performance',
-      description: 'Royal Car Bazaar (DEL-045) \u2014 leads down 60% vs last month.',
-      timestamp: new Date(now.getTime() - 48 * 3600000).toISOString(),
-      isRead: true,
-      cta: { label: 'Call Dealer', action: () => toast.info('Calling Royal Car Bazaar...') },
-    },
+    // ── ACTION: CEP Pending (no CEP or CEP=0) ──
+    recentLeads
+      .filter(l => !l.cep || l.cep === 0)
+      .slice(0, 3)
+      .forEach((lead) => {
+        items.push({
+          id: `cep-${lead.id}`,
+          group: 'action',
+          icon: AlertTriangle,
+          iconBg: 'bg-rose-50',
+          iconColor: 'text-rose-600',
+          title: 'CEP Pending',
+          description: `${lead.customerName} \u00b7 ${lead.regNo || lead.registrationNumber || 'N/A'} \u2014 No Customer Expected Price set.`,
+          timestamp: lead.createdAt,
+          isRead: false,
+          lead: {
+            regNo: lead.regNo || lead.registrationNumber || '',
+            customer: lead.customerName,
+            channel: lead.channel as Channel,
+            leadType: lead.leadType as 'Seller' | 'Inventory',
+            currentStage: lead.stage,
+          },
+          cta: { label: 'View Lead', action: () => {} },
+        });
+      });
 
-    // System / Info
-    {
-      id: 'n10',
-      group: 'system',
-      icon: CheckCircle2,
-      iconBg: 'bg-emerald-50',
-      iconColor: 'text-emerald-600',
-      title: 'Inspection completed',
-      description: 'Maruti Swift (DL1CAC1234) inspection done. Awaiting OCB.',
-      timestamp: new Date(now.getTime() - 4 * 3600000).toISOString(),
-      isRead: true,
-    },
-    {
-      id: 'n11',
-      group: 'system',
-      icon: Info,
-      iconBg: 'bg-slate-100',
-      iconColor: 'text-slate-500',
-      title: 'Monthly target updated',
-      description: 'Your February SI target has been revised to 18 stock-ins.',
-      timestamp: new Date(now.getTime() - 72 * 3600000).toISOString(),
-      isRead: true,
-    },
-  ], [now]);
+    // ── ACTION: Stale post-inspection (Inspection Done >2 days, not moved) ──
+    recentLeads
+      .filter(l => {
+        const canonical = classifyLeadStage(l.stage, l.createdAt);
+        if (canonical !== 'In Nego') return false;
+        // Check if inspection date is >2 days old
+        const inspDate = l.inspectionDate || l.updatedAt;
+        return inspDate && (now.getTime() - new Date(inspDate).getTime()) > twoDaysMs;
+      })
+      .slice(0, 3)
+      .forEach((lead) => {
+        const daysSinceInsp = Math.floor((now.getTime() - new Date(lead.inspectionDate || lead.updatedAt).getTime()) / 86_400_000);
+        items.push({
+          id: `stale-insp-${lead.id}`,
+          group: 'action',
+          icon: Clock,
+          iconBg: 'bg-amber-50',
+          iconColor: 'text-amber-600',
+          title: `Inspection Done \u2014 ${daysSinceInsp}d stale`,
+          description: `${lead.customerName} \u00b7 ${lead.regNo || 'N/A'} \u2014 Inspection completed ${daysSinceInsp} days ago, no OCB/PR raised.`,
+          timestamp: lead.updatedAt,
+          isRead: false,
+          lead: {
+            regNo: lead.regNo || lead.registrationNumber || '',
+            customer: lead.customerName,
+            channel: lead.channel as Channel,
+            leadType: lead.leadType as 'Seller' | 'Inventory',
+            currentStage: lead.stage,
+          },
+          cta: { label: 'View Lead', action: () => {} },
+          meta: lead.expectedRevenue ? [{ label: 'Potential', value: `\u20B9${(lead.expectedRevenue / 1000).toFixed(1)}K` }] : undefined,
+        });
+      });
+
+    // ── ACTION: DCF Delayed ──
+    recentDCF
+      .filter(d => d.overallStatus === 'DELAYED')
+      .slice(0, 3)
+      .forEach((dcf) => {
+        items.push({
+          id: `dcf-delay-${dcf.id}`,
+          group: 'action',
+          icon: AlertTriangle,
+          iconBg: 'bg-rose-50',
+          iconColor: 'text-rose-600',
+          title: 'DCF Delayed',
+          description: `${dcf.customerName} \u00b7 ${dcf.regNo} \u2014 Loan ${dcf.currentFunnel}/${dcf.currentSubStage} stuck.`,
+          timestamp: dcf.lastUpdatedAt || dcf.createdAt,
+          isRead: false,
+          cta: { label: 'Review', action: () => toast.info(`Opening DCF lead ${dcf.id}`) },
+        });
+      });
+
+    // ── FEEDBACK: Calls with pending feedback ──
+    recentCalls
+      .filter(c => c.feedbackStatus === 'PENDING')
+      .slice(0, 4)
+      .forEach((call) => {
+        items.push({
+          id: `fb-${call.id}`,
+          group: 'feedback',
+          icon: Phone,
+          iconBg: 'bg-indigo-50',
+          iconColor: 'text-indigo-600',
+          title: 'Call feedback pending',
+          description: `${call.dealerName} (${call.dealerCode}) \u2014 ${call.outcome || call.callStatus} call, feedback not submitted.`,
+          timestamp: call.callDate,
+          isRead: false,
+          cta: { label: 'Add Feedback', action: () => toast.info('Opening feedback form') },
+        });
+      });
+
+    // ── DEALER: Dormant dealers (0 leads in last 30 days) ──
+    const dealerIdsWithLeads30d = new Set(allLeads30d.map(l => l.dealerId));
+    (getRuntimeDBSync().dealers as import('../../data/types').Dealer[])
+      .filter(d => d.status === 'active' && !dealerIdsWithLeads30d.has(d.id))
+      .slice(0, 3)
+      .forEach((dealer) => {
+        items.push({
+          id: `dormant-${dealer.id}`,
+          group: 'dealer',
+          icon: TrendingDown,
+          iconBg: 'bg-amber-50',
+          iconColor: 'text-amber-600',
+          title: 'Dormant Dealer \u2014 Zero Leads',
+          description: `${dealer.name} (${dealer.code}) \u2014 no leads in last 30 days.`,
+          timestamp: new Date(now.getTime() - 24 * 3600000).toISOString(), // approximate
+          isRead: false,
+          cta: { label: 'Call Dealer', action: () => toast.info(`Calling ${dealer.name}...`) },
+        });
+      });
+
+    // ── SYSTEM: Recent stock-ins (celebration) ──
+    recentLeads
+      .filter(l => isStockIn(l.stage))
+      .slice(0, 3)
+      .forEach((lead) => {
+        items.push({
+          id: `si-${lead.id}`,
+          group: 'system',
+          icon: CheckCircle2,
+          iconBg: 'bg-emerald-50',
+          iconColor: 'text-emerald-600',
+          title: 'Stock-in completed',
+          description: `${lead.make} ${lead.model} (${lead.regNo || 'N/A'}) \u2014 ${lead.customerName} stock-in done.`,
+          timestamp: lead.updatedAt,
+          isRead: true,
+        });
+      });
+
+    // Sort each group by timestamp (newest first)
+    items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    return items;
+  }, []);
 
   // Apply read/archived overrides
   const liveNotifications = useMemo(
@@ -580,12 +596,21 @@ function TLKAMSelector() {
   const [selectedKAM, setSelectedKAM] = useState('all');
   const [open, setOpen] = useState(false);
 
-  const kams = [
-    { id: 'all', name: 'All KAMs' },
-    { id: 'kam1', name: 'Rajesh Kumar' },
-    { id: 'kam2', name: 'Priya Sharma' },
-    { id: 'kam3', name: 'Amit Patel' },
-  ];
+  // Extract unique KAM names from actual lead data
+  const kams = useMemo(() => {
+    const allLeads = getFilteredLeads({ period: TimePeriod.LAST_30D });
+    const kamMap = new Map<string, string>(); // kamId -> kamName
+    for (const lead of allLeads) {
+      if (lead.kamId && lead.kamName && !kamMap.has(lead.kamId)) {
+        kamMap.set(lead.kamId, lead.kamName);
+      }
+    }
+    const entries: { id: string; name: string }[] = [{ id: 'all', name: 'All KAMs' }];
+    for (const [id, name] of kamMap) {
+      entries.push({ id, name });
+    }
+    return entries;
+  }, []);
 
   return (
     <div className="flex items-center gap-2">

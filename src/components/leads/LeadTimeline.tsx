@@ -34,14 +34,14 @@ export function LeadTimeline({ channel, currentStage, leadData = {}, ocbStatus, 
   // Generate timeline stages based on channel
   const getTimelineStages = (): TimelineStage[] => {
     if (channel === 'NGS' || channel === 'GS') {
-      return getC2BTimeline();
+      return getNGSTimeline();
     } else if (channel === 'DCF') {
       return getDCFTimeline();
     }
     return [];
   };
 
-  const getC2BTimeline = (): TimelineStage[] => {
+  const getNGSTimeline = (): TimelineStage[] => {
     const stages = [
       'lead_created',
       'contact_completed',
@@ -161,7 +161,8 @@ export function LeadTimeline({ channel, currentStage, leadData = {}, ocbStatus, 
     ];
   };
 
-  const getC2DTimeline = (): TimelineStage[] => {
+  // Legacy: C2D timeline kept as NGS inventory flow for reference
+  const getNGSInventoryTimeline = (): TimelineStage[] => {
     const stages = [
       'lead_created',
       'contact_completed',
@@ -443,7 +444,7 @@ export function LeadTimeline({ channel, currentStage, leadData = {}, ocbStatus, 
         </div>
       )}
 
-      {/* Seller Backout Notice (C2D only) */}
+      {/* Seller Backout Notice (NGS inventory only) */}
       {/* Seller Backout Notice - kept for legacy compatibility */}
       {false && sellerBackout && (
         <div className="mb-4 p-3 bg-red-50 border-2 border-red-200 rounded-lg">
@@ -470,7 +471,7 @@ export function LeadTimeline({ channel, currentStage, leadData = {}, ocbStatus, 
         {visibleStages.map((stage, index) => {
           const isExpanded = expandedStages.has(stage.id);
           const hasMetadata = stage.metadata && stage.metadata.length > 0;
-          const isDisabledDueToBackout = channel === 'C2D' && sellerBackout && leadFeeRefunded && 
+          const isDisabledDueToBackout = channel === 'NGS' && sellerBackout && leadFeeRefunded &&
             ['mode_selected', 'payment_initiated', 'stockin_stockout', 'payout'].includes(stage.id);
           
           return (

@@ -3,7 +3,7 @@ import { ChevronLeft, Phone, Clock, Building2, User, MessageSquare, Play, Pause,
 
 type CallOutcome = 'connected_positive' | 'connected_neutral' | 'connected_negative' | 'not_reachable' | 'switched_off' | 'wrong_number' | 'call_back_later';
 type ProductiveStatus = 'productive' | 'non_productive' | 'unknown';
-type Channel = 'C2B' | 'C2D' | 'GS' | 'DCF';
+type Channel = 'NGS' | 'GS' | 'DCF';
 
 interface CallDetailProps {
   dealerName: string;
@@ -195,12 +195,10 @@ export function CallDetail({
                 <span className="text-gray-600">Channel: </span>
                 <span
                   className={`px-2 py-0.5 rounded text-xs ${
-                    channel === 'C2B'
-                      ? 'bg-blue-100 text-blue-700'
-                      : channel === 'C2D'
-                      ? 'bg-green-100 text-green-700'
+                    channel === 'NGS'
+                      ? 'bg-violet-100 text-violet-700'
                       : channel === 'GS'
-                      ? 'bg-purple-100 text-purple-700'
+                      ? 'bg-emerald-100 text-emerald-700'
                       : 'bg-amber-100 text-amber-700'
                   }`}
                 >

@@ -136,7 +136,7 @@ curl $BASE_URL/v1/dashboard/home?time_scope=mtd \
 ## 3. GET /v1/leads
 
 ```bash
-curl "$BASE_URL/v1/leads?channel=C2B&status=Active&time_scope=mtd&page=1&page_size=20" \
+curl "$BASE_URL/v1/leads?channel=NGS&status=Active&time_scope=mtd&page=1&page_size=20" \
   -H "X-User-Id: kam-ncr-01" \
   -H "X-User-Role: KAM"
 ```
@@ -160,7 +160,7 @@ curl "$BASE_URL/v1/leads?channel=C2B&status=Active&time_scope=mtd&page=1&page_si
         "make": "Maruti",
         "model": "Swift",
         "year": 2019,
-        "channel": "C2B",
+        "channel": "NGS",
         "lead_type": "Seller",
         "stage": "Inspection Scheduled",
         "sub_stage": null,
@@ -187,7 +187,7 @@ curl "$BASE_URL/v1/leads?channel=C2B&status=Active&time_scope=mtd&page=1&page_si
     "summary": {
       "total_leads": 42,
       "by_status": { "Active": 28, "Won": 10, "Lost": 3, "Expired": 1 },
-      "by_channel": { "C2B": 20, "C2D": 15, "GS": 7 }
+      "by_channel": { "NGS": 35, "GS": 7 }
     }
   },
   "meta": { "timestamp": "...", "request_id": "...", "time_scope": "mtd", "role": "KAM" },

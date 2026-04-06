@@ -81,11 +81,11 @@ export {
 } from './vcSelectors';
 
 // ============================================================================
-// ADMIN ORG MOCK (Admin-specific data)
+// ADMIN ORG DATA (Admin-specific data)
 // ============================================================================
 export {
   // Export admin org data if needed
-} from './adminOrgMock';
+} from './adminOrgData';
 
 // ============================================================================
 // NOTES FOR DEVELOPERS

@@ -32,7 +32,7 @@ In V1, Google Sheets is the operational data entry layer. Each tab maps 1:1 to a
 | `Users` | HR/Admin | ~200 | Weekly | `user_id` |
 | `Teams` | HR/Admin | ~20 | Weekly | `team_id` |
 | `Dealers` | Ops | ~2,000 | Daily | `dealer_id` |
-| `Leads_C2B_C2D_GS` | Ops/KAM | ~50,000/mo | Real-time (Form) | `lead_id` |
+| `Leads_NGS_GS` | Ops/KAM | ~50,000/mo | Real-time (Form) | `lead_id` |
 | `DCF_Leads` | DCF Ops | ~5,000/mo | Daily | `loan_id` |
 | `Call_Events` | Telephony/CRM | ~100,000/mo | Hourly | `call_id` |
 | `Visit_Events` | Mobile App | ~30,000/mo | Real-time | `visit_id` |
@@ -63,12 +63,12 @@ dcf_onboarded (bool) | dcf_onboarded_at |
 created_at | updated_at | deleted_at
 ```
 
-#### Leads_C2B_C2D_GS
+#### Leads_NGS_GS
 ```
 lead_id | dealer_id | kam_user_id | tl_user_id |
 customer_name | customer_phone | 
 reg_no | make | model | year | variant |
-channel (C2B|C2D|GS) | lead_type (Seller|Inventory) |
+channel (NGS|GS) | lead_type (Seller|Inventory) |
 stage | sub_stage | status (Active|Won|Lost|Expired) |
 expected_revenue | actual_revenue | cep |
 city | region |
@@ -268,7 +268,7 @@ CREATE TABLE dealers (
 );
 
 -- ============================================================
--- LEADS (C2B / C2D / GS)
+-- LEADS (NGS / GS)
 -- ============================================================
 CREATE TABLE leads (
   lead_id       TEXT PRIMARY KEY,           -- e.g., 'lead-ncr-001'
@@ -288,7 +288,7 @@ CREATE TABLE leads (
   variant       TEXT,
   
   -- Business
-  channel       TEXT NOT NULL CHECK (channel IN ('C2B', 'C2D', 'GS')),
+  channel       TEXT NOT NULL CHECK (channel IN ('NGS', 'GS')),
   lead_type     TEXT NOT NULL CHECK (lead_type IN ('Seller', 'Inventory')),
   stage         TEXT NOT NULL,              -- PR, PLL, Inspection Scheduled, Stock-in, etc.
   sub_stage     TEXT,

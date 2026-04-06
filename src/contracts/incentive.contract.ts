@@ -36,8 +36,7 @@ export interface IncentiveSummaryDTO {
 export interface IncentiveDetailDTO extends IncentiveSummaryDTO {
   // SI breakdown
   siBreakdown: {
-    c2b: number;
-    c2d: number;
+    ngs: number;
     gs: number;
   };
   

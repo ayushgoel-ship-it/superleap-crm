@@ -65,9 +65,9 @@ function formatAmount(amount: number): string {
 }
 
 function channelVariant(ch: string): 'info' | 'warning' | 'success' | 'neutral' {
-  if (ch === 'C2B') return 'info';
-  if (ch === 'C2D') return 'warning';
+  if (ch === 'NGS') return 'info';
   if (ch === 'GS') return 'success';
+  if (ch === 'DCF') return 'warning';
   return 'neutral';
 }
 
@@ -873,7 +873,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
         initialConfidence={localCepConfidence}
         initialNotes={localCepNotes}
         c24Quote={c24Quote}
-        channel={lead.channel as 'C2B' | 'C2D' | 'GS'}
+        channel={lead.channel as 'NGS' | 'GS' | 'DCF'}
         vehicleInfo={`${lead.make} ${lead.model} ${lead.year} \u2022 ${lead.regNo || lead.registrationNumber}`}
       />
 

@@ -8,7 +8,7 @@ import { useActivity } from '../../contexts/ActivityContext';
 
 type CallOutcome = 'connected_positive' | 'connected_neutral' | 'connected_negative' | 'not_reachable' | 'switched_off' | 'wrong_number' | 'call_back_later';
 type ProductiveStatus = 'productive' | 'non_productive' | 'unknown';
-type Channel = 'C2B' | 'C2D' | 'GS' | 'DCF';
+type Channel = 'NGS' | 'GS' | 'DCF';
 type DealerStage = 'lead_giving' | 'inspecting' | 'transacting' | 'dormant' | 'dcf_onboarded';
 type FeedbackStatus = 'Pending' | 'Submitted';
 

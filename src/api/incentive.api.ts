@@ -56,8 +56,7 @@ export async function updateUserTargets(params: {
   userId: string;
   month: string;
   targets: {
-    c2b?: number;
-    c2d?: number;
+    ngs?: number;
     gs?: number;
     dcf?: number;
   };

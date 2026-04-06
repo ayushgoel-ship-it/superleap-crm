@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { getAllDealers } from '../../data/selectors';
-import { getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { getFilteredDCFLeads, getDealerLeadMetrics, deriveDealerActivityStage } from '../../data/canonicalMetrics';
 import { TimePeriod } from '../../lib/domain/constants';
 
 interface DCFDealersListPageProps {
@@ -35,12 +35,14 @@ export function DCFDealersListPage({ onBack, filterType, dateRange, onDealerClic
     const rows: DealerRow[] = allDealers.map(d => {
       const dcfLeads = allDCFLeads.filter(l => l.dealerId === d.id);
       const disbursed = dcfLeads.filter(l => l.overallStatus === 'DISBURSED');
+      const metrics = getDealerLeadMetrics(d.id, { period });
+      const stage = deriveDealerActivityStage(metrics, d.status);
       return {
         id: d.id,
         name: d.name,
         code: d.code,
         city: d.city,
-        status: d.status === 'active' ? 'Active' : d.status === 'dormant' ? 'Dormant' : 'Inactive',
+        status: stage === 'Inactive' ? 'Inactive' : stage === 'Dormant' ? 'Dormant' : 'Active',
         dcfLeads: dcfLeads.length,
         mtdLeads: dcfLeads.length,
         mtdDisbursals: disbursed.length,

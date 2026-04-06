@@ -1,5 +1,5 @@
 -- ============================================================
--- MIGRATION 005: CREATE LEADS TABLE (C2B / C2D / GS)
+-- MIGRATION 005: CREATE LEADS TABLE (NGS / GS)
 -- Phase: 6A | Source: docs/DATA_ARCHITECTURE.md §3.1
 -- ============================================================
 
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS leads (
   variant       TEXT,
 
   -- Business
-  channel       TEXT NOT NULL CHECK (channel IN ('C2B', 'C2D', 'GS')),
+  channel       TEXT NOT NULL CHECK (channel IN ('NGS', 'GS')),
   lead_type     TEXT NOT NULL CHECK (lead_type IN ('Seller', 'Inventory')),
   stage         TEXT NOT NULL,              -- PR, PLL, Inspection Scheduled, Stock-in, etc.
   sub_stage     TEXT,
@@ -46,6 +46,6 @@ CREATE TABLE IF NOT EXISTS leads (
   deleted_at    TIMESTAMPTZ
 );
 
-COMMENT ON TABLE leads IS 'C2B/C2D/GS leads from dealer referrals';
+COMMENT ON TABLE leads IS 'NGS/GS leads from dealer referrals';
 COMMENT ON COLUMN leads.stage IS 'PR → PLL → Inspection Scheduled → Inspection Done → Stock-in';
 COMMENT ON COLUMN leads.cep IS 'Customer Expected Price';

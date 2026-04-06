@@ -57,7 +57,7 @@ function DealerCardDemo() {
             </div>
             <div className="flex-1">
               <div className="text-[14px] font-semibold text-slate-900">Rajesh Motors</div>
-              <div className="text-[11px] text-slate-500">Dealer {'\u2022'} Segment A {'\u2022'} C2B</div>
+              <div className="text-[11px] text-slate-500">Dealer {'\u2022'} Segment A {'\u2022'} NGS</div>
             </div>
             {state === 'selected' && (
               <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center sl-animate-chip">

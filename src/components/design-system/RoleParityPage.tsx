@@ -164,7 +164,7 @@ function RoleFrame({ role }: { role: RoleKey }) {
           </div>
           <div className="flex items-center gap-1.5">
             <StatusChip label="Active" variant="success" dot size="sm" />
-            <ChannelChip channel="C2B" />
+            <ChannelChip channel="NGS" />
           </div>
         </div>
       </div>

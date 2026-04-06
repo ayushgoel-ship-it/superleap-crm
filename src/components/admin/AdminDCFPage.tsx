@@ -7,15 +7,16 @@
  * Guaranteed reactivity with proper useMemo dependencies
  */
 
-import { useMemo } from 'react';
-import { IndianRupee, Users, TrendingUp } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { IndianRupee, Users, TrendingUp, AlertTriangle, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { TimePeriod } from '../../lib/domain/constants';
-import { getTLsByRegions, type Region } from '../../data/adminOrgMock';
+import { getTLsByRegions, type Region } from '../../data/adminOrgData';
 import { scaleTLMetrics } from '../../data/adminFilterHelpers';
 import { computeMetrics, computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
 import { AdminCommonFilters } from './AdminCommonFilters';
 import { useFilterScope } from '../../contexts/FilterContext';
 import { resolveTimePeriodToRange, type DateRange } from '../../lib/time/resolveTimePeriodToRange';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
 import { MetricCard } from '../cards/MetricCard';
 import { EmptyState } from '../premium/EmptyState';
 import { useLoadingState } from '../premium/SkeletonLoader';
@@ -67,6 +68,7 @@ interface TLPerformance {
 export function AdminDCFPage({ onNavigate }: AdminDCFPageProps = {}) {
   const { state, setFilter, resetFilters } = useFilterScope('admin_dcf');
   const loading = useLoadingState('loaded');
+  const [showStageFunnel, setShowStageFunnel] = useState(true);
 
   // Read filter state (Admin contract)
   const timePeriod = state.time_period ?? TimePeriod.MTD;
@@ -100,32 +102,93 @@ export function AdminDCFPage({ onNavigate }: AdminDCFPageProps = {}) {
     };
   }, [currentMetrics]);
 
-  // Build TL Performance rows from real KAM metrics
+  // Build TL Performance rows by aggregating KAMs under their actual TL
   const tlPerformanceRows = useMemo<TLPerformance[]>(() => {
-    return kamMetrics.map(km => ({
-      tlId: km.kamId,
-      tlName: km.kamName,
-      region: 'NCR',
-      leadsCount: km.dcfTotal,
-      disbursedCount: km.dcfDisbursals,
-      disbursedValue: km.dcfDisbursedValue * 100000,
-      onboardedDealers: km.totalDealers,
-      activeDealers: km.uniqueDealersVisited,
-      conversionRate: km.dcfTotal > 0 ? (km.dcfDisbursals / km.dcfTotal) * 100 : 0,
-    }));
-  }, [kamMetrics]);
+    const tls = getTLsByRegions(selectedRegions);
+    return tls.map(tl => {
+      const tlKamMetrics = kamMetrics.filter(km => tl.kams.some(k => k.kamId === km.kamId));
+      const dcfTotal = tlKamMetrics.reduce((s, km) => s + km.dcfTotal, 0);
+      const dcfDisbursals = tlKamMetrics.reduce((s, km) => s + km.dcfDisbursals, 0);
+      const dcfValue = tlKamMetrics.reduce((s, km) => s + km.dcfDisbursedValue * 100000, 0);
+      return {
+        tlId: tl.tlId,
+        tlName: tl.tlName,
+        region: tl.region,
+        leadsCount: dcfTotal,
+        disbursedCount: dcfDisbursals,
+        disbursedValue: dcfValue,
+        onboardedDealers: tlKamMetrics.reduce((s, km) => s + km.totalDealers, 0),
+        activeDealers: tlKamMetrics.reduce((s, km) => s + km.uniqueDealersVisited, 0),
+        conversionRate: dcfTotal > 0 ? (dcfDisbursals / dcfTotal) * 100 : 0,
+      };
+    }).filter(tl => tlId ? tl.tlId === tlId : true)
+      .sort((a, b) => b.disbursedValue - a.disbursedValue);
+  }, [kamMetrics, selectedRegions, tlId]);
 
   // Sort by GMV (disbursedValue) desc - MEMOIZED
   const sortedTLs = useMemo(() => {
-    return [...tlPerformanceRows]
-      .sort((a, b) => {
-        if (b.disbursedValue !== a.disbursedValue) {
-          return b.disbursedValue - a.disbursedValue;
-        }
-        return b.disbursedCount - a.disbursedCount;
-      })
-      .slice(0, 10);
+    return [...tlPerformanceRows].slice(0, 10);
   }, [tlPerformanceRows]);
+
+  // DCF Stage Funnel — shows files stuck at each stage by team
+  const stageFunnel = useMemo(() => {
+    const db = getRuntimeDBSync();
+    let dcfLeads = db.dcfLeads || [];
+
+    // Apply region/TL filters
+    if (regionId) {
+      const regionDealerCodes = new Set(db.dealers.filter(d => d.region === regionId).map(d => d.code));
+      dcfLeads = dcfLeads.filter(d => regionDealerCodes.has(d.dealerCode));
+    }
+    if (tlId) {
+      dcfLeads = dcfLeads.filter(d => d.tlId === tlId);
+    }
+
+    // Only non-disbursed, non-rejected (in-progress files)
+    const activeFiles = dcfLeads.filter(d => d.overallStatus !== 'disbursed' && d.overallStatus !== 'rejected');
+
+    // Group by currentFunnel (stage)
+    const stageMap = new Map<string, { count: number; totalValue: number; redCount: number; amberCount: number; byTeam: Map<string, number> }>();
+    activeFiles.forEach(f => {
+      const stage = f.currentFunnel || f.currentSubStage || 'Unknown';
+      if (!stageMap.has(stage)) stageMap.set(stage, { count: 0, totalValue: 0, redCount: 0, amberCount: 0, byTeam: new Map() });
+      const s = stageMap.get(stage)!;
+      s.count++;
+      s.totalValue += f.loanAmount || 0;
+      if (f.ragStatus === 'red') s.redCount++;
+      if (f.ragStatus === 'amber') s.amberCount++;
+      const team = f.conversionOwner || f.kamName || 'Unassigned';
+      s.byTeam.set(team, (s.byTeam.get(team) || 0) + 1);
+    });
+
+    return Array.from(stageMap.entries())
+      .map(([stage, data]) => ({
+        stage,
+        count: data.count,
+        totalValue: data.totalValue,
+        redCount: data.redCount,
+        amberCount: data.amberCount,
+        greenCount: data.count - data.redCount - data.amberCount,
+        topTeams: Array.from(data.byTeam.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([name, count]) => ({ name, count })),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [regionId, tlId]);
+
+  // Rejected summary
+  const rejectedSummary = useMemo(() => {
+    const db = getRuntimeDBSync();
+    let dcfLeads = db.dcfLeads || [];
+    if (regionId) {
+      const regionDealerCodes = new Set(db.dealers.filter(d => d.region === regionId).map(d => d.code));
+      dcfLeads = dcfLeads.filter(d => regionDealerCodes.has(d.dealerCode));
+    }
+    if (tlId) dcfLeads = dcfLeads.filter(d => d.tlId === tlId);
+    const rejected = dcfLeads.filter(d => d.overallStatus === 'rejected');
+    return { count: rejected.length, value: rejected.reduce((s, d) => s + (d.loanAmount || 0), 0) };
+  }, [regionId, tlId]);
 
   // Handle TL drill-down
   const handleTLClick = (tlIdToFilter: string) => {
@@ -229,6 +292,73 @@ export function AdminDCFPage({ onNavigate }: AdminDCFPageProps = {}) {
                 <div className="text-2xl font-bold text-emerald-600">{formatCompact(aggregatedKPIs.disbursalsValue)}</div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Stage-wise Funnel Summary */}
+        <div className="px-4 pb-3">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <button onClick={() => setShowStageFunnel(!showStageFunnel)} className="w-full px-4 py-3 flex items-center justify-between border-b border-slate-100">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-2">
+                <Filter className="w-3.5 h-3.5" />
+                Pipeline by Stage ({stageFunnel.reduce((s, f) => s + f.count, 0)} files)
+              </h3>
+              {showStageFunnel ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+            </button>
+            {showStageFunnel && (
+              <div className="divide-y divide-slate-50">
+                {stageFunnel.length === 0 ? (
+                  <div className="p-4 text-sm text-slate-400 text-center">No active files in pipeline</div>
+                ) : (
+                  stageFunnel.map(s => (
+                    <div key={s.stage} className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-800">{s.stage}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-xs font-bold text-slate-700">{s.count}</span>
+                        </div>
+                        <span className="text-xs text-slate-500">{formatCurrency(s.totalValue)}</span>
+                      </div>
+                      {/* RAG status bar */}
+                      <div className="flex gap-1 mb-2">
+                        {s.redCount > 0 && (
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 text-xs">
+                            <AlertTriangle className="w-3 h-3 text-rose-500" />
+                            <span className="font-medium text-rose-700">{s.redCount} red</span>
+                          </div>
+                        )}
+                        {s.amberCount > 0 && (
+                          <div className="px-1.5 py-0.5 rounded bg-amber-50 text-xs font-medium text-amber-700">{s.amberCount} amber</div>
+                        )}
+                        {s.greenCount > 0 && (
+                          <div className="px-1.5 py-0.5 rounded bg-emerald-50 text-xs font-medium text-emerald-700">{s.greenCount} green</div>
+                        )}
+                      </div>
+                      {/* Top teams with files stuck */}
+                      <div className="flex flex-wrap gap-1">
+                        {s.topTeams.map(t => (
+                          <span key={t.name} className="px-2 py-0.5 rounded-full bg-indigo-50 text-xs text-indigo-700">
+                            {t.name}: {t.count}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+                {/* Rejected summary */}
+                {rejectedSummary.count > 0 && (
+                  <div className="px-4 py-3 bg-rose-50/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-rose-700">Rejected</span>
+                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-xs font-bold text-rose-700">{rejectedSummary.count}</span>
+                      </div>
+                      <span className="text-xs text-rose-600">{formatCurrency(rejectedSummary.value)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

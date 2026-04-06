@@ -171,8 +171,7 @@ router.get('/', async (req: Request, res: Response) => {
           Expired: parseInt(s.expired) || 0,
         },
         by_channel: {
-          C2B: parseInt(s.c2b) || 0,
-          C2D: parseInt(s.c2d) || 0,
+          NGS: parseInt(s.ngs) || 0,
           GS: parseInt(s.gs) || 0,
         },
       },
@@ -219,7 +218,7 @@ router.get('/:lead_id', async (req: Request, res: Response) => {
       phone: row.dealer_phone,
     };
 
-    // Timeline — not yet implemented as a separate table for C2B/C2D/GS leads.
+    // Timeline — not yet implemented as a separate table for NGS/GS leads.
     // Return empty array; can be extended later.
     const timeline: any[] = [];
 

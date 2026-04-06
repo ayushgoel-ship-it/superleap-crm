@@ -21,10 +21,11 @@ import {
 } from 'lucide-react';
 import { TimePeriod } from '../../lib/domain/constants';
 import { computeMetrics } from '../../lib/metrics/metricsFromDB';
+import { getConfigI2SITarget, getConfigTargetsForUser } from '../../lib/configFromDB';
+import { getSITarget, getDCFTargets } from '../../lib/metricsEngine';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 
 // ── Types ──
-
-type Period = 'today' | 'd-1' | 'mtd' | 'last-month';
 
 interface KAMDetailPageProps {
   kamName: string;
@@ -73,24 +74,19 @@ interface KAMLmtd {
   dcfGMV: number;
 }
 
-function periodToTimePeriod(p: Period): TimePeriod {
-  switch (p) {
-    case 'today': return TimePeriod.TODAY;
-    case 'd-1': return TimePeriod.D_MINUS_1;
-    case 'mtd': return TimePeriod.MTD;
-    case 'last-month': return TimePeriod.LAST_MONTH;
-  }
-}
+function getKAMData(period: TimePeriod) {
+  const m = computeMetrics(period);
 
-function getKAMData(period: Period) {
-  const tp = periodToTimePeriod(period);
-  const m = computeMetrics(tp);
-
-  const stockInsTarget = period === 'today' || period === 'd-1' ? 6 : 150;
-  const dcfTarget = period === 'today' || period === 'd-1' ? 1 : 25;
-  const visitsTarget = period === 'today' || period === 'd-1' ? 3 : 32;
-  const connectsTarget = period === 'today' || period === 'd-1' ? 15 : 200;
-  const inputScoreTarget = 85;
+  const isDaily = period === TimePeriod.TODAY || period === TimePeriod.D_MINUS_1;
+  const kamRoleTargets = getConfigTargetsForUser('');
+  const monthlySITarget = getSITarget('KAM');
+  const dcfMonthlyTargets = getDCFTargets('KAM');
+  const WORKING_DAYS = 25;
+  const stockInsTarget = isDaily ? Math.round(monthlySITarget / WORKING_DAYS) : monthlySITarget;
+  const dcfTarget = isDaily ? Math.max(1, Math.round(dcfMonthlyTargets.disbursement / WORKING_DAYS)) : dcfMonthlyTargets.disbursement;
+  const visitsTarget = isDaily ? kamRoleTargets.visitTarget : kamRoleTargets.visitTarget * WORKING_DAYS;
+  const connectsTarget = isDaily ? kamRoleTargets.callTarget * 3 : kamRoleTargets.callTarget * 3 * WORKING_DAYS;
+  const inputScoreTarget = kamRoleTargets.inputScoreGate;
 
   // Compute input score
   const inputScore = Math.round(
@@ -108,10 +104,10 @@ function getKAMData(period: Period) {
   const cepConversionPct = m.totalLeads > 0 ? Math.round((m.wonLeads / m.totalLeads) * 100) : 0;
 
   return {
-    stockIns: m.stockIns, stockInsTarget, i2si: m.i2si, i2siTarget: 65,
+    stockIns: m.stockIns, stockInsTarget, i2si: m.i2si, i2siTarget: getConfigI2SITarget(),
     inputScore, inputScoreTarget,
     inspections: m.totalLeads, leads: m.totalLeads, sis: m.wonLeads,
-    dcfDisbursals: m.dcfDisbursals, dcfTarget, dcfOnboardings: m.dcfTotal - m.dcfDisbursals,
+    dcfDisbursals: m.dcfDisbursals, dcfTarget, dcfOnboardings: m.dcfOnboarded,
     dcfLeadsSubmitted: m.dcfTotal, dcfGMV: m.dcfDisbursedValue, dcfConversion,
     visits: m.completedVisits, visitsTarget, connects: m.connectedCalls, connectsTarget,
     callFeedbackPct, dealersVisited: m.uniqueDealersVisited, dormantDealers,
@@ -121,7 +117,7 @@ function getKAMData(period: Period) {
   };
 }
 
-function getKAMLmtd(period: Period): KAMLmtd {
+function getKAMLmtd(_period: TimePeriod): KAMLmtd {
   // Use last month data as LMTD comparison baseline
   const lastMonth = computeMetrics(TimePeriod.LAST_MONTH);
   const lastMonthSIPct = lastMonth.totalLeads > 0 ? Math.round((lastMonth.wonLeads / lastMonth.totalLeads) * 100) : 0;
@@ -178,19 +174,12 @@ function formatLakhs(n: number): string {
   return `\u20B9${n.toFixed(1)}L`;
 }
 
-// ── Period labels ──
-
-const PERIODS: { key: Period; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: 'd-1', label: 'D-1' },
-  { key: 'mtd', label: 'MTD' },
-  { key: 'last-month', label: 'Last Month' },
-];
-
 // ── Component ──
 
 export function KAMDetailPage({ kamName, kamCity, onBack, onNavigateToSection }: KAMDetailPageProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState<Period>('mtd');
+  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
   const d = getKAMData(selectedPeriod);
   const lmtd = getKAMLmtd(selectedPeriod);
 
@@ -346,22 +335,21 @@ export function KAMDetailPage({ kamName, kamCity, onBack, onNavigateToSection }:
           </div>
 
           {/* Period switcher */}
-          <div className="flex gap-1.5">
-            {PERIODS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setSelectedPeriod(key)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all duration-150
-                  ${selectedPeriod === key
-                    ? 'bg-white text-indigo-700 shadow-sm'
-                    : 'text-indigo-200 hover:bg-white/10 hover:text-white'
-                  }
-                `}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <TimeFilterControl
+            mode="chips"
+            chipStyle="pill"
+            value={selectedPeriod}
+            onChange={setSelectedPeriod}
+            options={CANONICAL_TIME_OPTIONS}
+            labelOverrides={CANONICAL_TIME_LABELS}
+            allowCustom
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomRangeChange={({ fromISO, toISO }) => {
+              setCustomFrom(fromISO);
+              setCustomTo(toISO);
+            }}
+          />
         </div>
       </div>
 

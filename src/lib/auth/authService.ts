@@ -40,6 +40,7 @@ export async function login(credentials: LoginCredentials): Promise<{ session: A
     email: user.email || '',
     phone: userRow.phone || '',
     city: userRow.city || '',
+    mustResetPassword: !!userRow.must_reset_password,
     createdAt: user.created_at || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -139,22 +140,48 @@ export function isProfileComplete(profile: UserProfile): boolean {
   return !!(profile.name && profile.phone);
 }
 
-// ─── Password Reset (via Supabase Auth) ─────────────────────────────────────
-export async function requestPasswordReset(email: string): Promise<string> {
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/reset-password`,
-  });
+// ─── Password Reset via OTP ─────────────────────────────────────────────────
 
+/** Step 1 — send 6-digit OTP to email */
+export async function sendPasswordResetOTP(email: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false },
+  });
   if (error) throw new Error(error.message);
-  return 'Check your email for the reset link';
+}
+
+/** Step 2 — verify OTP and establish session */
+export async function verifyPasswordResetOTP(email: string, token: string): Promise<void> {
+  const { error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'email',
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Step 3 — set new password (requires active session from verifyPasswordResetOTP) */
+export async function setNewPassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+  // Sign out so the user logs in fresh with the new password
+  await supabase.auth.signOut();
+  localStorage.removeItem(LS_SESSION_KEY);
+}
+
+/** Legacy — kept for any existing deep-links in email */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw new Error(error.message);
 }
 
 export async function confirmPasswordReset(request: PasswordResetRequest): Promise<void> {
-  // Supabase handles this via the redirect URL + updateUser
   const { error } = await supabase.auth.updateUser({
     password: request.newPassword,
   });
-
   if (error) throw new Error(error.message);
 }
 

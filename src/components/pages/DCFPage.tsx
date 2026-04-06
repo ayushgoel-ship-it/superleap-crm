@@ -34,6 +34,7 @@ import { DCFPageTL } from './DCFPageTL';
 import { DCFKpiCard } from '../dcf/DCFKpiCard';
 import { DCFDealerCard, type DCFDealerData, type OnboardingStep } from '../dcf/DCFDealerCard';
 import { FilterChip } from '../premium/Chip';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 import { EmptyState } from '../premium/EmptyState';
 import { CardSkeleton } from '../premium/SkeletonLoader';
 import { toast } from 'sonner';
@@ -56,12 +57,15 @@ interface DCFPageProps {
 }
 
 import { TimePeriod } from '../../lib/domain/constants';
-import { CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 
 type StatusFilter = 'All' | 'Onboarded' | 'Not Onboarded';
 
 // ── Derive DCF dealer data from canonical sources ──
 
+// BUG: This function only accepts a TimePeriod enum, but the component tracks
+// customFrom/customTo state. Custom date ranges from TimeFilterControl are
+// silently ignored — dealer data always uses enum-based period boundaries.
+// TODO: Accept customFrom/customTo params once behavior change is approved.
 function buildDCFDealerData(timeScope: TimePeriod): DCFDealerData[] {
   const allDealers = getAllDealers();
   const dcfLeads = getFilteredDCFLeads({ period: timeScope });
@@ -128,6 +132,8 @@ export function DCFPage({
 
   // ── State ──
   const [timeScope, setTimeScope] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
   const [isLoading, setIsLoading] = useState(true);
   const [dismissedInsights, setDismissedInsights] = useState<Set<string>>(new Set());
@@ -286,22 +292,18 @@ export function DCFPage({
         </div>
 
         {/* Time scope — canonical options */}
-        <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
-          {CANONICAL_TIME_OPTIONS.filter(k => k !== TimePeriod.CUSTOM).map((key) => (
-            <button
-              key={key}
-              onClick={() => handleTimeScopeChange(key)}
-              className={`flex-1 py-2 px-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 min-h-[36px]
-                ${timeScope === key
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-                }
-              `}
-            >
-              {CANONICAL_TIME_LABELS[key] || key}
-            </button>
-          ))}
-        </div>
+        <TimeFilterControl
+          mode="chips"
+          chipStyle="pill"
+          value={timeScope}
+          onChange={handleTimeScopeChange}
+          options={CANONICAL_TIME_OPTIONS}
+          labelOverrides={CANONICAL_TIME_LABELS}
+          allowCustom
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+        />
       </div>
 
       {/* ═══ SCROLLABLE BODY ═══ */}

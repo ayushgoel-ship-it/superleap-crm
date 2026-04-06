@@ -11,7 +11,7 @@
 
 SuperLeap is a comprehensive CRM for CARS24's Dealer Referral business where **Key Account Managers (KAMs)** manage panels of used-car dealers who share seller leads and inventory leads in exchange for commissions. The app serves as a single cockpit for KAMs and Team Leads to track panel health, funnel metrics, dealer visits, lead management, DCF onboarding, and performance targets.
 
-**Business Verticals:** C2B (Customer to Business), C2D (Customer to Dealer), GS (Guaranteed Sale), DCF (Dealer Credit Facility - loans for car buyers).
+**Business Verticals:** NGS (Non-Guaranteed Sale), GS (Guaranteed Sale), DCF (Dealer Credit Facility - loans for car buyers).
 
 **User Roles:**
 - **KAM (Key Account Manager):** Manages 20-30 dealers, executes visits/calls, tracks leads, earns incentives
@@ -63,15 +63,21 @@ npm run preview
 │   ├── dcf/                          # DCF onboarding components
 │   └── shared/                       # Shared utilities
 ├── data/
-│   ├── mockDatabase.ts               # ⭐ SINGLE SOURCE: All mock data
+│   ├── runtimeDB.ts                  # ⭐ SINGLE SOURCE: Supabase data cache
+│   ├── supabaseRaw.ts                # Raw Supabase fetch layer
 │   ├── selectors.ts                  # Data access layer
+│   ├── canonicalMetrics.ts           # Stage classification & DCF metrics
 │   ├── dtoSelectors.ts               # DTO contract enforcement
 │   ├── types.ts                      # Entity type definitions
-│   └── adapters/                     # Legacy adapters (archived)
+│   ├── adminOrgData.ts               # Admin org data accessors
+│   └── adapters/                     # Data adapters (dcfAdapter, leadAdapter)
 ├── lib/
 │   ├── metricsEngine.ts              # ⭐ SINGLE SOURCE: Metric calculations
 │   ├── incentiveEngine.ts            # ⭐ SINGLE SOURCE: Incentive logic
 │   ├── productivityEngine.ts         # ⭐ SINGLE SOURCE: Productivity rules
+│   ├── metricsFromDB.ts              # Rank-based metrics from runtimeDB
+│   ├── time/
+│   │   └── resolveTimePeriod.ts      # ⭐ Canonical date range resolver
 │   ├── domain/
 │   │   ├── constants.ts              # Business constants
 │   │   └── metrics.ts                # Metric definitions
@@ -110,7 +116,7 @@ npm run preview
 
 | What | File | Rules |
 |------|------|-------|
-| **Mock Data** | `/data/mockDatabase.ts` | All dealers, leads, calls, visits, DCF data. Never inline mock data in components. |
+| **Data Cache** | `/data/runtimeDB.ts` | All dealers, leads, calls, visits, DCF data fetched from Supabase. Never inline data in components. |
 | **Data Access** | `/data/selectors.ts` | ALL data queries go through selectors (getDealerById, getLeadsByDealerId, etc). |
 | **DTO Contracts** | `/data/dtoSelectors.ts` + `/contracts/` | UI components consume DTOs, not raw entities. |
 | **Metrics Calculations** | `/lib/metricsEngine.ts` | I2SI%, Input Score, DCF metrics - all calculated here. |
@@ -154,7 +160,7 @@ npm run preview
    - Write test cases in engine validation files
 
 2. **Data Layer**
-   - Add mock data to `/data/mockDatabase.ts`
+   - Ensure data is available via `/data/runtimeDB.ts` (fetched from Supabase)
    - Create selector in `/data/selectors.ts`
    - Define DTO contract in `/contracts/<module>.contract.ts`
    - Create DTO selector in `/data/dtoSelectors.ts`
@@ -171,7 +177,7 @@ npm run preview
 
 **❌ DO NOT:**
 - Inline mock data in components
-- Bypass selectors to access mockDatabase directly
+- Bypass selectors to access runtimeDB directly
 - Create duplicate metric calculations
 - Hardcode navigation paths
 - Accept raw entities in UI components (use DTOs)
@@ -180,7 +186,7 @@ npm run preview
 
 ## Known Constraints
 
-1. **Client-Side Only:** No backend. All data is mock. API scaffolding exists in `/api/` but not connected.
+1. **Supabase Backend:** Data is fetched from Supabase and cached in `runtimeDB.ts`. The app is primarily client-side with a Supabase data layer.
 
 2. **No Persistence:** Page refresh resets state. Use localStorage for critical state (auth does this).
 

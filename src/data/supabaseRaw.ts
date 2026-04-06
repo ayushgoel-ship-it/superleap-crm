@@ -185,7 +185,7 @@ export async function fetchLeadsRaw(): Promise<Lead[]> {
       kamPhone: '',
       tlId: '',
 
-      customerName: 'Customer',
+      customerName: [l.year, l.make, l.model].filter(Boolean).join(' ') || `Lead #${l.lead_id}`,
       customerPhone: '',
 
       regNo: l.cx_reg_no || '',
@@ -510,4 +510,70 @@ export async function fetchOrgRaw(): Promise<AdminOrg | null> {
     regions: ['NCR', 'West', 'South', 'East'] as any,
     tls,
   };
+}
+
+// ════════════════════════════════════════════════════════════════════
+// CONFIG TABLES: targets, incentive_slabs, incentive_rules
+// ════════════════════════════════════════════════════════════════════
+
+export interface TargetRow {
+  target_id: string;
+  user_id: string;
+  role: 'KAM' | 'TL';
+  month: string; // 'YYYY-MM'
+  si_target: number;
+  call_target: number;
+  visit_target: number;
+  i2si_target: number;       // I2SI% target (e.g. 65)
+  input_score_gate: number;
+  quality_score_gate: number;
+}
+
+export interface IncentiveSlabRow {
+  slab_id: string;
+  role: 'KAM' | 'TL';
+  slab_name: string;
+  min_percent: number;
+  max_percent: number | null;
+  rate_per_si: number;
+  description: string | null;
+  effective_from: string;
+  effective_to: string | null;
+}
+
+export interface IncentiveRuleRow {
+  rule_id: string;
+  scope: 'team' | 'role';
+  metric_key: string;
+  threshold: number | null;
+  payout: number | null;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+
+export async function fetchTargetsRaw(): Promise<TargetRow[]> {
+  try {
+    return await fetchAll<TargetRow>('targets', '*');
+  } catch (e) {
+    console.warn('[SupabaseRaw] Failed to fetch targets:', e);
+    return [];
+  }
+}
+
+export async function fetchIncentiveSlabsRaw(): Promise<IncentiveSlabRow[]> {
+  try {
+    return await fetchAll<IncentiveSlabRow>('incentive_slabs', '*');
+  } catch (e) {
+    console.warn('[SupabaseRaw] Failed to fetch incentive_slabs:', e);
+    return [];
+  }
+}
+
+export async function fetchIncentiveRulesRaw(): Promise<IncentiveRuleRow[]> {
+  try {
+    return await fetchAll<IncentiveRuleRow>('incentive_rules', '*');
+  } catch (e) {
+    console.warn('[SupabaseRaw] Failed to fetch incentive_rules:', e);
+    return [];
+  }
 }

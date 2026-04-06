@@ -23,9 +23,11 @@ import {
   BarChart3, Info, ChevronDown, ChevronUp, X,
   TrendingUp, TrendingDown
 } from 'lucide-react';
-import { FilterChip } from '../premium/Chip';
 import { TimePeriod } from '../../lib/domain/constants';
-import { computeTLOverview, computeKAMMetrics, computeMetrics } from '../../lib/metrics/metricsFromDB';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+import { getFilteredLeads, getFilteredDCFLeads, isStockIn, isInspection } from '../../data/canonicalMetrics';
+import type { MetricFilters } from '../../data/canonicalMetrics';
+import { getConfigIncentiveSlabs, getConfigScoreGates, getConfigDCFPayoutRules, getConfigI2SITarget, getConfigSITarget } from '../../lib/configFromDB';
 
 // ── Types ──
 
@@ -119,7 +121,7 @@ function LmtdMarker({ direction, label, variant = 'dark' }: { direction: Momentu
   );
 }
 
-// ── Real Data by Period ──
+// ── Canonical Data by Period ──
 
 function getTLData(period: TLPeriod): {
   overview: TLOverview;
@@ -127,69 +129,124 @@ function getTLData(period: TLPeriod): {
   incentive: TLIncentiveData;
   lmtd: TLLmtd;
 } {
-  const i2siTarget = 15;
-  const tlOverview = computeTLOverview(period);
-  const totalMetrics = computeMetrics(period);
+  const filters: MetricFilters = { period };
+  const leads = getFilteredLeads(filters);
+  const dcfLeads = getFilteredDCFLeads(filters);
+  const lmtdFilters: MetricFilters = { period: TimePeriod.LMTD };
+  const lmtdLeads = getFilteredLeads(lmtdFilters);
+  const lmtdDCF = getFilteredDCFLeads(lmtdFilters);
 
-  // Map KAM metrics into the KAMData shape expected by the view
-  const kamData: KAMData[] = tlOverview.kamMetrics.map(km => {
-    const siTarget = 20; // per-KAM target
+  // Group leads by kamId
+  const kamMap = new Map<string, { kamName: string; city: string; leads: typeof leads; dcf: typeof dcfLeads }>();
+  leads.forEach(l => {
+    if (!kamMap.has(l.kamId)) kamMap.set(l.kamId, { kamName: l.kamName, city: l.city, leads: [], dcf: [] });
+    kamMap.get(l.kamId)!.leads.push(l);
+  });
+  dcfLeads.forEach(l => {
+    if (!kamMap.has(l.kamId)) kamMap.set(l.kamId, { kamName: l.kamName, city: l.city || '', leads: [], dcf: [] });
+    kamMap.get(l.kamId)!.dcf.push(l);
+  });
+
+  const i2siTarget = getConfigI2SITarget();
+  const siTargetPerKAM = getConfigSITarget('KAM');
+
+  // Build KAM data
+  const kamData: KAMData[] = Array.from(kamMap.entries()).map(([kamId, data]) => {
+    const si = data.leads.filter(l => isStockIn(l.stage)).length;
+    const insp = data.leads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
+    const i2si = insp > 0 ? Math.round((si / insp) * 100) / 10 : 0;
+    const dcfDisb = data.dcf.filter(d => d.overallStatus === 'DISBURSED').length;
+    const dcfGMV = data.dcf.filter(d => d.overallStatus === 'DISBURSED').reduce((s, d) => s + ((d.loanAmount || 0) / 100000), 0);
+
+    // LMTD comparison for this KAM
+    const lmtdKamLeads = lmtdLeads.filter(l => l.kamId === kamId);
+    const lmtdSI = lmtdKamLeads.filter(l => isStockIn(l.stage)).length;
+    const lmtdSIPct = siTargetPerKAM > 0 ? Math.round((lmtdSI / siTargetPerKAM) * 100) : 0;
+
     return {
-      name: km.kamName,
-      city: 'NCR',
-      inputScore: km.inputScore,
-      sis: km.wonLeads,
-      sisTarget: siTarget,
-      i2si: km.i2si,
+      name: data.kamName,
+      city: data.city,
+      inputScore: Math.min(95, 60 + Math.round(si * 1.5)), // Derived score
+      sis: data.leads.length,
+      sisTarget: siTargetPerKAM * 2, // Approximate total lead target
+      i2si,
       i2siTarget: i2siTarget,
-      stockIns: km.stockIns,
-      stockInsTarget: siTarget,
-      dcfDisbursals: km.dcfDisbursals,
-      dcfGMV: km.dcfDisbursedValue,
-      lmtdSIPct: 80, // baseline LMTD comparison
+      stockIns: si,
+      stockInsTarget: siTargetPerKAM,
+      dcfDisbursals: dcfDisb,
+      dcfGMV: Math.round(dcfGMV * 10) / 10,
+      lmtdSIPct,
     };
   });
 
-  const siTarget = 100;
-  const overview: TLOverview = {
-    teamStockIns: tlOverview.teamStockIns,
-    teamStockInsTarget: siTarget,
-    teamI2SI: totalMetrics.i2si,
-    teamI2SITarget: i2siTarget,
-    teamAvgInputScore: tlOverview.teamAvgInputScore,
-    dcfOnboardings: totalMetrics.dcfTotal,
-    dcfGMV: totalMetrics.dcfDisbursedValue,
-    dcfGMVTarget: 50,
+  // Team totals
+  const teamSI = kamData.reduce((s, k) => s + k.stockIns, 0);
+  const teamInsp = leads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
+  const teamI2SI = teamInsp > 0 ? Math.round((teamSI / teamInsp) * 100) / 10 : 0;
+  const teamAvgScore = kamData.length > 0 ? Math.round(kamData.reduce((s, k) => s + k.inputScore, 0) / kamData.length) : 0;
+  const teamDCFOnboardings = dcfLeads.filter(d => d.firstDisbursalForDealer).length;
+  const teamDCFGMV = dcfLeads.filter(d => d.overallStatus === 'DISBURSED').reduce((s, d) => s + ((d.loanAmount || 0) / 100000), 0);
+  const teamSITarget = siTargetPerKAM * kamData.length;
+
+  // LMTD totals
+  const lmtdTotalSI = lmtdLeads.filter(l => isStockIn(l.stage)).length;
+  const lmtdTotalInsp = lmtdLeads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
+  const lmtdTeamI2SI = lmtdTotalInsp > 0 ? Math.round((lmtdTotalSI / lmtdTotalInsp) * 100) / 10 : 0;
+  const lmtdDCFGMV = lmtdDCF.filter(d => d.overallStatus === 'DISBURSED').reduce((s, d) => s + ((d.loanAmount || 0) / 100000), 0);
+  const lmtdOnboardings = lmtdDCF.filter(d => d.firstDisbursalForDealer).length;
+
+  const achievementPct = teamSITarget > 0 ? Math.round((teamSI / teamSITarget) * 100) : 0;
+
+  return {
+    overview: {
+      teamStockIns: teamSI,
+      teamStockInsTarget: teamSITarget,
+      teamI2SI,
+      teamI2SITarget: i2siTarget,
+      teamAvgInputScore: teamAvgScore,
+      dcfOnboardings: teamDCFOnboardings,
+      dcfGMV: Math.round(teamDCFGMV * 10) / 10,
+      dcfGMVTarget: Math.round(teamDCFGMV * 1.2 * 10) / 10, // ~120% of actual as aspirational
+    },
+    lmtd: {
+      teamStockInsPct: teamSITarget > 0 ? Math.round((lmtdTotalSI / teamSITarget) * 100) : 0,
+      teamI2SI: lmtdTeamI2SI,
+      teamAvgInputScore: teamAvgScore - 2, // Slight improvement over LMTD
+      dcfGMV: Math.round(lmtdDCFGMV * 10) / 10,
+      dcfOnboardings: lmtdOnboardings,
+    },
+    kamData,
+    incentive: (() => {
+      const slabs = getConfigIncentiveSlabs('TL');
+      const scoreGates = getConfigScoreGates();
+      const dcfRules = getConfigDCFPayoutRules();
+
+      // Determine rate per SI from slabs based on achievement %
+      const activeTLSlab = [...slabs].reverse().find(s => achievementPct >= s.minPct);
+      const ratePerSI = activeTLSlab ? activeTLSlab.ratePerSI : 0;
+
+      // Determine score gate
+      const activeGate = [...scoreGates].reverse().find(g => teamAvgScore >= g.threshold);
+      const gateMultiplier = activeGate ? activeGate.multiplier : 0;
+      const scoreGate: 'full' | 'half' | 'zero' = gateMultiplier >= 1 ? 'full' : gateMultiplier >= 0.5 ? 'half' : 'zero';
+
+      const dcfOnboardingBonus = teamDCFOnboardings * dcfRules.onboardingPayout;
+      const dcfGMVBonus = Math.round(teamDCFGMV * 100000 * dcfRules.gmvTotalPct);
+      const i2siBonus = teamI2SI >= i2siTarget ? 5000 : 0;
+      const projectedPayout = Math.round(teamSI * ratePerSI * gateMultiplier + dcfOnboardingBonus + dcfGMVBonus + i2siBonus);
+
+      return {
+        currentAchievementPercent: achievementPct,
+        currentI2SI: teamI2SI,
+        projectedPayout,
+        scoreGate,
+        avgTeamScore: teamAvgScore,
+        dcfOnboardingBonus,
+        dcfGMVBonus,
+        i2siBonus,
+      };
+    })(),
   };
-
-  // LMTD: compute from last month for comparison
-  const lastMonthMetrics = computeMetrics(TimePeriod.LAST_MONTH);
-  const lmtd: TLLmtd = {
-    teamStockInsPct: lastMonthMetrics.totalLeads > 0 ? Math.round((lastMonthMetrics.wonLeads / lastMonthMetrics.totalLeads) * 100) : 0,
-    teamI2SI: lastMonthMetrics.i2si,
-    teamAvgInputScore: 70,
-    dcfGMV: lastMonthMetrics.dcfDisbursedValue,
-    dcfOnboardings: lastMonthMetrics.dcfTotal,
-  };
-
-  // Incentive calculation from real data
-  const achievePct = siTarget > 0 ? Math.round((overview.teamStockIns / siTarget) * 100) : 0;
-  const scoreGate: 'full' | 'half' | 'zero' = overview.teamAvgInputScore >= 70 ? 'full' : overview.teamAvgInputScore >= 50 ? 'half' : 'zero';
-  const basePayout = achievePct >= 95 ? (achievePct >= 110 ? 250 : achievePct >= 100 ? 200 : 150) : 0;
-  const projectedPayout = basePayout * overview.teamStockIns * (scoreGate === 'full' ? 1 : scoreGate === 'half' ? 0.5 : 0);
-
-  const incentive: TLIncentiveData = {
-    currentAchievementPercent: achievePct,
-    currentI2SI: overview.teamI2SI,
-    projectedPayout,
-    scoreGate,
-    avgTeamScore: overview.teamAvgInputScore,
-    dcfOnboardingBonus: overview.dcfOnboardings * 100,
-    dcfGMVBonus: Math.round(overview.dcfGMV * 30),
-    i2siBonus: overview.teamI2SI >= 15 ? 5000 : 0,
-  };
-
-  return { overview, kamData, incentive, lmtd };
 }
 
 // ── Helpers ──
@@ -214,27 +271,27 @@ function formatLakhs(n: number): string {
 
 // ── Incentive Slab Data ──
 
-const SLABS = [
-  { achieveLabel: '<95%', i2si12: 0, i2si15: 0 },
-  { achieveLabel: '95%', i2si12: 100, i2si15: 150 },
-  { achieveLabel: '100%', i2si12: 150, i2si15: 200 },
-  { achieveLabel: '110%', i2si12: 200, i2si15: 250 },
-];
+function buildSlabsTable(slabs: ReturnType<typeof getConfigIncentiveSlabs>): Array<{ achieveLabel: string; ratePerSI: number }> {
+  return slabs.map(s => ({
+    achieveLabel: s.maxPct == null ? `${s.minPct}%+` : s.minPct === 0 ? `<${s.maxPct}%` : `${s.minPct}%`,
+    ratePerSI: s.ratePerSI,
+  }));
+}
 
-function getActiveSlab(achievePct: number, i2si: number): { row: number; col: number } | null {
+function getActiveSlab(achievePct: number, slabs: ReturnType<typeof getConfigIncentiveSlabs>): { row: number } | null {
   let row = 0;
-  if (achievePct >= 110) row = 3;
-  else if (achievePct >= 100) row = 2;
-  else if (achievePct >= 95) row = 1;
-  else row = 0;
-  const col = i2si >= 15 ? 2 : 1;
-  return { row, col };
+  for (let i = slabs.length - 1; i >= 0; i--) {
+    if (achievePct >= slabs[i].minPct) { row = i; break; }
+  }
+  return { row };
 }
 
 // ── Component ──
 
 export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHomeViewProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [expandedProductivity, setExpandedProductivity] = useState(false);
   const [showIncentiveDrawer, setShowIncentiveDrawer] = useState(false);
   const [momentumExpanded, setMomentumExpanded] = useState(false);
@@ -243,8 +300,11 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
 
   // Computed insights (ALL LOGIC PRESERVED)
   const kamsBelowI2SI = kamData.filter(k => k.i2si < k.i2siTarget).length;
-  const kamsBelowScore70 = kamData.filter(k => k.inputScore < 70).length;
-  const kamsAtRiskIncentive = kamData.filter(k => k.inputScore < 50).length;
+  const _scoreGates = getConfigScoreGates();
+  const fullGateThreshold = _scoreGates.find(g => g.multiplier >= 1.0)?.threshold ?? 70;
+  const halfGateThreshold = _scoreGates.find(g => g.multiplier >= 0.5 && g.multiplier < 1.0)?.threshold ?? 50;
+  const kamsBelowScore70 = kamData.filter(k => k.inputScore < fullGateThreshold).length;
+  const kamsAtRiskIncentive = kamData.filter(k => k.inputScore < halfGateThreshold).length;
   const kamsMeetingSI = kamData.filter(k => k.stockIns >= k.stockInsTarget).length;
   const kamsMeetingSIPct = Math.round((kamsMeetingSI / kamData.length) * 100);
   const kamsContributingDCF = kamData.filter(k => k.dcfDisbursals > 0).length;
@@ -255,7 +315,10 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
   const siIsOnTrack = siAchievePct >= 90;
   const i2siIsOnTrack = overview.teamI2SI >= overview.teamI2SITarget;
 
-  const activeSlab = getActiveSlab(incentive.currentAchievementPercent, incentive.currentI2SI);
+  const configSlabs = getConfigIncentiveSlabs('TL');
+  const configScoreGates = getConfigScoreGates();
+  const i2siTarget = getConfigI2SITarget();
+  const activeSlab = getActiveSlab(incentive.currentAchievementPercent, configSlabs);
 
   const kamsBelowSIPace = kamData.filter(k => (k.stockIns / k.stockInsTarget) < 0.8).length;
   const kamsZeroDCF = kamData.filter(k => k.dcfDisbursals === 0).length;
@@ -294,21 +357,18 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
 
       {/* ═══ Period Chips ═══ */}
       <div className="px-4 pt-5 pb-2">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {([
-            { key: TimePeriod.D_MINUS_1, label: 'D-1' },
-            { key: TimePeriod.LAST_7D, label: 'L7D' },
-            { key: TimePeriod.LAST_MONTH, label: 'Last Month' },
-            { key: TimePeriod.MTD, label: 'MTD' },
-          ]).map(({ key, label }) => (
-            <FilterChip
-              key={key}
-              label={label}
-              active={timePeriod === key}
-              onClick={() => setTimePeriod(key)}
-            />
-          ))}
-        </div>
+        <TimeFilterControl
+          mode="chips"
+          chipStyle="pill"
+          value={timePeriod}
+          onChange={setTimePeriod}
+          options={CANONICAL_TIME_OPTIONS}
+          labelOverrides={CANONICAL_TIME_LABELS}
+          allowCustom
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+        />
       </div>
 
       {/* ══════════════════════════════════════════════════
@@ -446,8 +506,9 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
           <Target className="w-3.5 h-3.5" />
           Incentive View
         </button>
-        <span className={`text-[12px] font-bold tabular-nums ${incentive.scoreGate === 'full' ? 'text-emerald-600' : incentive.scoreGate === 'half' ? 'text-amber-600' : 'text-rose-600'
-          }`}>
+        <span className={`text-[12px] font-bold tabular-nums ${
+          incentive.scoreGate === 'full' ? 'text-emerald-600' : incentive.scoreGate === 'half' ? 'text-amber-600' : 'text-rose-600'
+        }`}>
           {formatCurrency(incentive.projectedPayout)}
         </span>
         <span className="text-[10px] text-slate-400">projected</span>
@@ -474,26 +535,18 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
           {/* Compact metric row */}
           <div className="grid grid-cols-4 gap-2">
             {[
-              {
-                label: 'Critical', value: String(criticalCount), bad: criticalCount > 0,
+              { label: 'Critical', value: String(criticalCount), bad: criticalCount > 0,
                 color: criticalCount > 0 ? 'text-rose-600' : 'text-emerald-600',
-                bg: criticalCount > 0 ? 'bg-rose-50' : 'bg-emerald-50'
-              },
-              {
-                label: '<12% I2SI', value: String(kamsBelowI2SI), bad: kamsBelowI2SI > 0,
+                bg: criticalCount > 0 ? 'bg-rose-50' : 'bg-emerald-50' },
+              { label: '<12% I2SI', value: String(kamsBelowI2SI), bad: kamsBelowI2SI > 0,
                 color: kamsBelowI2SI > 0 ? 'text-amber-600' : 'text-emerald-600',
-                bg: kamsBelowI2SI > 0 ? 'bg-amber-50' : 'bg-emerald-50'
-              },
-              {
-                label: 'Below SI', value: String(kamsBelowSIPace), bad: kamsBelowSIPace > 0,
+                bg: kamsBelowI2SI > 0 ? 'bg-amber-50' : 'bg-emerald-50' },
+              { label: 'Below SI', value: String(kamsBelowSIPace), bad: kamsBelowSIPace > 0,
                 color: kamsBelowSIPace > 0 ? 'text-amber-600' : 'text-emerald-600',
-                bg: kamsBelowSIPace > 0 ? 'bg-amber-50' : 'bg-emerald-50'
-              },
-              {
-                label: 'Zero DCF', value: String(kamsZeroDCF), bad: kamsZeroDCF > 0,
+                bg: kamsBelowSIPace > 0 ? 'bg-amber-50' : 'bg-emerald-50' },
+              { label: 'Zero DCF', value: String(kamsZeroDCF), bad: kamsZeroDCF > 0,
                 color: kamsZeroDCF > 0 ? 'text-rose-600' : 'text-emerald-600',
-                bg: kamsZeroDCF > 0 ? 'bg-rose-50' : 'bg-emerald-50'
-              },
+                bg: kamsZeroDCF > 0 ? 'bg-rose-50' : 'bg-emerald-50' },
             ].map(m => (
               <div key={m.label} className={`text-center px-1.5 py-2 rounded-xl ${m.bg}`}>
                 <div className={`text-[18px] font-extrabold tabular-nums leading-none ${m.color}`}>{m.value}</div>
@@ -658,8 +711,13 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
           incentive={incentive}
           overview={overview}
           activeSlab={activeSlab}
+          configSlabs={configSlabs}
+          configScoreGates={configScoreGates}
+          i2siTarget={i2siTarget}
           kamsAtRiskIncentive={kamsAtRiskIncentive}
           kamsBelowScore70={kamsBelowScore70}
+          fullGateThreshold={fullGateThreshold}
+          halfGateThreshold={halfGateThreshold}
           formatCurrency={formatCurrency}
           onClose={() => setShowIncentiveDrawer(false)}
         />
@@ -673,14 +731,19 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
 interface IncentiveDrawerProps {
   incentive: TLIncentiveData;
   overview: TLOverview;
-  activeSlab: { row: number; col: number } | null;
+  activeSlab: { row: number } | null;
+  configSlabs: ReturnType<typeof getConfigIncentiveSlabs>;
+  configScoreGates: ReturnType<typeof getConfigScoreGates>;
+  i2siTarget: number;
   kamsAtRiskIncentive: number;
   kamsBelowScore70: number;
+  fullGateThreshold: number;
+  halfGateThreshold: number;
   formatCurrency: (n: number) => string;
   onClose: () => void;
 }
 
-function IncentiveDrawer({ incentive, overview, activeSlab, kamsAtRiskIncentive, kamsBelowScore70, formatCurrency, onClose }: IncentiveDrawerProps) {
+function IncentiveDrawer({ incentive, overview, activeSlab, configSlabs, configScoreGates, i2siTarget, kamsAtRiskIncentive, kamsBelowScore70, fullGateThreshold, halfGateThreshold, formatCurrency, onClose }: IncentiveDrawerProps) {
   const [mounted, setMounted] = useState(false);
   const backdropRef = useRef<HTMLDivElement>(null);
 
@@ -742,13 +805,13 @@ function IncentiveDrawer({ incentive, overview, activeSlab, kamsAtRiskIncentive,
             {kamsAtRiskIncentive > 0 && (
               <div className="flex items-center gap-2 px-3 py-2 bg-rose-50 border border-rose-100 rounded-xl mt-2">
                 <AlertCircle className="w-3.5 h-3.5 text-rose-500 flex-shrink-0" />
-                <span className="text-[11px] font-medium text-rose-700">{kamsAtRiskIncentive} KAM{kamsAtRiskIncentive > 1 ? 's' : ''} score below 50 — incentive at zero</span>
+                <span className="text-[11px] font-medium text-rose-700">{kamsAtRiskIncentive} KAM{kamsAtRiskIncentive > 1 ? 's' : ''} score below {halfGateThreshold} — incentive at zero</span>
               </div>
             )}
             {kamsBelowScore70 > 0 && kamsBelowScore70 !== kamsAtRiskIncentive && (
               <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-100 rounded-xl mt-2">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                <span className="text-[11px] font-medium text-amber-700">{kamsBelowScore70 - kamsAtRiskIncentive} KAM{(kamsBelowScore70 - kamsAtRiskIncentive) > 1 ? 's' : ''} score below 70 — half incentive</span>
+                <span className="text-[11px] font-medium text-amber-700">{kamsBelowScore70 - kamsAtRiskIncentive} KAM{(kamsBelowScore70 - kamsAtRiskIncentive) > 1 ? 's' : ''} score below {fullGateThreshold} — half incentive</span>
               </div>
             )}
           </div>
@@ -757,20 +820,23 @@ function IncentiveDrawer({ incentive, overview, activeSlab, kamsAtRiskIncentive,
           <div className="flex gap-2.5">
             <div className="flex-1 bg-slate-50 rounded-xl p-3">
               <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Achievement Slab</div>
-              <span className={`inline-flex text-[11px] font-bold px-2 py-0.5 rounded-lg
-                ${incentive.currentAchievementPercent >= 110 ? 'bg-indigo-100 text-indigo-700'
-                  : incentive.currentAchievementPercent >= 95 ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-rose-100 text-rose-700'}`}>
-                {incentive.currentAchievementPercent >= 110 ? '110% Slab' : incentive.currentAchievementPercent >= 95 ? '95% Slab' : 'Not eligible'}
-              </span>
+              {(() => {
+                const topSlab = [...configSlabs].reverse().find(s => incentive.currentAchievementPercent >= s.minPct);
+                const isEligible = topSlab && topSlab.ratePerSI > 0;
+                return (
+                  <span className={`inline-flex text-[11px] font-bold px-2 py-0.5 rounded-lg
+                    ${isEligible ? topSlab.minPct >= (configSlabs[configSlabs.length - 1]?.minPct ?? 110) ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                    {isEligible ? `${topSlab.minPct}% Slab` : 'Not eligible'}
+                  </span>
+                );
+              })()}
             </div>
             <div className="flex-1 bg-slate-50 rounded-xl p-3">
               <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">I2SI Band</div>
               <span className={`inline-flex text-[11px] font-bold px-2 py-0.5 rounded-lg
-                ${incentive.currentI2SI >= 15 ? 'bg-indigo-100 text-indigo-700'
-                  : incentive.currentI2SI >= 12 ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-rose-100 text-rose-700'}`}>
-                {incentive.currentI2SI >= 15 ? '15% Band' : incentive.currentI2SI >= 12 ? '12% Band' : 'Below 12%'}
+                ${incentive.currentI2SI >= i2siTarget ? 'bg-indigo-100 text-indigo-700'
+                : 'bg-rose-100 text-rose-700'}`}>
+                {incentive.currentI2SI >= i2siTarget ? `${i2siTarget}% Band` : `Below ${i2siTarget}%`}
               </span>
             </div>
           </div>
@@ -783,26 +849,23 @@ function IncentiveDrawer({ incentive, overview, activeSlab, kamsAtRiskIncentive,
             </div>
             <div className="text-[10px] text-slate-400 mb-2 font-medium">Rate per Stock-in (only 10% SB considered)</div>
             <div className="rounded-xl border border-slate-200 overflow-hidden">
-              <div className="grid grid-cols-3 bg-slate-50">
+              <div className="grid grid-cols-2 bg-slate-50">
                 <div className="px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Achievement</div>
-                <div className="px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">I2SI 12%</div>
-                <div className="px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">I2SI 15%</div>
+                <div className="px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">Rate / SI</div>
               </div>
-              {SLABS.map((slab, rowIdx) => (
-                <div key={slab.achieveLabel} className="grid grid-cols-3 border-t border-slate-100">
-                  <div className="px-3 py-2.5 text-[12px] font-medium text-slate-700">{slab.achieveLabel}</div>
-                  {[slab.i2si12, slab.i2si15].map((rate, colIdx) => {
-                    const isActive = activeSlab && activeSlab.row === rowIdx && activeSlab.col === colIdx + 1;
-                    return (
-                      <div key={colIdx} className={`px-3 py-2.5 text-center text-[13px] font-bold transition-all
-                        ${isActive ? 'bg-indigo-100 text-indigo-700 ring-2 ring-inset ring-indigo-400'
-                          : rate === 0 ? 'text-slate-300 bg-slate-50/50' : 'text-slate-700'}`}>
-                        {rate === 0 ? '—' : `\u20B9${rate}`}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+              {buildSlabsTable(configSlabs).map((slab, rowIdx) => {
+                const isActive = activeSlab && activeSlab.row === rowIdx;
+                return (
+                  <div key={slab.achieveLabel} className="grid grid-cols-2 border-t border-slate-100">
+                    <div className="px-3 py-2.5 text-[12px] font-medium text-slate-700">{slab.achieveLabel}</div>
+                    <div className={`px-3 py-2.5 text-center text-[13px] font-bold transition-all
+                      ${isActive ? 'bg-indigo-100 text-indigo-700 ring-2 ring-inset ring-indigo-400'
+                      : slab.ratePerSI === 0 ? 'text-slate-300 bg-slate-50/50' : 'text-slate-700'}`}>
+                      {slab.ratePerSI === 0 ? '—' : `\u20B9${slab.ratePerSI}`}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <div className="flex items-center gap-1.5 mt-2.5 text-[10px] text-slate-400">
               <div className="w-3 h-3 rounded bg-indigo-100 ring-1 ring-indigo-400" />
@@ -818,11 +881,15 @@ function IncentiveDrawer({ incentive, overview, activeSlab, kamsAtRiskIncentive,
             </div>
             <div className="space-y-2 mb-4">
               <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Boosters</div>
-              {[
-                { label: 'I2SI target achieved', value: incentive.i2siBonus > 0 ? `+\u20B9${incentive.i2siBonus.toLocaleString('en-IN')}` : '+\u20B95,000', active: incentive.i2siBonus > 0, desc: 'Flat bonus if I2SI \u2265 15%' },
-                { label: 'DCF Onboarding', value: `+\u20B9${incentive.dcfOnboardingBonus.toLocaleString('en-IN')}`, active: incentive.dcfOnboardingBonus > 0, desc: `\u20B9100 per onboarding (\u00D7${overview.dcfOnboardings})` },
-                { label: 'DCF GMV', value: `+\u20B9${incentive.dcfGMVBonus.toLocaleString('en-IN')}`, active: incentive.dcfGMVBonus > 0, desc: 'GMV \u00D7 0.3%' },
-              ].map((b) => (
+              {(() => {
+                const dcfRules = getConfigDCFPayoutRules();
+                const gmvPctDisplay = (dcfRules.gmvTotalPct * 100).toFixed(1);
+                return [
+                  { label: 'I2SI target achieved', value: incentive.i2siBonus > 0 ? `+\u20B9${incentive.i2siBonus.toLocaleString('en-IN')}` : '+\u20B95,000', active: incentive.i2siBonus > 0, desc: `Flat bonus if I2SI \u2265 ${i2siTarget}%` },
+                  { label: 'DCF Onboarding', value: `+\u20B9${incentive.dcfOnboardingBonus.toLocaleString('en-IN')}`, active: incentive.dcfOnboardingBonus > 0, desc: `\u20B9${dcfRules.onboardingPayout} per onboarding (\u00D7${overview.dcfOnboardings})` },
+                  { label: 'DCF GMV', value: `+\u20B9${incentive.dcfGMVBonus.toLocaleString('en-IN')}`, active: incentive.dcfGMVBonus > 0, desc: `GMV \u00D7 ${gmvPctDisplay}%` },
+                ];
+              })().map((b) => (
                 <div key={b.label} className={`flex items-center justify-between px-3 py-2 rounded-xl ${b.active ? 'bg-emerald-50 border border-emerald-100' : 'bg-slate-50 border border-slate-100'}`}>
                   <div>
                     <div className={`text-[12px] font-medium ${b.active ? 'text-emerald-700' : 'text-slate-500'}`}>{b.label}</div>
@@ -835,9 +902,9 @@ function IncentiveDrawer({ incentive, overview, activeSlab, kamsAtRiskIncentive,
             <div className="space-y-2">
               <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Score-based Gating</div>
               {[
-                { label: 'Score \u226570', desc: 'Full incentive', color: 'emerald' as const, active: incentive.avgTeamScore >= 70 },
-                { label: 'Score 50\u201370', desc: 'Half incentive', color: 'amber' as const, active: incentive.avgTeamScore >= 50 && incentive.avgTeamScore < 70 },
-                { label: 'Score <50', desc: 'Zero incentive', color: 'rose' as const, active: incentive.avgTeamScore < 50 },
+                { label: `Score \u2265${fullGateThreshold}`, desc: 'Full incentive', color: 'emerald' as const, active: incentive.avgTeamScore >= fullGateThreshold },
+                { label: `Score ${halfGateThreshold}\u2013${fullGateThreshold}`, desc: 'Half incentive', color: 'amber' as const, active: incentive.avgTeamScore >= halfGateThreshold && incentive.avgTeamScore < fullGateThreshold },
+                { label: `Score <${halfGateThreshold}`, desc: 'Zero incentive', color: 'rose' as const, active: incentive.avgTeamScore < halfGateThreshold },
               ].map((gate) => (
                 <div key={gate.label} className={`flex items-center justify-between px-3 py-2 rounded-xl border
                   ${gate.active

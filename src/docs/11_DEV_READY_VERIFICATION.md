@@ -47,8 +47,8 @@ All 33 routes from baseline remain:
 - AUTH_LOGIN, AUTH_FORGOT_PASSWORD ✅
 - PROFILE, PROFILE_COMPLETE ✅
 - HOME, DEALERS, LEADS, LEAD_DETAIL, VISITS, VISIT_DETAIL ✅
-- CALL_DETAIL, CALL_FEEDBACK, TL_CALL_DETAIL ✅
-- VISIT_FEEDBACK, VISIT_CHECKIN ✅
+- CALL_FEEDBACK ✅ (CALL_DETAIL, TL_CALL_DETAIL removed in Wave 2)
+- VISIT_FEEDBACK ✅ (VISIT_CHECKIN removed in Wave 2)
 - DCF, DCF_DEALERS, DCF_LEADS, DCF_DISBURSALS, DCF_DEALER_DETAIL, etc. ✅
 - PERFORMANCE, PRODUCTIVITY, LEADERBOARD, INCENTIVE_SIMULATOR ✅
 - ADMIN_HOME, ADMIN_DEALERS, ADMIN_LEADS, ADMIN_VC, ADMIN_DCF, etc. ✅
@@ -301,7 +301,7 @@ All 33 routes from baseline remain:
 **Protected Files (NEVER ARCHIVE):**
 - [ ] /App.tsx ✅ (not touched)
 - [ ] /components/figma/ImageWithFallback.tsx ✅ (not touched)
-- [ ] /data/mockDatabase.ts ✅ (not touched)
+- [ ] /data/runtimeDB.ts ✅ (not touched)
 - [ ] /lib/metricsEngine.ts ✅ (not touched)
 - [ ] /lib/incentiveEngine.ts ✅ (not touched)
 - [ ] /lib/productivityEngine.ts ✅ (not touched)
