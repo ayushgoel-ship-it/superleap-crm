@@ -349,8 +349,7 @@ export function LegacyPreviewPage() {
                 ))}
               </div>
               <div className="flex gap-1.5 mb-3">
-                <ChannelChip channel="C2B" />
-                <ChannelChip channel="C2D" />
+                <ChannelChip channel="NGS" />
                 <ChannelChip channel="DCF" />
               </div>
               <div className="space-y-2">
@@ -358,7 +357,7 @@ export function LegacyPreviewPage() {
                   <div key={name} className="p-2 bg-slate-50 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-1.5 mb-1">
                       <span className="text-[9px] font-mono text-slate-400">LEAD-{2045 + i}</span>
-                      <ChannelChip channel={i === 0 ? 'C2B' : 'DCF'} />
+                      <ChannelChip channel={i === 0 ? 'NGS' : 'DCF'} />
                     </div>
                     <div className="text-[11px] font-semibold text-slate-700">{name}</div>
                     <div className="text-[9px] text-slate-400 mb-1">{i === 0 ? 'Swift Dzire 2021' : 'Hyundai i20 2020'}</div>

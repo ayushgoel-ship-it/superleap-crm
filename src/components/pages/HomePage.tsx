@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { TimePeriod } from '../../lib/domain/constants';
 import type { UserRole } from '../../lib/shared/appTypes';
-import { FilterChip } from '../premium/Chip';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 import { computeMetrics, getMonthProgress, projectToEOM, type DashboardMetrics } from '../../lib/metrics/metricsFromDB';
 import { MetricCard } from '../cards/MetricCard';
 import { TargetCard } from '../cards/TargetCard';
@@ -18,6 +18,7 @@ import {
 } from '../../lib/domain/metrics';
 import { getSITarget } from '../../lib/metricsEngine';
 import { calculateActualProjectedIncentive, type IncentiveContext } from '../../lib/incentiveEngine';
+import { getConfigSITarget, getConfigI2SITarget } from '../../lib/configFromDB';
 
 interface HomePageProps {
   userRole: UserRole;
@@ -34,6 +35,8 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
   const [expandedI2SI, setExpandedI2SI] = useState(false);
   const [expandedQuality, setExpandedQuality] = useState(false);
   const [expandedUniqueRaise, setExpandedUniqueRaise] = useState(false);
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
 
 
   // Color-coded metric row helper
@@ -98,7 +101,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
     i2si: metrics.i2si,
     dcfDisbursals: metrics.dcfDisbursals,
     dcfValue: metrics.dcfDisbursedValue,
-    dcfDealersOnboarded: metrics.dcfTotal - metrics.dcfDisbursals,
+    dcfDealersOnboarded: metrics.dcfOnboarded,
     dcfLeadsSubmitted: metrics.dcfTotal,
     visits: {
       top: metrics.completedVisits,
@@ -124,7 +127,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
 
   const targets = {
     inspections: selectedPeriod === TimePeriod.TODAY || selectedPeriod === TimePeriod.D_MINUS_1 ? 10 : 250,
-    i2si: 65,
+    i2si: getConfigI2SITarget('KAM'),
     a2c: 65,
   };
 
@@ -140,9 +143,8 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
     const total = metrics.totalLeads || 1;
     return {
       gsI2SI: Math.round(((cb['GS'] || 0) / total) * 100),
-      c2dI2SI: Math.round(((cb['NGS'] || 0) / total) * 100),
-      c2bI2SI: Math.round(((cb['NGS'] || 0) / total) * 100),
-      c2dI2T: Math.round(((cb['DCF'] || 0) / total) * 100),
+      ngsI2SI: Math.round(((cb['NGS'] || 0) / total) * 100),
+      dcfI2T: Math.round(((cb['DCF'] || 0) / total) * 100),
       t2SI: metrics.i2si,
     };
   };
@@ -151,8 +153,8 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
     const ur = data.uniqueRaise;
     return {
       gsUniqueRaise: ur,
-      c2dUniqueRaise: Math.max(0, ur - 4),
-      c2bUniqueRaise: Math.max(0, ur - 2),
+      ngsUniqueRaise: Math.max(0, ur - 4),
+      dcfUniqueRaise: Math.max(0, ur - 2),
     };
   };
 
@@ -190,21 +192,18 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
   return (
     <div className="px-4 py-5 space-y-5 animate-fade-in">
       {/* Period Switcher - Pill-style */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {([
-          { key: TimePeriod.TODAY, label: 'Today' },
-          { key: TimePeriod.D_MINUS_1, label: 'Yesterday' },
-          { key: TimePeriod.MTD, label: 'MTD' },
-          { key: TimePeriod.LAST_MONTH, label: 'Last Month' },
-        ]).map(({ key, label }) => (
-          <FilterChip
-            key={key}
-            label={label}
-            active={selectedPeriod === key}
-            onClick={() => setSelectedPeriod(key)}
-          />
-        ))}
-      </div>
+      <TimeFilterControl
+        mode="chips"
+        chipStyle="pill"
+        value={selectedPeriod}
+        onChange={setSelectedPeriod}
+        options={CANONICAL_TIME_OPTIONS}
+        labelOverrides={CANONICAL_TIME_LABELS}
+        allowCustom
+        customFrom={customFrom}
+        customTo={customTo}
+        onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+      />
 
       {/* Hero Performance Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-5 text-white shadow-lg shadow-indigo-200/50">
@@ -374,8 +373,8 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
           <span className="text-[11px] font-medium text-indigo-600">View all</span>
         </div>
         <div className="space-y-3">
-          <TargetCard title="Stock-in" target={150} achieved={data.stockIns} unit="units" />
-          <TargetCard title="I2SI%" target={65} achieved={data.i2si} unit="%" inverse />
+          <TargetCard title="Stock-in" target={getConfigSITarget('KAM')} achieved={data.stockIns} unit="units" />
+          <TargetCard title="I2SI%" target={getConfigI2SITarget('KAM')} achieved={data.i2si} unit="%" inverse />
           <TargetCard title="DCF Disbursement" target={25} achieved={data.dcfDisbursals} unit="loans" />
         </div>
       </div>
@@ -654,13 +653,12 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
                     <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Channel-wise</div>
                     <div className="space-y-2">
                       <MetricRow label="GS I2SI%" subtitle="Target: 15%" value={i2siBreakdown.gsI2SI} target={15} state={getMetricColorState(i2siBreakdown.gsI2SI, 15)} />
-                      <MetricRow label="C2D I2SI%" subtitle="Target: 20%" value={i2siBreakdown.c2dI2SI} target={20} state={getMetricColorState(i2siBreakdown.c2dI2SI, 20)} />
-                      <MetricRow label="C2B I2SI%" subtitle="Target: 12%" value={i2siBreakdown.c2bI2SI} target={12} state={getMetricColorState(i2siBreakdown.c2bI2SI, 12)} />
+                      <MetricRow label="NGS I2SI%" subtitle="Target: 16%" value={i2siBreakdown.ngsI2SI} target={16} state={getMetricColorState(i2siBreakdown.ngsI2SI, 16)} />
                     </div>
                     <div className="border-t border-slate-100 pt-3">
-                      <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">C2D & Telecalling</div>
+                      <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-2">DCF & Telecalling</div>
                       <div className="space-y-2">
-                        <MetricRow label="C2D I2T%" subtitle="Target: 30%" value={i2siBreakdown.c2dI2T} target={30} state={getMetricColorState(i2siBreakdown.c2dI2T, 30)} />
+                        <MetricRow label="DCF I2T%" subtitle="Target: 30%" value={i2siBreakdown.dcfI2T} target={30} state={getMetricColorState(i2siBreakdown.dcfI2T, 30)} />
                         <MetricRow label="T2SI%" subtitle="Target: 75%" value={i2siBreakdown.t2SI} target={75} state={getMetricColorState(i2siBreakdown.t2SI, 75)} />
                       </div>
                     </div>
@@ -728,8 +726,8 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
                     <div className="space-y-2">
                       {[
                         { label: 'GS', value: uniqueRaiseBreakdown.gsUniqueRaise },
-                        { label: 'NGS', value: uniqueRaiseBreakdown.c2dUniqueRaise },
-                        { label: 'DCF', value: uniqueRaiseBreakdown.c2bUniqueRaise },
+                        { label: 'NGS', value: uniqueRaiseBreakdown.ngsUniqueRaise },
+                        { label: 'DCF', value: uniqueRaiseBreakdown.dcfUniqueRaise },
                       ].map((ch) => (
                         <div key={ch.label} className="flex items-center justify-between text-[13px]">
                           <span className="text-slate-500">{ch.label} Unique Raise%</span>

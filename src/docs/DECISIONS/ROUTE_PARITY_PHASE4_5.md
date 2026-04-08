@@ -17,26 +17,17 @@ Reconciled all mismatches between the `AppRoute` enum, `ROUTES` object, `ROLE_CO
 
 | # | Enum Constant | Key Value | In `ROUTES` obj | In `accessibleRoutes` | App.tsx switch case | Other references | Verdict |
 |---|--------------|-----------|-----------------|----------------------|--------------------|--------------------|---------|
-| A1 | `VISIT_DETAIL` | `visit-detail` | Yes | No | **NO** | 0 usage refs | **DEPRECATED** — detail handled inline by VisitsPage |
-| A2 | `CALL_DETAIL` | `call-detail` | Yes | No | **NO** | 0 usage refs | **DEPRECATED** — detail handled inline by VisitsPage |
-| A3 | `TL_CALL_DETAIL` | `tl-call-detail` | Yes | No | **NO** | 0 usage refs | **DEPRECATED** — planned but never implemented |
-| A4 | `VISIT_CHECKIN` | `visit-checkin` | Yes | No | **NO** | 0 usage refs | **DEPRECATED** — check-in handled inline by VisitsPage |
-| A5 | `DCF_ONBOARDING_FORM` | `dcf-onboarding-form` | Yes | No | **NO** | `isDCFRoute` helper (routes.ts:106) | **DEPRECATED** — `dcf-onboarding` is the live route |
+| A1 | `VISIT_DETAIL` | `visit-detail` | Removed | No | **NO** | 0 usage refs | **REMOVED** — detail handled inline by VisitsPage |
+| A2 | `CALL_DETAIL` | `call-detail` | Removed | No | **NO** | 0 usage refs | **REMOVED** — detail handled inline by VisitsPage |
+| A3 | `TL_CALL_DETAIL` | `tl-call-detail` | Removed | No | **NO** | 0 usage refs | **REMOVED** — planned but never implemented |
+| A4 | `VISIT_CHECKIN` | `visit-checkin` | Removed | No | **NO** | 0 usage refs | **REMOVED** — check-in handled inline by VisitsPage |
+| A5 | `DCF_ONBOARDING_FORM` | `dcf-onboarding-form` | Removed | No | **NO** | 0 usage refs | **REMOVED** — `dcf-onboarding` is the live route |
 
 ### Action Taken
 
-- Added `@deprecated` JSDoc comments to all 5 in `AppRoute` enum (`constants.ts`) and `ROUTES` object (`routes.ts`)
-- **NOT removed** — removing would narrow the `Route` type union, which is a breaking type change
-- `isDCFRoute` helper retains `DCF_ONBOARDING_FORM` for backward compat; also added live `DCF_ONBOARDING`
-
-### Why Not Remove
-
-Removing enum values or ROUTES entries would:
-1. Narrow the `Route` type union → potential type errors in downstream consumers
-2. Remove from `isValidRoute()` checks → any code checking for these strings would get false
-3. Violate zero-behavior-change constraint
-
-The deprecated comments clearly mark these as dead for future cleanup.
+- Originally marked `@deprecated` in Phase 4.5
+- **Now fully REMOVED** in Wave 2 cleanup — all 5 route constants deleted from `AppRoute` enum and `ROUTES` object
+- `isDCFRoute` helper updated to remove `DCF_ONBOARDING_FORM` reference
 
 ---
 

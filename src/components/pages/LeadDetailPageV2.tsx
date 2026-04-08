@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { getLeadById } from '../../data/selectors';
 import type { Lead } from '../../data/types';
+import { deriveRangeStatus, mapChannelToCanonical } from '../../data/canonicalMetrics';
 import { StatusChip } from '../premium/Chip';
 import { InlineEmpty } from '../premium/EmptyState';
 import { toast } from 'sonner@2.0.3';
@@ -64,9 +65,9 @@ function formatAmount(amount: number): string {
 }
 
 function channelVariant(ch: string): 'info' | 'warning' | 'success' | 'neutral' {
-  if (ch === 'C2B') return 'info';
-  if (ch === 'C2D') return 'warning';
+  if (ch === 'NGS') return 'info';
   if (ch === 'GS') return 'success';
+  if (ch === 'DCF') return 'warning';
   return 'neutral';
 }
 
@@ -254,6 +255,12 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     const gap = effectiveCep - c24Quote;
     return { raw: gap, abs: Math.abs(gap), pct: Math.round((gap / c24Quote) * 100) };
   }, [effectiveCep, c24Quote]);
+
+  // ── Range Status (GS/NGS only) ──
+  const rangeStatus = useMemo(() => {
+    if (mapChannelToCanonical(lead.channel) === 'DCF') return null;
+    return deriveRangeStatus({ cep: effectiveCep, c24Quote });
+  }, [lead.channel, effectiveCep, c24Quote]);
 
   // ── CEP Save Handler ──
   const handleCEPSave = useCallback(async (data: CEPData) => {
@@ -613,6 +620,19 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
                         {cepGap ? `${cepGap.raw > 0 ? '+' : ''}${formatAmount(cepGap.raw)} (${cepGap.pct > 0 ? '+' : ''}${cepGap.pct}%)` : '\u2014'}
                       </span>
                     </div>
+                    {rangeStatus && (
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[12px] font-semibold text-slate-600">Range</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                          rangeStatus === 'Within Range'    ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                          rangeStatus === 'Less than Range' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                          rangeStatus === 'More than Range' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                                              'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                          {rangeStatus}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   {/* Insight */}
                   {cepGap && cepGap.raw > 0 && (
@@ -853,7 +873,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
         initialConfidence={localCepConfidence}
         initialNotes={localCepNotes}
         c24Quote={c24Quote}
-        channel={lead.channel as 'C2B' | 'C2D' | 'GS'}
+        channel={lead.channel as 'NGS' | 'GS' | 'DCF'}
         vehicleInfo={`${lead.make} ${lead.model} ${lead.year} \u2022 ${lead.regNo || lead.registrationNumber}`}
       />
 

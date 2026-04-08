@@ -25,7 +25,7 @@
 | `metric_key` | `si_achievement` |
 | `display_name` | Stock-Ins (SI) |
 | `unit` | `count / target` |
-| `dimensions` | `channel` (C2B, C2D, GS), `region` |
+| `dimensions` | `channel` (NGS, GS), `region` |
 | Source tables | `leads`, `targets` |
 | Filters | `leads.kam_user_id = :user_id`, `leads.status = 'Won'`, `leads.stage = 'Stock-in'`, `leads.converted_at BETWEEN :start_date AND :end_date` |
 | **Formula** | `si_achieved = COUNT(*) FROM leads WHERE stage = 'Stock-in' AND status = 'Won'` |
@@ -194,20 +194,33 @@
 
 ## 3. Dealer Metrics
 
-### 3.1 Dealer Status Derivation
+### 3.1 Dealer Activity Stage Derivation
 
-| Status | Rule |
-|--------|------|
-| `active` | At least 1 call OR 1 visit in last 14 days |
-| `dormant` | No calls AND no visits in last 14–60 days |
-| `inactive` | No calls AND no visits for > 60 days |
+The frontend uses `deriveDealerActivityStage()` from `data/canonicalMetrics.ts` to compute a 4-tier activity stage. Dormancy is COMPUTED from activity data, not read from a stored status column.
+
+| Stage | Rule |
+|-------|------|
+| `Transacting` | Has active deals/stock-ins in the time period |
+| `Inspecting` | Has inspections but no stock-ins |
+| `Lead Giving` | Sharing leads but no inspections |
+| `Dormant` | No meaningful activity in the time period |
+
+```typescript
+// Frontend usage
+import { deriveDealerActivityStage } from '../data/canonicalMetrics';
+
+const stage = deriveDealerActivityStage(dealer);
+// Returns: 'Transacting' | 'Inspecting' | 'Lead Giving' | 'Dormant'
+```
+
+For backend SQL contexts, the equivalent derivation is:
 
 ```sql
--- Derived status (override manual if needed)
 CASE
-  WHEN last_call_days <= 14 OR last_visit_days <= 14 THEN 'active'
-  WHEN last_call_days <= 60 OR last_visit_days <= 60 THEN 'dormant'
-  ELSE 'inactive'
+  WHEN has_stock_ins_in_period THEN 'Transacting'
+  WHEN has_inspections_in_period THEN 'Inspecting'
+  WHEN has_leads_in_period THEN 'Lead Giving'
+  ELSE 'Dormant'
 END
 ```
 
@@ -236,7 +249,7 @@ Same formula as Section 1.5 but scoped to `dealer_id` instead of `kam_user_id`.
 
 ## 4. Lead Status & Stage Derivation Rules
 
-### 4.1 Lead Stages (C2B/C2D/GS)
+### 4.1 Lead Stages (NGS/GS)
 
 | Stage (enum) | Description | Transition From | Transition To |
 |-------------|-------------|-----------------|---------------|
@@ -413,7 +426,7 @@ Same as call duration. Additionally:
 |-------|------|
 | `lead_id` | NOT NULL, UNIQUE |
 | `dealer_id` | Must reference existing dealer |
-| `channel` | IN ('C2B', 'C2D', 'GS') |
+| `channel` | IN ('NGS', 'GS') |
 | `lead_type` | IN ('Seller', 'Inventory') |
 | `status` | IN ('Active', 'Won', 'Lost', 'Expired') |
 | `expected_revenue` | >= 0 |

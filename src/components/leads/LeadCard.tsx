@@ -9,7 +9,7 @@
  * Features:
  * - Works with LeadCardVM from adapter (single source of truth)
  * - Displays lead with proper badges (Channel, Type, Status)
- * - Shows CEP or CEP Pending for C2B/C2D/GS
+ * - Shows CEP or CEP Pending for NGS/GS
  * - Shows C24 Quote / LTV value
  * - Shows KAM owner (TL mode only)
  * - Clickable to navigate to Lead Detail

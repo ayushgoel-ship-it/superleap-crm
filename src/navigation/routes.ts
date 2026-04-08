@@ -27,12 +27,6 @@ export const ROUTES = {
   LEAD_CREATE: AppRoute.LEAD_CREATE,
   VISITS: AppRoute.VISITS,
   NOTIFICATIONS: AppRoute.NOTIFICATIONS,
-  /** @deprecated Unmounted — Phase 4.5 */
-  VISIT_DETAIL: AppRoute.VISIT_DETAIL,
-  /** @deprecated Unmounted — Phase 4.5 */
-  CALL_DETAIL: AppRoute.CALL_DETAIL,
-  /** @deprecated Unmounted — Phase 4.5 */
-  TL_CALL_DETAIL: AppRoute.TL_CALL_DETAIL,
   DCF: AppRoute.DCF,
   DCF_DEALERS: AppRoute.DCF_DEALERS,
   DCF_LEADS: AppRoute.DCF_LEADS,
@@ -41,16 +35,12 @@ export const ROUTES = {
   DCF_LEAD_DETAIL: AppRoute.DCF_LEAD_DETAIL,
   DCF_ONBOARDING_DETAIL: AppRoute.DCF_ONBOARDING_DETAIL,
   DCF_ONBOARDING: AppRoute.DCF_ONBOARDING,
-  /** @deprecated Unmounted — Phase 4.5 */
-  DCF_ONBOARDING_FORM: AppRoute.DCF_ONBOARDING_FORM,
   PERFORMANCE: AppRoute.PERFORMANCE,
   PRODUCTIVITY: AppRoute.PRODUCTIVITY,
   LEADERBOARD: AppRoute.LEADERBOARD,
   INCENTIVE_SIMULATOR: AppRoute.INCENTIVE_SIMULATOR,
   CALL_FEEDBACK: AppRoute.CALL_FEEDBACK,
   VISIT_FEEDBACK: AppRoute.VISIT_FEEDBACK,
-  /** @deprecated Unmounted — Phase 4.5 */
-  VISIT_CHECKIN: AppRoute.VISIT_CHECKIN,
   
   // Navigation Detail Pages (no bottom nav)
   DEALER_LOCATION_UPDATE: AppRoute.DEALER_LOCATION_UPDATE,
@@ -123,7 +113,6 @@ export function isDCFRoute(route: Route | string): boolean {
     ROUTES.DCF_LEAD_DETAIL,
     ROUTES.DCF_ONBOARDING_DETAIL,
     ROUTES.DCF_ONBOARDING,
-    ROUTES.DCF_ONBOARDING_FORM, // @deprecated but kept for backward compat
   ];
   return dcfRoutes.includes(route as Route);
 }

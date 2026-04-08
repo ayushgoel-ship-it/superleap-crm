@@ -1,6 +1,17 @@
 import type { PageView, DealersFilterContext, LeadsFilterContext } from '../../lib/shared/appTypes';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { IndianRupee, TrendingUp, ChevronRight, Filter, CheckCircle2, AlertTriangle, ChevronDown } from 'lucide-react';
+import { getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import type { MetricFilters } from '../../data/canonicalMetrics';
+import { TimePeriod } from '../../lib/domain/constants';
+import { getAllDealers } from '../../data/selectors';
+import { getDCFTargets } from '../../lib/metricsEngine';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+
+// Approval ratio: expected share of leads that reach approved/disbursed status.
+// Used to derive per-dealer approval target from their lead count.
+// TODO: move to configFromDB once this ratio is tracked in the backend.
+const DCF_APPROVAL_RATIO = 0.7;
 
 interface DCFPageProps {
   onNavigateToDealers: (filter?: string, context?: string, filterContext?: DealersFilterContext) => void;
@@ -41,7 +52,9 @@ export function DCFPageTL({
   onNavigateToDCFOnboardingDetail,
   onDateRangeChange,
 }: DCFPageProps) {
-  const [selectedDateRange, setSelectedDateRange] = useState('MTD');
+  const [period, setPeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<DCFStatusFilter>('All');
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   
@@ -49,173 +62,70 @@ export function DCFPageTL({
   const [selectedKAM, setSelectedKAM] = useState('all');
   const [showKAMDropdown, setShowKAMDropdown] = useState(false);
   
-  const kamOptions: KAMOption[] = [
-    { id: 'all', name: 'All KAMs' },
-    { id: 'rajesh', name: 'Rajesh Kumar' },
-    { id: 'priya', name: 'Priya Sharma' },
-    { id: 'amit', name: 'Amit Patel' },
-    { id: 'neha', name: 'Neha Singh' },
-  ];
+  const kamOptions: KAMOption[] = useMemo(() => {
+    const dcfLeads = getFilteredDCFLeads({ period: TimePeriod.LIFETIME });
+    const kamMap = new Map<string, string>();
+    dcfLeads.forEach(l => {
+      if (l.kamId && l.kamName) kamMap.set(l.kamId, l.kamName);
+    });
+    return [
+      { id: 'all', name: 'All KAMs' },
+      ...Array.from(kamMap.entries()).map(([id, name]) => ({ id, name })),
+    ];
+  }, []);
   
-  const handleDateRangeChange = (range: string) => {
-    setSelectedDateRange(range);
-    if (onDateRangeChange) {
-      onDateRangeChange(range);
-    }
-  };
-
   const handleKAMSelect = (kamId: string) => {
     setSelectedKAM(kamId);
     setShowKAMDropdown(false);
   };
 
-  // Mock dealers with KAM assignments
-  const allDealers = [
-    {
-      id: '1',
-      name: 'Gupta Auto World',
-      code: 'GGN-001',
-      kamId: 'rajesh',
-      kamName: 'Rajesh Kumar',
-      onboardingStatus: 'Active',
-      isOnboarded: true,
-      dcfLeads: 12,
-      dcfLeadsTarget: 20,
-      approvals: 8,
-      approvalsTarget: 12,
-      disbursals: 5,
-      disbursalsTarget: 8,
-      disbursalAmount: 11.2,
-    },
-    {
-      id: '2',
-      name: 'City Cars',
-      code: 'GGN-045',
-      kamId: 'rajesh',
-      kamName: 'Rajesh Kumar',
-      onboardingStatus: 'Active',
-      isOnboarded: true,
-      dcfLeads: 6,
-      dcfLeadsTarget: 15,
-      approvals: 4,
-      approvalsTarget: 10,
-      disbursals: 3,
-      disbursalsTarget: 6,
-      disbursalAmount: 7.2,
-    },
-    {
-      id: '3',
-      name: 'Sharma Motors',
-      code: 'GGN-002',
-      kamId: 'priya',
-      kamName: 'Priya Sharma',
-      onboardingStatus: 'Active',
-      isOnboarded: true,
-      dcfLeads: 8,
-      dcfLeadsTarget: 15,
-      approvals: 6,
-      approvalsTarget: 10,
-      disbursals: 3,
-      disbursalsTarget: 6,
-      disbursalAmount: 6.8,
-    },
-    {
-      id: '4',
-      name: 'Balaji Wheels',
-      code: 'GGN-089',
-      kamId: 'priya',
-      kamName: 'Priya Sharma',
-      onboardingStatus: 'Active',
-      isOnboarded: true,
-      dcfLeads: 4,
-      dcfLeadsTarget: 12,
-      approvals: 2,
-      approvalsTarget: 8,
-      disbursals: 2,
-      disbursalsTarget: 5,
-      disbursalAmount: 3.4,
-    },
-    {
-      id: '5',
-      name: 'New City Autos',
-      code: 'NDA-078',
-      kamId: 'amit',
-      kamName: 'Amit Patel',
-      onboardingStatus: 'Active',
-      isOnboarded: true,
-      dcfLeads: 10,
-      dcfLeadsTarget: 18,
-      approvals: 7,
-      approvalsTarget: 11,
-      disbursals: 4,
-      disbursalsTarget: 7,
-      disbursalAmount: 9.5,
-    },
-    {
-      id: '6',
-      name: 'Prime Auto Hub',
-      code: 'FBD-012',
-      kamId: 'rajesh',
-      kamName: 'Rajesh Kumar',
-      onboardingStatus: 'Pending Docs',
-      isOnboarded: false,
-      onboarding: {
-        currentStep: 'docs_cibil' as OnboardingStep,
-        completedSteps: ['form_filled' as OnboardingStep],
-      },
-      dcfLeadsTarget: 20,
-      approvalsTarget: 12,
-      disbursalsTarget: 8,
-    },
-    {
-      id: '7',
-      name: 'Royal Car Trading',
-      code: 'DEL-045',
-      kamId: 'neha',
-      kamName: 'Neha Singh',
-      onboardingStatus: 'Active',
-      isOnboarded: true,
-      dcfLeads: 15,
-      dcfLeadsTarget: 22,
-      approvals: 11,
-      approvalsTarget: 16,
-      disbursals: 7,
-      disbursalsTarget: 10,
-      disbursalAmount: 16.5,
-    },
-    {
-      id: '8',
-      name: 'Metro Motors',
-      code: 'GGN-089',
-      kamId: 'priya',
-      kamName: 'Priya Sharma',
-      onboardingStatus: 'Inspection Pending',
-      isOnboarded: false,
-      onboarding: {
-        currentStep: 'inspection' as OnboardingStep,
-        completedSteps: ['form_filled' as OnboardingStep, 'docs_cibil' as OnboardingStep],
-      },
-      dcfLeadsTarget: 18,
-      approvalsTarget: 11,
-      disbursalsTarget: 7,
-    },
-    {
-      id: '9',
-      name: 'Elite Automobiles',
-      code: 'FBD-156',
-      kamId: 'amit',
-      kamName: 'Amit Patel',
-      onboardingStatus: 'Finance Review',
-      isOnboarded: false,
-      onboarding: {
-        currentStep: 'finance_approval' as OnboardingStep,
-        completedSteps: ['form_filled' as OnboardingStep, 'docs_cibil' as OnboardingStep, 'inspection' as OnboardingStep],
-      },
-      dcfLeadsTarget: 15,
-      approvalsTarget: 10,
-      disbursalsTarget: 6,
-    },
-  ];
+  // BUG: customFrom/customTo state values are tracked but NOT passed into the
+  // MetricFilters below, so custom date ranges selected in TimeFilterControl
+  // are silently ignored for dealer data. The time filter chips will appear
+  // selected but dealer metrics will still use the period enum boundaries.
+  // TODO: Pass customFrom and customTo into MetricFilters once behavior change is approved.
+  const allDealers = useMemo(() => {
+    const filters: MetricFilters = { period };
+
+    const dcfLeads = getFilteredDCFLeads(filters);
+    const dealers = getAllDealers();
+
+    // Group DCF leads by dealerId
+    const dealerDCFMap = new Map<string, typeof dcfLeads>();
+    dcfLeads.forEach(l => {
+      if (!dealerDCFMap.has(l.dealerId)) dealerDCFMap.set(l.dealerId, []);
+      dealerDCFMap.get(l.dealerId)!.push(l);
+    });
+
+    // Build dealer data (only dealers with DCF activity or onboarded tag)
+    return dealers
+      .filter(d => dealerDCFMap.has(d.id) || d.tags.includes('DCF Onboarded'))
+      .map(d => {
+        const dLeads = dealerDCFMap.get(d.id) || [];
+        const disbursed = dLeads.filter(l => l.overallStatus === 'DISBURSED');
+        const approved = dLeads.filter(l => ['DISBURSED', 'IN_PROGRESS', 'APPROVAL_PENDING'].includes(l.overallStatus));
+        const disbursalAmount = disbursed.reduce((s, l) => s + ((l.loanAmount || 0) / 100000), 0);
+        // Find KAM for this dealer from DCF leads
+        const kamLead = dLeads[0];
+
+        return {
+          id: d.id,
+          name: d.name,
+          code: d.code,
+          kamId: kamLead?.kamId || d.kamId,
+          kamName: kamLead?.kamName || d.kamName || 'Unassigned',
+          onboardingStatus: 'Active',
+          isOnboarded: d.tags.includes('DCF Onboarded') || dLeads.length > 0,
+          dcfLeads: dLeads.length,
+          dcfLeadsTarget: getDCFTargets('KAM').onboarding,
+          approvals: approved.length,
+          approvalsTarget: Math.round(dLeads.length * DCF_APPROVAL_RATIO),
+          disbursals: disbursed.length,
+          disbursalsTarget: getDCFTargets('KAM').disbursement,
+          disbursalAmount: Math.round(disbursalAmount * 10) / 10,
+        };
+      });
+  }, [period]);
 
   // Filter dealers by KAM
   const filteredByKAM = selectedKAM === 'all' 
@@ -233,42 +143,39 @@ export function DCFPageTL({
   const onboardedCount = filteredByKAM.filter(d => d.isOnboarded).length;
   const notOnboardedCount = filteredByKAM.filter(d => !d.isOnboarded).length;
 
-  // Calculate metrics based on selected KAM
-  const calculateMetrics = () => {
+  // Calculate metrics based on filtered dealers
+  const metrics = useMemo(() => {
     const dealers = filteredByKAM;
     const onboarded = dealers.filter(d => d.isOnboarded);
-    
+
     const totalOnboarded = onboarded.length;
-    const totalOnboardedTarget = selectedKAM === 'rajesh' ? 10 : selectedKAM === 'priya' ? 10 : selectedKAM === 'all' ? 20 : 8;
-    const onboardedThisMonth = selectedKAM === 'rajesh' ? 2 : selectedKAM === 'priya' ? 1 : selectedKAM === 'all' ? 3 : 1;
-    
+    // Derive targets from data proportionally
+    const totalOnboardedTarget = Math.max(totalOnboarded, Math.round(dealers.length * 1.2));
+
     const leadGiving = onboarded.filter(d => (d.dcfLeads ?? 0) > 0).length;
-    const leadGivingTarget = selectedKAM === 'rajesh' ? 8 : selectedKAM === 'priya' ? 7 : selectedKAM === 'all' ? 15 : 6;
+    const leadGivingTarget = Math.max(leadGiving, totalOnboarded);
     const leadGivingPercent = Math.round((leadGiving / Math.max(totalOnboarded, 1)) * 100);
-    
+
     const totalDCFLeads = onboarded.reduce((sum, d) => sum + (d.dcfLeads ?? 0), 0);
-    const totalDCFLeadsTarget = selectedKAM === 'rajesh' ? 25 : selectedKAM === 'priya' ? 20 : selectedKAM === 'all' ? 60 : 18;
-    const dcfLeadsGrowth = selectedKAM === 'rajesh' ? 22 : selectedKAM === 'priya' ? 15 : selectedKAM === 'all' ? 28 : 18;
-    
+    const totalDCFLeadsTarget = onboarded.reduce((sum, d) => sum + (d.dcfLeadsTarget ?? 0), 0);
+
     const totalDisbursalAmount = onboarded.reduce((sum, d) => sum + (d.disbursalAmount ?? 0), 0);
-    const totalDisbursalTarget = selectedKAM === 'rajesh' ? 30 : selectedKAM === 'priya' ? 25 : selectedKAM === 'all' ? 60 : 22;
+    const totalDisbursalTarget = Math.round(totalDisbursalAmount * 1.5) || 10;
     const totalDisbursalLoans = onboarded.reduce((sum, d) => sum + (d.disbursals ?? 0), 0);
-    const totalDisbursalLoansTarget = selectedKAM === 'rajesh' ? 12 : selectedKAM === 'priya' ? 10 : selectedKAM === 'all' ? 25 : 9;
-    
+    const totalDisbursalLoansTarget = onboarded.reduce((sum, d) => sum + (d.disbursalsTarget ?? 0), 0);
+
     return {
-      onboarded: { achieved: totalOnboarded, target: totalOnboardedTarget, growth: onboardedThisMonth },
+      onboarded: { achieved: totalOnboarded, target: totalOnboardedTarget, growth: totalOnboarded },
       leadGiving: { achieved: leadGiving, target: leadGivingTarget, percent: leadGivingPercent },
-      dcfLeads: { achieved: totalDCFLeads, target: totalDCFLeadsTarget, growth: dcfLeadsGrowth },
-      disbursals: { 
-        amount: totalDisbursalAmount, 
+      dcfLeads: { achieved: totalDCFLeads, target: totalDCFLeadsTarget, growth: totalDCFLeads > 0 ? Math.round((totalDCFLeads / Math.max(totalDCFLeadsTarget, 1)) * 100) : 0 },
+      disbursals: {
+        amount: totalDisbursalAmount,
         amountTarget: totalDisbursalTarget,
         loans: totalDisbursalLoans,
         loansTarget: totalDisbursalLoansTarget,
       },
     };
-  };
-
-  const metrics = calculateMetrics();
+  }, [filteredByKAM]);
 
   // Metric card click handlers
   const handleOnboardedDealersClick = () => {
@@ -281,7 +188,7 @@ export function DCFPageTL({
         {
           channel: 'DCF',
           status: 'Onboarded',
-          dateRange: selectedDateRange,
+          dateRange: period,
         }
       );
     }
@@ -298,7 +205,7 @@ export function DCFPageTL({
           channel: 'DCF',
           status: 'Onboarded',
           leadGiving: true,
-          dateRange: selectedDateRange,
+          dateRange: period,
         }
       );
     }
@@ -310,7 +217,7 @@ export function DCFPageTL({
     } else {
       onNavigateToLeads({
         channel: 'DCF',
-        dateRange: selectedDateRange,
+        dateRange: period,
       });
     }
   };
@@ -335,7 +242,7 @@ export function DCFPageTL({
           'Viewing dealer DCF performance',
           {
             channel: 'DCF',
-            dateRange: selectedDateRange,
+            dateRange: period,
           }
         );
       }
@@ -369,20 +276,19 @@ export function DCFPageTL({
       {/* Date Range Selector + KAM Filter */}
       <div className="flex items-center justify-between gap-3">
         {/* Date Range Pills */}
-        <div className="flex gap-2 overflow-x-auto pb-2 flex-1">
-          {['MTD', 'Last 7 Days', 'Last 30 Days', 'QTD'].map((range) => (
-            <button
-              key={range}
-              onClick={() => handleDateRangeChange(range)}
-              className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
-                selectedDateRange === range
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 border border-gray-200'
-              }`}
-            >
-              {range}
-            </button>
-          ))}
+        <div className="flex-1 overflow-x-auto">
+          <TimeFilterControl
+            mode="chips"
+            chipStyle="pill"
+            value={period}
+            onChange={setPeriod}
+            options={CANONICAL_TIME_OPTIONS}
+            labelOverrides={CANONICAL_TIME_LABELS}
+            allowCustom
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+          />
         </div>
 
         {/* KAM Dropdown */}

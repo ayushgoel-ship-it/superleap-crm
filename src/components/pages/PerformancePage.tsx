@@ -1,25 +1,124 @@
+import { useMemo, useState } from 'react';
 import type { UserRole } from '../../lib/shared/appTypes';
 import { IndianRupee, Trophy, Calculator } from 'lucide-react';
+import { computeMetrics, computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
+import { TimePeriod } from '../../lib/domain/constants';
+import { getSITarget } from '../../lib/metricsEngine';
+import { calculateActualProjectedIncentive, type IncentiveContext, type DCFIncentiveMetrics } from '../../lib/incentiveEngine';
+import { getMonthProgress } from '../../lib/metrics/metricsFromDB';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
+import { getConfigI2SITarget, getConfigDCFGMVTarget } from '../../lib/configFromDB';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 
 interface PerformancePageProps {
   userRole: UserRole;
+  kamId?: string;
   onNavigate?: (page: string) => void;
   onOpenTLIncentive?: () => void;
 }
 
-export function PerformancePage({ userRole, onNavigate, onOpenTLIncentive }: PerformancePageProps) {
-  const topDealers = [
-    { dealer: 'Gupta Auto World', code: 'GGN-001', c24Quote: '₹2.4L', stockIns: 24 },
-    { dealer: 'New City Autos', code: 'NDA-078', c24Quote: '₹1.9L', stockIns: 18 },
-    { dealer: 'Sharma Motors', code: 'GGN-002', c24Quote: '₹1.7L', stockIns: 16 },
-  ];
+export function PerformancePage({ userRole, kamId, onNavigate, onOpenTLIncentive }: PerformancePageProps) {
+  const [period, setPeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
-  const incentiveBreakdown = [
-    { metric: 'Stock-in', achieved: 124, payout: '₹25,000' },
-    { metric: 'I2SI%', achieved: '69%', payout: '₹8,000' },
-    { metric: 'DCF Disbursals', achieved: '18', payout: '₹9,000' },
-    { metric: 'Input Score', achieved: '87', payout: '₹3,000' },
-  ];
+  const { targetCards, funnelData, rankText, topDealers, incentiveBreakdown, totalIncentive } = useMemo(() => {
+    const metrics = computeMetrics(period, kamId);
+    const siTarget = getSITarget(userRole === 'TL' ? 'TL' : 'KAM');
+    const monthCtx = getMonthProgress();
+    const db = getRuntimeDBSync();
+
+    // Compute rank from all KAMs
+    let rankStr = '';
+    if (userRole === 'KAM' && kamId) {
+      const allKams = computeKAMMetrics(period);
+      const sorted = [...allKams].sort((a, b) => b.stockIns - a.stockIns);
+      const myIdx = sorted.findIndex(k => k.kamId === kamId);
+      if (myIdx >= 0) {
+        rankStr = `Rank #${myIdx + 1} of ${sorted.length} KAMs`;
+      }
+    }
+
+    // Target cards
+    const siPercent = siTarget > 0 ? Math.round((metrics.stockIns / siTarget) * 100) : 0;
+    const i2si = metrics.i2si;
+    const i2siTarget = getConfigI2SITarget();
+    const i2siPercent = i2siTarget > 0 ? Math.round((i2si / i2siTarget) * 100) : 0;
+    const dcfTarget = getConfigDCFGMVTarget();
+    const dcfPercent = dcfTarget > 0 ? Math.round((metrics.dcfDisbursals / dcfTarget) * 100) : 0;
+
+    const cards = [
+      { title: 'Stock-in', achieved: metrics.stockIns, target: siTarget, percent: siPercent },
+      { title: 'I2SI%', achieved: i2si, target: i2siTarget, percent: i2siPercent },
+      { title: 'DCF Disbursals', achieved: metrics.dcfDisbursals, target: dcfTarget, percent: dcfPercent },
+    ];
+
+    // Funnel
+    const maxFunnel = Math.max(metrics.totalLeads, 1);
+    const funnel = [
+      { stage: 'Leads', count: metrics.totalLeads, max: maxFunnel },
+      { stage: 'Inspections', count: metrics.inspections, max: maxFunnel },
+      { stage: 'Tokens', count: metrics.tokens, max: maxFunnel },
+      { stage: 'Stock-ins', count: metrics.stockIns, max: maxFunnel },
+    ];
+
+    // Top dealers by stock-ins
+    const dealers = db.dealers || [];
+    const kamDealers = kamId ? dealers.filter(d => d.kamId === kamId) : dealers;
+    const leads = db.leads || [];
+    const dealerSIs = kamDealers.map(d => {
+      const dealerLeads = leads.filter(l => l.dealerCode === d.dealerCode);
+      const sis = dealerLeads.filter(l => l.regStockinRank === 1 && (l.finalSiDate || l.stockinDate)).length;
+      return { dealer: d.name, code: d.dealerCode, stockIns: sis };
+    }).filter(d => d.stockIns > 0).sort((a, b) => b.stockIns - a.stockIns).slice(0, 3);
+
+    // Incentive calculation
+    const dcfLeads = db.dcfLeads || [];
+    const kamDcf = kamId ? dcfLeads.filter(d => d.kamId === kamId) : dcfLeads;
+    const disbursed = kamDcf.filter(d => d.disbursalDate || d.overallStatus === 'disbursed');
+    const gmvTotal = disbursed.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
+    const onboardingCount = new Set(kamDcf.map(d => d.dealerId)).size;
+
+    const inputScore = (() => {
+      const visitScore = Math.min(metrics.completedVisits / 3, 1) * 30;
+      const callScore = Math.min(metrics.totalCalls / 5, 1) * 30;
+      const dealerScore = Math.min(metrics.uniqueDealersCalled / 3, 1) * 20;
+      const convScore = Math.min(metrics.conversionRate / 50, 1) * 20;
+      return Math.round(visitScore + callScore + dealerScore + convScore);
+    })();
+
+    const ctx: IncentiveContext = {
+      role: userRole === 'TL' ? 'TL' : 'KAM',
+      siActualMTD: metrics.stockIns,
+      siTarget,
+      inspectionsMTD: metrics.inspections,
+      daysElapsed: monthCtx.daysElapsed,
+      totalDaysInMonth: monthCtx.totalDays,
+      inputScore,
+      dcf: {
+        onboardingCount,
+        gmvTotal,
+        gmvFirstDisbursement: 0,
+        dealerCount: onboardingCount,
+      },
+    };
+    const result = calculateActualProjectedIncentive(ctx);
+
+    const breakdown = [
+      { metric: 'Stock-in', achieved: metrics.stockIns, payout: `₹${(result.breakup.siIncentive).toLocaleString()}` },
+      { metric: 'DCF GMV', achieved: `₹${(gmvTotal / 100000).toFixed(1)}L`, payout: `₹${(result.breakup.dcf.totalDCF).toLocaleString()}` },
+      { metric: 'Input Score', achieved: `${inputScore}`, payout: `${result.breakup.scoreMultiplier * 100}% multiplier` },
+    ];
+
+    return {
+      targetCards: cards,
+      funnelData: funnel,
+      rankText: rankStr,
+      topDealers: dealerSIs,
+      incentiveBreakdown: breakdown,
+      totalIncentive: result.totalIncentive,
+    };
+  }, [userRole, kamId, period]);
 
   return (
     <div className="p-4 space-y-6">
@@ -56,22 +155,34 @@ export function PerformancePage({ userRole, onNavigate, onOpenTLIncentive }: Per
             </div>
             <div>
               <div className="text-gray-900 mb-1">View Leaderboard</div>
-              <div className="text-xs text-gray-600">You are Rank #7 of 42 KAMs</div>
+              <div className="text-xs text-gray-600">{rankText ? `You are ${rankText}` : 'See how you compare'}</div>
             </div>
           </div>
           <div className="text-2xl">›</div>
         </div>
       </button>
 
+      {/* Time Filter */}
+      <div className="mb-4">
+        <TimeFilterControl
+          mode="chips"
+          chipStyle="pill"
+          value={period}
+          onChange={setPeriod}
+          options={CANONICAL_TIME_OPTIONS}
+          labelOverrides={CANONICAL_TIME_LABELS}
+          allowCustom
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+        />
+      </div>
+
       {/* Target Cards */}
       <div>
         <h3 className="text-gray-900 mb-3">Targets (MTD)</h3>
         <div className="space-y-3">
-          {[
-            { title: 'Stock-in', achieved: 124, target: 150, percent: 83 },
-            { title: 'I2SI%', achieved: 69, target: 65, percent: 106 },
-            { title: 'DCF Disbursals', achieved: 18, target: 25, percent: 72 },
-          ].map((item, idx) => (
+          {targetCards.map((item, idx) => (
             <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-sm text-gray-600">{item.title}</h4>
@@ -106,13 +217,7 @@ export function PerformancePage({ userRole, onNavigate, onOpenTLIncentive }: Per
       <div>
         <h3 className="text-gray-900 mb-3">Lead Funnel (MTD)</h3>
         <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
-          {[
-            { stage: 'Leads', count: 287, max: 287 },
-            { stage: 'Inspections', count: 243, max: 287 },
-            { stage: 'SIs', count: 198, max: 287 },
-            { stage: 'Buys', count: 156, max: 287 },
-            { stage: 'Stock-ins', count: 124, max: 287 },
-          ].map((item, idx) => (
+          {funnelData.map((item, idx) => (
             <div key={idx}>
               <div className="flex items-center justify-between text-sm mb-1">
                 <span className="text-gray-600">{item.stage}</span>
@@ -121,7 +226,7 @@ export function PerformancePage({ userRole, onNavigate, onOpenTLIncentive }: Per
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-blue-600 h-2 rounded-full"
-                  style={{ width: `${(item.count / item.max) * 100}%` }}
+                  style={{ width: `${item.max > 0 ? (item.count / item.max) * 100 : 0}%` }}
                 />
               </div>
             </div>
@@ -130,25 +235,26 @@ export function PerformancePage({ userRole, onNavigate, onOpenTLIncentive }: Per
       </div>
 
       {/* Top Dealers */}
-      <div>
-        <h3 className="text-gray-900 mb-3">Top Dealers</h3>
-        <div className="space-y-2">
-          {topDealers.map((dealer, idx) => (
-            <div key={idx} className="bg-white border border-gray-200 rounded-lg p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <div className="text-sm text-gray-900">{dealer.dealer}</div>
-                  <div className="text-xs text-gray-500">{dealer.code}</div>
+      {topDealers.length > 0 && (
+        <div>
+          <h3 className="text-gray-900 mb-3">Top Dealers</h3>
+          <div className="space-y-2">
+            {topDealers.map((dealer, idx) => (
+              <div key={idx} className="bg-white border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm text-gray-900">{dealer.dealer}</div>
+                    <div className="text-xs text-gray-500">{dealer.code}</div>
+                  </div>
                 </div>
-                <div className="text-green-600">{dealer.c24Quote}</div>
+                <div className="text-xs text-gray-600">
+                  Stock-ins: {dealer.stockIns}
+                </div>
               </div>
-              <div className="text-xs text-gray-600">
-                Stock-ins: {dealer.stockIns}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Incentive Breakdown */}
       <div>
@@ -156,7 +262,7 @@ export function PerformancePage({ userRole, onNavigate, onOpenTLIncentive }: Per
           <h3 className="text-gray-900">Incentive Breakdown</h3>
           <div className="flex items-center gap-1 text-green-600">
             <IndianRupee className="w-4 h-4" />
-            <span className="text-lg">45,000</span>
+            <span className="text-lg">{totalIncentive.toLocaleString()}</span>
           </div>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-200">

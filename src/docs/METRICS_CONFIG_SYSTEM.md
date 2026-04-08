@@ -87,12 +87,8 @@ INSERT INTO metric_definitions (metric_key, display_name, unit, calc_type, sql_t
  '{"channel", "region", "dealer_id"}', 'mtd', TRUE,
  '{"green_min": 90, "amber_min": 70}'),
 
-('si_c2b', 'SI — C2B', 'count', 'count',
- 'SELECT COUNT(*) FROM leads WHERE kam_user_id = :user_id AND stage = ''Stock-in'' AND status = ''Won'' AND channel = ''C2B'' AND converted_at BETWEEN :start_date AND :end_date',
- '{"region"}', 'mtd', FALSE, NULL),
-
-('si_c2d', 'SI — C2D', 'count', 'count',
- 'SELECT COUNT(*) FROM leads WHERE kam_user_id = :user_id AND stage = ''Stock-in'' AND status = ''Won'' AND channel = ''C2D'' AND converted_at BETWEEN :start_date AND :end_date',
+('si_ngs', 'SI — NGS', 'count', 'count',
+ 'SELECT COUNT(*) FROM leads WHERE kam_user_id = :user_id AND stage = ''Stock-in'' AND status = ''Won'' AND channel = ''NGS'' AND converted_at BETWEEN :start_date AND :end_date',
  '{"region"}', 'mtd', FALSE, NULL),
 
 ('si_gs', 'SI — GS', 'count', 'count',
@@ -192,9 +188,14 @@ INSERT INTO metric_definitions (metric_key, display_name, unit, calc_type, sql_t
  '{"segment", "region"}', 'lifetime', FALSE, NULL),
 
 ('dealers_dormant', 'Dormant Dealers', 'count', 'count',
- 'SELECT COUNT(*) FROM dealers WHERE kam_user_id = :user_id AND status = ''dormant'' AND deleted_at IS NULL',
+ 'SELECT COUNT(*) FROM dealers d WHERE d.kam_user_id = :user_id AND d.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM leads l WHERE l.dealer_id = d.dealer_id AND l.created_at > NOW() - INTERVAL ''90 days'') AND NOT EXISTS (SELECT 1 FROM call_events c WHERE c.dealer_id = d.dealer_id AND c.call_date > NOW() - INTERVAL ''90 days'') AND NOT EXISTS (SELECT 1 FROM visit_events v WHERE v.dealer_id = d.dealer_id AND v.visit_date > NOW() - INTERVAL ''90 days'')',
  '{"segment", "region"}', 'lifetime', FALSE,
  '{"green_min": 0, "amber_min": 3}');
+
+-- NOTE: The frontend uses deriveDealerActivityStage() from canonicalMetrics.ts
+-- which computes a 4-tier classification (Transacting/Inspecting/Lead Giving/Dormant)
+-- based on actual activity data rather than a stored status column.
+-- The SQL above should be aligned with that logic for consistency.
 ```
 
 ---
@@ -610,6 +611,18 @@ API server excludes disabled metrics from responses. Tiles referencing disabled 
 ### 6.3 `GET /v1/admin/dashboards` — List Layouts
 
 ### 6.4 `PUT /v1/admin/dashboards/:layout_id/tiles` — Replace Tiles Config
+
+---
+
+## 7. Frontend Metrics Layers
+
+The frontend has two complementary metrics computation layers:
+
+1. **`data/canonicalMetrics.ts`** (stage-based) — Computes dealer activity stages via `deriveDealerActivityStage()`. Uses the 4-tier model: Transacting / Inspecting / Lead Giving / Dormant. This is the canonical source for dormancy classification.
+
+2. **`lib/metricsFromDB.ts`** (rank-based) — Computes rank-based metrics using `resolveTimePeriodToRange()` from `lib/time/resolveTimePeriod.ts` for unified date filtering. Works with the `TimeFilterControl.tsx` component.
+
+Both layers read from `runtimeDB.ts` (the Supabase data cache). The config-driven `metric_definitions` table (Section 1) is the backend equivalent for when the API server executes queries.
 
 ---
 

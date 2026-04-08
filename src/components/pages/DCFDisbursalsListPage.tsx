@@ -1,243 +1,33 @@
+import { useMemo } from 'react';
 import { ArrowLeft, IndianRupee } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import { getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { TimePeriod } from '../../lib/domain/constants';
 
 interface DCFDisbursalsListPageProps {
   onBack: () => void;
   dateRange: string;
 }
 
-interface DisbursalRow {
-  id: string;
-  loanId: string;
-  customerName: string;
-  dealerName: string;
-  dealerCode: string;
-  car: string;
-  amount: string;
-  amountValue: number;
-  disbursedDate: string;
-  tenure: string;
-}
-
 export function DCFDisbursalsListPage({ onBack, dateRange }: DCFDisbursalsListPageProps) {
-  const disbursals: DisbursalRow[] = [
-    { 
-      id: '1', 
-      loanId: 'DCF24120001', 
-      customerName: 'Vikram Singh', 
-      dealerName: 'Royal Auto Sales', 
-      dealerCode: 'GGN-045',
-      car: 'Hyundai Creta SX 2021', 
-      amount: '₹4.2L',
-      amountValue: 420000,
-      disbursedDate: '2024-12-07',
-      tenure: '36 months'
-    },
-    { 
-      id: '2', 
-      loanId: 'DCF24120002', 
-      customerName: 'Kavita Sharma', 
-      dealerName: 'Highway Auto', 
-      dealerCode: 'FBD-112',
-      car: 'Honda Jazz VX 2020', 
-      amount: '₹3.8L',
-      amountValue: 380000,
-      disbursedDate: '2024-12-05',
-      tenure: '24 months'
-    },
-    { 
-      id: '3', 
-      loanId: 'DCF24120003', 
-      customerName: 'Sneha Reddy', 
-      dealerName: 'Sharma Motors', 
-      dealerCode: 'GGN-002',
-      car: 'Maruti Baleno Alpha 2021', 
-      amount: '₹3.5L',
-      amountValue: 350000,
-      disbursedDate: '2024-12-03',
-      tenure: '36 months'
-    },
-    { 
-      id: '4', 
-      loanId: 'DCF24110004', 
-      customerName: 'Rajesh Kumar', 
-      dealerName: 'Gupta Auto World', 
-      dealerCode: 'GGN-001',
-      car: 'Honda City VX 2019', 
-      amount: '₹4.5L',
-      amountValue: 450000,
-      disbursedDate: '2024-11-29',
-      tenure: '48 months'
-    },
-    { 
-      id: '5', 
-      loanId: 'DCF24110005', 
-      customerName: 'Priya Malhotra', 
-      dealerName: 'Elite Auto World', 
-      dealerCode: 'GGN-098',
-      car: 'Hyundai Venue SX 2020', 
-      amount: '₹3.2L',
-      amountValue: 320000,
-      disbursedDate: '2024-11-28',
-      tenure: '36 months'
-    },
-    { 
-      id: '6', 
-      loanId: 'DCF24110006', 
-      customerName: 'Amit Joshi', 
-      dealerName: 'Delhi Car Bazaar', 
-      dealerCode: 'DLH-034',
-      car: 'Maruti Swift VXI 2020', 
-      amount: '₹2.8L',
-      amountValue: 280000,
-      disbursedDate: '2024-11-26',
-      tenure: '24 months'
-    },
-    { 
-      id: '7', 
-      loanId: 'DCF24110007', 
-      customerName: 'Deepak Verma', 
-      dealerName: 'Metro Motors', 
-      dealerCode: 'NDA-056',
-      car: 'Hyundai i20 Sportz 2021', 
-      amount: '₹3.6L',
-      amountValue: 360000,
-      disbursedDate: '2024-11-25',
-      tenure: '36 months'
-    },
-    { 
-      id: '8', 
-      loanId: 'DCF24110008', 
-      customerName: 'Sunita Agarwal', 
-      dealerName: 'Premium Car Point', 
-      dealerCode: 'GGN-134',
-      car: 'Honda Amaze VX 2020', 
-      amount: '₹2.9L',
-      amountValue: 290000,
-      disbursedDate: '2024-11-23',
-      tenure: '24 months'
-    },
-    { 
-      id: '9', 
-      loanId: 'DCF24110009', 
-      customerName: 'Manoj Yadav', 
-      dealerName: 'Star Auto Sales', 
-      dealerCode: 'DLH-123',
-      car: 'Maruti Dzire VXI 2019', 
-      amount: '₹3.1L',
-      amountValue: 310000,
-      disbursedDate: '2024-11-22',
-      tenure: '36 months'
-    },
-    { 
-      id: '10', 
-      loanId: 'DCF24110010', 
-      customerName: 'Anjali Kapoor', 
-      dealerName: 'New City Autos', 
-      dealerCode: 'NDA-078',
-      car: 'Hyundai Creta E 2020', 
-      amount: '₹4.8L',
-      amountValue: 480000,
-      disbursedDate: '2024-11-20',
-      tenure: '48 months'
-    },
-    { 
-      id: '11', 
-      loanId: 'DCF24110011', 
-      customerName: 'Rahul Singh', 
-      dealerName: 'Trust Motors', 
-      dealerCode: 'NDA-101',
-      car: 'Maruti Ertiga VXI 2020', 
-      amount: '₹4.0L',
-      amountValue: 400000,
-      disbursedDate: '2024-11-18',
-      tenure: '36 months'
-    },
-    { 
-      id: '12', 
-      loanId: 'DCF24110012', 
-      customerName: 'Neha Gupta', 
-      dealerName: 'Speed Auto Point', 
-      dealerCode: 'FBD-067',
-      car: 'Honda City ZX 2021', 
-      amount: '₹5.2L',
-      amountValue: 520000,
-      disbursedDate: '2024-11-15',
-      tenure: '48 months'
-    },
-    { 
-      id: '13', 
-      loanId: 'DCF24110013', 
-      customerName: 'Sanjay Sharma', 
-      dealerName: 'Gupta Auto World', 
-      dealerCode: 'GGN-001',
-      car: 'Maruti Baleno Delta 2020', 
-      amount: '₹3.3L',
-      amountValue: 330000,
-      disbursedDate: '2024-11-13',
-      tenure: '36 months'
-    },
-    { 
-      id: '14', 
-      loanId: 'DCF24110014', 
-      customerName: 'Pooja Reddy', 
-      dealerName: 'Royal Auto Sales', 
-      dealerCode: 'GGN-045',
-      car: 'Hyundai Venue S 2020', 
-      amount: '₹3.0L',
-      amountValue: 300000,
-      disbursedDate: '2024-11-12',
-      tenure: '24 months'
-    },
-    { 
-      id: '15', 
-      loanId: 'DCF24110015', 
-      customerName: 'Anil Kumar', 
-      dealerName: 'Highway Auto', 
-      dealerCode: 'FBD-112',
-      car: 'Maruti Swift VXI 2021', 
-      amount: '₹3.4L',
-      amountValue: 340000,
-      disbursedDate: '2024-11-10',
-      tenure: '36 months'
-    },
-    { 
-      id: '16', 
-      loanId: 'DCF24110016', 
-      customerName: 'Ritu Malhotra', 
-      dealerName: 'Elite Auto World', 
-      dealerCode: 'GGN-098',
-      car: 'Honda Amaze S 2019', 
-      amount: '₹2.6L',
-      amountValue: 260000,
-      disbursedDate: '2024-11-08',
-      tenure: '24 months'
-    },
-    { 
-      id: '17', 
-      loanId: 'DCF24110017', 
-      customerName: 'Vikas Joshi', 
-      dealerName: 'Delhi Car Bazaar', 
-      dealerCode: 'DLH-034',
-      car: 'Hyundai i20 Asta 2021', 
-      amount: '₹3.9L',
-      amountValue: 390000,
-      disbursedDate: '2024-11-05',
-      tenure: '36 months'
-    },
-    { 
-      id: '18', 
-      loanId: 'DCF24110018', 
-      customerName: 'Meena Singh', 
-      dealerName: 'Metro Motors', 
-      dealerCode: 'NDA-056',
-      car: 'Maruti Ertiga ZXI 2020', 
-      amount: '₹4.3L',
-      amountValue: 430000,
-      disbursedDate: '2024-11-02',
-      tenure: '48 months'
-    },
-  ];
+  const disbursals = useMemo(() => {
+    const period = (Object.values(TimePeriod).includes(dateRange as TimePeriod)
+      ? dateRange as TimePeriod
+      : TimePeriod.MTD);
+    const raw = getFilteredDCFLeads({ period }).filter(l => l.overallStatus === 'DISBURSED');
+    return raw.map(lead => ({
+      id: lead.id,
+      loanId: lead.id,
+      customerName: lead.customerName,
+      dealerName: lead.dealerName,
+      dealerCode: lead.dealerCode,
+      car: lead.car,
+      amountValue: lead.loanAmount ?? 0,
+      amount: `₹${((lead.loanAmount ?? 0) / 100000).toFixed(1)}L`,
+      disbursedDate: (lead as any).disbursalDate ?? lead.createdAt,
+      tenure: lead.tenure ? `${lead.tenure} months` : '–',
+    }));
+  }, [dateRange]);
 
   const filterChips = [
     { label: 'Section', value: 'Loans' },

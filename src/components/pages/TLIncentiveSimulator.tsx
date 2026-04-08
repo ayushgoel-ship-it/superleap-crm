@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronDown, ChevronUp, Info, Lock, Unlock, Zap, Lightbulb } from 'lucide-react';
-import { 
+import {
   calculateActualProjectedIncentive,
   simulateIncentiveWhatIf,
   type IncentiveContext,
@@ -8,6 +8,9 @@ import {
   getIncentiveSummary
 } from '../../lib/incentiveEngine';
 import { getSITarget } from '../../lib/metricsEngine';
+import { getConfigDCFPayoutRules } from '../../lib/configFromDB';
+import { computeDashboardMetrics, getFilteredDCFLeads } from '../../data/canonicalMetrics';
+import { TimePeriod } from '../../lib/domain/constants';
 
 interface TLIncentiveSimulatorProps {
   onClose: () => void;
@@ -38,16 +41,26 @@ export function TLIncentiveSimulator({ onClose }: TLIncentiveSimulatorProps) {
   // Targets (from engine)
   const siTarget = getSITarget('TL');
   const incentiveSummary = getIncentiveSummary('TL');
+  const dcfPayoutRules = getConfigDCFPayoutRules();
 
   // Current MTD values (used ONLY for Auto Projection - READ ONLY)
-  const mtdValues = {
-    stockIns: 65, // Team stock-ins MTD
-    inspections: 400, // Team inspections MTD
-    gmvTotal: 2000000, // Total GMV ₹20L
-    gmvFirstDisbursement: 800000, // First disbursement GMV ₹8L
-    onboarding: 20, // DCF dealers onboarded
-    score: 78, // TL Score (0-100)
-  };
+  const mtdValues = useMemo(() => {
+    const metrics = computeDashboardMetrics({ period: TimePeriod.MTD });
+    const dcfLeads = getFilteredDCFLeads({ period: TimePeriod.MTD });
+    const disbursedDCF = dcfLeads.filter(d => d.overallStatus === 'DISBURSED');
+    const gmvTotal = disbursedDCF.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
+    const firstDisbursals = disbursedDCF.filter(d => d.firstDisbursalForDealer);
+    const gmvFirst = firstDisbursals.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
+
+    return {
+      stockIns: metrics.stockIns,
+      inspections: metrics.inspections,
+      gmvTotal,
+      gmvFirstDisbursement: gmvFirst,
+      onboarding: metrics.dcfOnboardedDealers,
+      score: 78,
+    };
+  }, []);
 
   // What-If mode: Manual month-end expected values (EDITABLE - ONLY SOURCE FOR WHAT-IF)
   const [whatIfInputs, setWhatIfInputs] = useState({
@@ -349,9 +362,9 @@ export function TLIncentiveSimulator({ onClose }: TLIncentiveSimulatorProps) {
                 {/* DCF GMV Total */}
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <div>
-                    <div className="text-sm text-gray-900">DCF GMV Total (1%)</div>
+                    <div className="text-sm text-gray-900">DCF GMV Total ({(dcfPayoutRules.gmvTotalPct * 100).toFixed(1)}%)</div>
                     <div className="text-xs text-gray-500">
-                      {formatCurrency(isAutoMode ? autoContext.dcf.gmvTotal : whatIfContext.dcf.gmvTotal)} × 1%
+                      {formatCurrency(isAutoMode ? autoContext.dcf.gmvTotal : whatIfContext.dcf.gmvTotal)} × {(dcfPayoutRules.gmvTotalPct * 100).toFixed(1)}%
                     </div>
                   </div>
                   <span className="text-sm text-gray-900">{formatCurrency(breakup.dcf.gmvTotal)}</span>
@@ -360,9 +373,9 @@ export function TLIncentiveSimulator({ onClose }: TLIncentiveSimulatorProps) {
                 {/* DCF GMV First */}
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <div>
-                    <div className="text-sm text-gray-900">DCF GMV First (0.5%)</div>
+                    <div className="text-sm text-gray-900">DCF GMV First ({(dcfPayoutRules.gmvFirstPct * 100).toFixed(1)}%)</div>
                     <div className="text-xs text-gray-500">
-                      {formatCurrency(isAutoMode ? autoContext.dcf.gmvFirstDisbursement : whatIfContext.dcf.gmvFirst)} × 0.5%
+                      {formatCurrency(isAutoMode ? autoContext.dcf.gmvFirstDisbursement : whatIfContext.dcf.gmvFirst)} × {(dcfPayoutRules.gmvFirstPct * 100).toFixed(1)}%
                     </div>
                   </div>
                   <span className="text-sm text-gray-900">{formatCurrency(breakup.dcf.gmvFirst)}</span>
@@ -373,7 +386,7 @@ export function TLIncentiveSimulator({ onClose }: TLIncentiveSimulatorProps) {
                   <div>
                     <div className="text-sm text-gray-900">DCF Onboarding</div>
                     <div className="text-xs text-gray-500">
-                      {isAutoMode ? autoContext.dcf.onboardingCount : whatIfContext.dcf.onboarding} dealers × ₹300
+                      {isAutoMode ? autoContext.dcf.onboardingCount : whatIfContext.dcf.onboarding} dealers × {formatCurrency(dcfPayoutRules.onboardingPayout)}
                     </div>
                   </div>
                   <span className="text-sm text-gray-900">{formatCurrency(breakup.dcf.onboarding)}</span>

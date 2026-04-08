@@ -1,70 +1,135 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ArrowLeft, TrendingUp, Lock, Unlock, Users, Target, DollarSign, Percent, AlertTriangle, CheckCircle2, ChevronRight, Calculator } from 'lucide-react';
 import { TLIncentiveSimulator } from './TLIncentiveSimulator';
+import { computeTLOverview, computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
+import { TimePeriod } from '../../lib/domain/constants';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+import { calculateActualProjectedIncentive, type IncentiveContext, type DCFIncentiveMetrics } from '../../lib/incentiveEngine';
+import { getSITarget, projectMTDToEOM } from '../../lib/metricsEngine';
+import { getMonthProgress } from '../../lib/metrics/metricsFromDB';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
 
 interface TLIncentiveDashboardProps {
   onBack: () => void;
 }
 
-type Period = 'this-month' | 'last-month' | 'custom';
-
-interface KAMData {
-  name: string;
-  city: string;
-  stockIns: number;
-  stockInsTarget: number;
-  dcfDisbursals: number;
-  dcfTarget: number;
-  i2si: number;
-  inputScore: number;
-  contribution: number;
-  status: 'on-track' | 'at-risk';
-}
-
 export function TLIncentiveDashboard({ onBack }: TLIncentiveDashboardProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState<Period>('this-month');
+  const [timeScope, setTimeScope] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState<string | undefined>();
+  const [customTo, setCustomTo] = useState<string | undefined>();
   const [showSimulator, setShowSimulator] = useState(false);
-  const [selectedKAM, setSelectedKAM] = useState<KAMData | null>(null);
 
-  // Sample data
-  const tlData = {
-    name: 'Ayush Goel',
-    region: 'North – Dealer Referral',
-    totalPotentialIncentive: 185000,
-    eligibleIncentive: 0, // Blocked due to I2SI gate
-    realizedIncentive: 0,
-    teamStockIns: 28,
-    teamStockInsTarget: 35,
-    teamDCFDisbursals: 1800000,
-    teamDCFTarget: 2500000,
-    teamInputScore: 74,
-    teamInputScoreTarget: 70,
-    teamI2SI: 62,
-    teamI2SIGate: 65,
-  };
+  const period = timeScope;
 
-  const gates = [
-    { name: 'I2SI% Gate', condition: '≥ 65%', actual: '62%', status: 'failed' as const, description: 'Team average I2SI must be at least 65%' },
-    { name: 'Input Score Gate', condition: '≥ 70', actual: '74', status: 'passed' as const, description: 'Team average Input Score must be at least 70' },
-    { name: 'Active Dealers Gate', condition: '≥ 25', actual: '32', status: 'passed' as const, description: 'Minimum active dealers in the month' },
-  ];
+  // Compute all data from backend
+  const { tlData, gates, kamRows, incentiveResult, allGatesPassed } = useMemo(() => {
+    const overview = computeTLOverview(period);
+    const kamMetricsList = computeKAMMetrics(period);
+    const monthCtx = getMonthProgress();
+    const siTarget = getSITarget('TL');
+    const i2siTarget = overview.teamI2SITarget;
+    const inputScoreGate = 70;
 
-  const kamData: KAMData[] = [
-    { name: 'Rajesh Kumar', city: 'Gurugram', stockIns: 8, stockInsTarget: 10, dcfDisbursals: 520000, dcfTarget: 700000, i2si: 68, inputScore: 82, contribution: 52000, status: 'on-track' },
-    { name: 'Priya Sharma', city: 'Delhi', stockIns: 6, stockInsTarget: 8, dcfDisbursals: 380000, dcfTarget: 600000, i2si: 71, inputScore: 78, contribution: 41000, status: 'on-track' },
-    { name: 'Vikram Singh', city: 'Noida', stockIns: 7, stockInsTarget: 9, dcfDisbursals: 460000, dcfTarget: 650000, i2si: 58, inputScore: 68, contribution: 38000, status: 'at-risk' },
-    { name: 'Anita Desai', city: 'Faridabad', stockIns: 4, stockInsTarget: 5, dcfDisbursals: 280000, dcfTarget: 350000, i2si: 52, inputScore: 65, contribution: 28000, status: 'at-risk' },
-    { name: 'Amit Patel', city: 'Gurugram', stockIns: 3, stockInsTarget: 3, dcfDisbursals: 160000, dcfTarget: 200000, i2si: 75, inputScore: 81, contribution: 26000, status: 'on-track' },
-  ];
+    // DCF data for incentive calc
+    const db = getRuntimeDBSync();
+    const dcfLeads = db.dcfLeads || [];
+    const disbursedLeads = dcfLeads.filter(d => d.disbursalDate || d.overallStatus === 'disbursed');
+    const gmvTotal = disbursedLeads.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
+    const firstDisbursements = dcfLeads.filter(d => {
+      const dealerDcf = dcfLeads.filter(dl => dl.dealerId === d.dealerId);
+      return dealerDcf.length === 1 && (d.disbursalDate || d.overallStatus === 'disbursed');
+    });
+    const gmvFirst = firstDisbursements.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
+    const onboardingCount = new Set(dcfLeads.map(d => d.dealerId)).size;
 
-  const allGatesPassed = gates.every(g => g.status === 'passed');
+    const dcfMetrics: DCFIncentiveMetrics = {
+      onboardingCount,
+      gmvTotal,
+      gmvFirstDisbursement: gmvFirst,
+      dealerCount: onboardingCount,
+    };
+
+    // Calculate incentive
+    const ctx: IncentiveContext = {
+      role: 'TL',
+      siActualMTD: overview.teamStockIns,
+      siTarget,
+      inspectionsMTD: kamMetricsList.reduce((s, k) => s + k.inspections, 0),
+      daysElapsed: monthCtx.daysElapsed,
+      totalDaysInMonth: monthCtx.totalDays,
+      inputScore: overview.teamAvgInputScore,
+      dcf: dcfMetrics,
+    };
+    const result = calculateActualProjectedIncentive(ctx);
+
+    // Gate evaluation
+    const i2siPassed = overview.teamI2SI >= i2siTarget;
+    const inputScorePassed = overview.teamAvgInputScore >= inputScoreGate;
+    const activeDealerCount = (db.dealers || []).filter(d => d.status === 'active').length;
+    const activeDealersPassed = activeDealerCount >= 25;
+
+    const gatesArr = [
+      { name: 'I2SI% Gate', condition: `≥ ${i2siTarget}%`, actual: `${overview.teamI2SI}%`, status: (i2siPassed ? 'passed' : 'failed') as 'passed' | 'failed', description: `Team average I2SI must be at least ${i2siTarget}%` },
+      { name: 'Input Score Gate', condition: `≥ ${inputScoreGate}`, actual: `${overview.teamAvgInputScore}`, status: (inputScorePassed ? 'passed' : 'failed') as 'passed' | 'failed', description: `Team average Input Score must be at least ${inputScoreGate}` },
+      { name: 'Active Dealers Gate', condition: '≥ 25', actual: `${activeDealerCount}`, status: (activeDealersPassed ? 'passed' : 'failed') as 'passed' | 'failed', description: 'Minimum active dealers in the month' },
+    ];
+
+    // KAM rows with real data
+    const rows = kamMetricsList.map(k => {
+      const siTarget_kam = getSITarget('KAM');
+      const kamDcfLeads = dcfLeads.filter(d => d.kamId === k.kamId);
+      const kamDisbursed = kamDcfLeads.filter(d => d.disbursalDate || d.overallStatus === 'disbursed');
+      const kamDcfValue = kamDisbursed.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
+      const kamDcfTarget = 500000; // from overview targets scaled per KAM
+      const i2si = k.inspections > 0 ? Math.round((k.stockIns / k.inspections) * 100) : 0;
+      const siPercent = siTarget_kam > 0 ? (k.stockIns / siTarget_kam) * 100 : 0;
+      return {
+        kamId: k.kamId,
+        name: k.kamName,
+        city: '',
+        stockIns: k.stockIns,
+        stockInsTarget: siTarget_kam,
+        dcfDisbursals: kamDcfValue,
+        dcfTarget: kamDcfTarget,
+        i2si,
+        inputScore: k.inputScore,
+        contribution: 0, // contribution computed from incentive engine if needed
+        status: (siPercent >= 80 && k.inputScore >= 50 ? 'on-track' : 'at-risk') as 'on-track' | 'at-risk',
+      };
+    }).sort((a, b) => b.stockIns - a.stockIns);
+
+    const dcfGMVLakhs = overview.dcfGMV;
+    const dcfGMVTarget = overview.dcfGMVTarget;
+
+    const data = {
+      name: db.org?.tls?.[0]?.name || 'Team Lead',
+      region: db.org?.tls?.[0]?.region || '',
+      totalPotentialIncentive: result.breakup.totalBeforeScore,
+      eligibleIncentive: result.totalIncentive,
+      realizedIncentive: 0,
+      teamStockIns: overview.teamStockIns,
+      teamStockInsTarget: siTarget,
+      teamDCFDisbursals: dcfGMVLakhs * 100000,
+      teamDCFTarget: dcfGMVTarget * 100000,
+      teamInputScore: overview.teamAvgInputScore,
+      teamInputScoreTarget: inputScoreGate,
+      teamI2SI: overview.teamI2SI,
+      teamI2SIGate: i2siTarget,
+    };
+
+    return {
+      tlData: data,
+      gates: gatesArr,
+      kamRows: rows,
+      incentiveResult: result,
+      allGatesPassed: gatesArr.every(g => g.status === 'passed'),
+    };
+  }, [period]);
 
   if (showSimulator) {
     return (
       <TLIncentiveSimulator
-        tlData={tlData}
-        gates={gates}
-        onBack={() => setShowSimulator(false)}
+        onClose={() => setShowSimulator(false)}
       />
     );
   }
@@ -84,7 +149,7 @@ export function TLIncentiveDashboard({ onBack }: TLIncentiveDashboardProps) {
               </button>
               <div>
                 <h1 className="text-2xl text-gray-900">Incentive Dashboard – Team Lead</h1>
-                <div className="text-sm text-gray-500 mt-1">{tlData.name} • {tlData.region}</div>
+                <div className="text-sm text-gray-500 mt-1">{tlData.name} {tlData.region ? `• ${tlData.region}` : ''}</div>
               </div>
             </div>
             <button
@@ -98,32 +163,21 @@ export function TLIncentiveDashboard({ onBack }: TLIncentiveDashboardProps) {
 
           {/* Period Selector */}
           <div className="flex items-center gap-3">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setSelectedPeriod('this-month')}
-                className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                  selectedPeriod === 'this-month' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                This Month
-              </button>
-              <button
-                onClick={() => setSelectedPeriod('last-month')}
-                className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                  selectedPeriod === 'last-month' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Last Month
-              </button>
-              <button
-                onClick={() => setSelectedPeriod('custom')}
-                className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                  selectedPeriod === 'custom' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Custom
-              </button>
-            </div>
+            <TimeFilterControl
+              mode="chips"
+              chipStyle="pill"
+              value={timeScope}
+              onChange={setTimeScope}
+              options={CANONICAL_TIME_OPTIONS}
+              labelOverrides={CANONICAL_TIME_LABELS}
+              allowCustom
+              customFrom={customFrom}
+              customTo={customTo}
+              onCustomRangeChange={({ fromISO, toISO }) => {
+                setCustomFrom(fromISO);
+                setCustomTo(toISO);
+              }}
+            />
             <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm">
               Calculated on team performance & gates (I2SI, Input Score etc.)
             </div>
@@ -173,7 +227,7 @@ export function TLIncentiveDashboard({ onBack }: TLIncentiveDashboardProps) {
                         <Lock className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <div className="font-medium">Gates Blocked – I2SI below threshold</div>
+                        <div className="font-medium">Gates Blocked – {gates.filter(g => g.status === 'failed').map(g => g.name).join(', ')}</div>
                         <div className="text-sm opacity-75">Incentive payout currently blocked</div>
                       </div>
                     </>
@@ -222,11 +276,11 @@ export function TLIncentiveDashboard({ onBack }: TLIncentiveDashboardProps) {
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                   <div
                     className="bg-blue-600 h-2 rounded-full transition-all"
-                    style={{ width: `${(tlData.teamStockIns / tlData.teamStockInsTarget) * 100}%` }}
+                    style={{ width: `${Math.min((tlData.teamStockIns / Math.max(tlData.teamStockInsTarget, 1)) * 100, 100)}%` }}
                   />
                 </div>
                 <div className="text-sm text-gray-600">
-                  {((tlData.teamStockIns / tlData.teamStockInsTarget) * 100).toFixed(0)}% achieved • {tlData.teamStockInsTarget - tlData.teamStockIns} needed
+                  {tlData.teamStockInsTarget > 0 ? ((tlData.teamStockIns / tlData.teamStockInsTarget) * 100).toFixed(0) : 0}% achieved • {Math.max(0, tlData.teamStockInsTarget - tlData.teamStockIns)} needed
                 </div>
               </div>
 
@@ -246,76 +300,86 @@ export function TLIncentiveDashboard({ onBack }: TLIncentiveDashboardProps) {
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                   <div
                     className="bg-green-600 h-2 rounded-full transition-all"
-                    style={{ width: `${(tlData.teamDCFDisbursals / tlData.teamDCFTarget) * 100}%` }}
+                    style={{ width: `${Math.min(tlData.teamDCFTarget > 0 ? (tlData.teamDCFDisbursals / tlData.teamDCFTarget) * 100 : 0, 100)}%` }}
                   />
                 </div>
                 <div className="text-sm text-gray-600">
-                  {((tlData.teamDCFDisbursals / tlData.teamDCFTarget) * 100).toFixed(0)}% achieved • ₹{((tlData.teamDCFTarget - tlData.teamDCFDisbursals) / 100000).toFixed(1)}L needed
+                  {tlData.teamDCFTarget > 0 ? ((tlData.teamDCFDisbursals / tlData.teamDCFTarget) * 100).toFixed(0) : 0}% achieved
                 </div>
               </div>
 
               {/* Team I2SI% - GATE */}
-              <div className="border-2 border-red-200 bg-red-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Percent className="w-5 h-5 text-red-600" />
-                    <span className="text-gray-900">Team I2SI%</span>
+              {(() => {
+                const i2siPassed = tlData.teamI2SI >= tlData.teamI2SIGate;
+                return (
+                  <div className={`border-2 rounded-lg p-4 ${i2siPassed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Percent className={`w-5 h-5 ${i2siPassed ? 'text-green-600' : 'text-red-600'}`} />
+                        <span className="text-gray-900">Team I2SI%</span>
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs flex items-center gap-1 ${i2siPassed ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                        {i2siPassed ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                        Gate
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className="text-3xl text-gray-900">{tlData.teamI2SI}%</span>
+                      <span className="text-sm text-gray-500">/ {tlData.teamI2SIGate}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${i2siPassed ? 'bg-green-600' : 'bg-red-600'}`}
+                        style={{ width: `${Math.min((tlData.teamI2SI / Math.max(tlData.teamI2SIGate, 1)) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <div className={`text-sm flex items-center gap-1 ${i2siPassed ? 'text-green-700' : 'text-red-700'}`}>
+                      {i2siPassed ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                      I2SI Gate: Min {tlData.teamI2SIGate}% required • Current {tlData.teamI2SI}% ({i2siPassed ? 'Gate passed' : 'Gate failed'})
+                    </div>
                   </div>
-                  <span className="px-2 py-1 bg-red-200 text-red-800 rounded text-xs flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    Gate
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2 mb-2">
-                  <span className="text-3xl text-gray-900">{tlData.teamI2SI}%</span>
-                  <span className="text-sm text-gray-500">/ {tlData.teamI2SIGate}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                  <div
-                    className="bg-red-600 h-2 rounded-full transition-all"
-                    style={{ width: `${(tlData.teamI2SI / tlData.teamI2SIGate) * 100}%` }}
-                  />
-                </div>
-                <div className="text-sm text-red-700 flex items-center gap-1">
-                  <AlertTriangle className="w-4 h-4" />
-                  I2SI Gate: Min {tlData.teamI2SIGate}% required • Current {tlData.teamI2SI}% (Gate failed)
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Team Input Score - GATE */}
-              <div className="border-2 border-green-200 bg-green-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
-                    <span className="text-gray-900">Team Input Score</span>
+              {(() => {
+                const inputPassed = tlData.teamInputScore >= tlData.teamInputScoreTarget;
+                return (
+                  <div className={`border-2 rounded-lg p-4 ${inputPassed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className={`w-5 h-5 ${inputPassed ? 'text-green-600' : 'text-red-600'}`} />
+                        <span className="text-gray-900">Team Input Score</span>
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs flex items-center gap-1 ${inputPassed ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                        {inputPassed ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                        Gate
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className="text-3xl text-gray-900">{tlData.teamInputScore}</span>
+                      <span className="text-sm text-gray-500">/ {tlData.teamInputScoreTarget}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${inputPassed ? 'bg-green-600' : 'bg-red-600'}`}
+                        style={{ width: `${Math.min((tlData.teamInputScore / 100) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <div className={`text-sm flex items-center gap-1 ${inputPassed ? 'text-green-700' : 'text-red-700'}`}>
+                      {inputPassed ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                      Input Score Gate: Min {tlData.teamInputScoreTarget} required • Current {tlData.teamInputScore} ({inputPassed ? 'Gate passed' : 'Gate failed'})
+                    </div>
                   </div>
-                  <span className="px-2 py-1 bg-green-200 text-green-800 rounded text-xs flex items-center gap-1">
-                    <Unlock className="w-3 h-3" />
-                    Gate
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2 mb-2">
-                  <span className="text-3xl text-gray-900">{tlData.teamInputScore}</span>
-                  <span className="text-sm text-gray-500">/ {tlData.teamInputScoreTarget}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                  <div
-                    className="bg-green-600 h-2 rounded-full transition-all"
-                    style={{ width: `${(tlData.teamInputScore / 100) * 100}%` }}
-                  />
-                </div>
-                <div className="text-sm text-green-700 flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" />
-                  Input Score Gate: Min {tlData.teamInputScoreTarget} required • Current {tlData.teamInputScore} (Gate passed)
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
 
           {/* SECTION C - Gates Panel */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-lg text-gray-900 mb-4">Incentive Gates</h2>
-            
+
             {!allGatesPassed && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -374,7 +438,7 @@ export function TLIncentiveDashboard({ onBack }: TLIncentiveDashboardProps) {
                   <div className={`text-sm font-medium ${
                     gate.status === 'passed' ? 'text-green-700' : 'text-red-700'
                   }`}>
-                    Status: {gate.status === 'passed' ? '✅ Passed' : '❌ Failed'}
+                    Status: {gate.status === 'passed' ? 'Passed' : 'Failed'}
                   </div>
                 </div>
               ))}
@@ -384,84 +448,80 @@ export function TLIncentiveDashboard({ onBack }: TLIncentiveDashboardProps) {
           {/* SECTION D - Team Incentive Breakdown by KAM */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-lg text-gray-900 mb-4">Team Performance & Incentive Breakdown by KAM</h2>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 text-sm text-gray-600">KAM Name</th>
-                    <th className="text-left py-3 px-4 text-sm text-gray-600">City</th>
-                    <th className="text-left py-3 px-4 text-sm text-gray-600">Stock-ins</th>
-                    <th className="text-left py-3 px-4 text-sm text-gray-600">DCF Disbursals</th>
-                    <th className="text-left py-3 px-4 text-sm text-gray-600">I2SI%</th>
-                    <th className="text-left py-3 px-4 text-sm text-gray-600">Input Score</th>
-                    <th className="text-left py-3 px-4 text-sm text-gray-600">Contribution</th>
-                    <th className="text-left py-3 px-4 text-sm text-gray-600">Status</th>
-                    <th className="py-3 px-4"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {kamData.map((kam, idx) => (
-                    <tr
-                      key={idx}
-                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
-                      onClick={() => setSelectedKAM(kam)}
-                    >
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-gray-900">{kam.name}</div>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-gray-600">{kam.city}</td>
-                      <td className="py-3 px-4">
-                        <div className="text-sm">
-                          <span className="text-gray-900">{kam.stockIns}</span>
-                          <span className="text-gray-500"> / {kam.stockInsTarget}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="text-sm">
-                          <span className="text-gray-900">₹{(kam.dcfDisbursals / 100000).toFixed(1)}L</span>
-                          <span className="text-gray-500"> / ₹{(kam.dcfTarget / 100000).toFixed(1)}L</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-sm ${
-                          kam.i2si >= 65 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {kam.i2si}%
-                          {kam.i2si < 65 && <AlertTriangle className="w-3 h-3" />}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-sm ${
-                          kam.inputScore >= 70 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {kam.inputScore}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-900">₹{(kam.contribution / 1000).toFixed(0)}K</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          kam.status === 'on-track'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {kam.status === 'on-track' ? 'On-track' : 'At risk'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
 
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-sm text-blue-900">
-                <strong>Recommendation:</strong> Focus on improving I2SI% for Vikram Singh and Anita Desai to unlock team incentive. Consider additional dealer training or inspection quality reviews.
+            {kamRows.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">No KAM data available for this period</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm text-gray-600">KAM Name</th>
+                      <th className="text-left py-3 px-4 text-sm text-gray-600">Stock-ins</th>
+                      <th className="text-left py-3 px-4 text-sm text-gray-600">DCF Disbursals</th>
+                      <th className="text-left py-3 px-4 text-sm text-gray-600">I2SI%</th>
+                      <th className="text-left py-3 px-4 text-sm text-gray-600">Input Score</th>
+                      <th className="text-left py-3 px-4 text-sm text-gray-600">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {kamRows.map((kam, idx) => (
+                      <tr
+                        key={idx}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-gray-900">{kam.name}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="text-sm">
+                            <span className="text-gray-900">{kam.stockIns}</span>
+                            <span className="text-gray-500"> / {kam.stockInsTarget}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="text-sm">
+                            <span className="text-gray-900">₹{(kam.dcfDisbursals / 100000).toFixed(1)}L</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-sm ${
+                            kam.i2si >= 65 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {kam.i2si}%
+                            {kam.i2si < 65 && <AlertTriangle className="w-3 h-3" />}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-sm ${
+                            kam.inputScore >= 70 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {kam.inputScore}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            kam.status === 'on-track'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {kam.status === 'on-track' ? 'On-track' : 'At risk'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
+            )}
+
+            {kamRows.some(k => k.status === 'at-risk') && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="text-sm text-blue-900">
+                  <strong>Recommendation:</strong> Focus on improving performance for at-risk KAMs to unlock team incentive.
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

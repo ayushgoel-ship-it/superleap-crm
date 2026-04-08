@@ -206,7 +206,7 @@ export function FilterSystemPage() {
               <div className="flex flex-wrap gap-2">
                 <FilterChip label="MTD" active={true} onClick={() => {}} />
                 <FilterChip label="Active" active={true} onClick={() => {}} />
-                <FilterChip label="C2B" active={true} onClick={() => {}} />
+                <FilterChip label="NGS" active={true} onClick={() => {}} />
               </div>
             </div>
           </div>
@@ -241,7 +241,7 @@ export function FilterSystemPage() {
               <div className="px-4 py-3 border-b border-slate-100">
                 <div className="text-[15px] font-bold text-slate-800">Dealer Portfolio</div>
                 <div className="text-[11px] text-indigo-600 font-medium mt-0.5">
-                  Showing: MTD (Feb 1 - Feb 13) | Active dealers | C2B
+                  Showing: MTD (Feb 1 - Feb 13) | Active dealers | NGS
                 </div>
               </div>
               <div className="px-4 py-3 bg-slate-50/50">

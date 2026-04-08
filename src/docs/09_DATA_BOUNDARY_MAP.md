@@ -9,7 +9,7 @@
 ## Table of Contents
 
 1. [Data Architecture](#data-architecture)
-2. [Where Mock Data Lives](#where-mock-data-lives)
+2. [Where Data Lives](#where-mock-data-lives)
 3. [Where Selectors Live](#where-selectors-live)
 4. [Which Screens Bypass Selectors](#which-screens-bypass-selectors)
 5. [Centralization Status](#centralization-status)
@@ -29,8 +29,8 @@
        │
        ▼
 ┌─────────────┐
-│ Mock DB     │  Raw entities (Dealer, Lead, Call, Visit, etc.)
-│(mockDB.ts)  │
+│ Runtime DB     │  Raw entities (Dealer, Lead, Call, Visit, etc.)
+│(runtimeDB.ts)  │
 └──────┬──────┘
        │
        ▼
@@ -61,9 +61,9 @@
 
 ---
 
-## Where Mock Data Lives
+## Where Data Lives
 
-### Single Source of Truth: `/data/mockDatabase.ts`
+### Single Source of Truth: `/data/runtimeDB.ts` (Supabase cache)
 
 **Exported Collections:**
 
@@ -217,7 +217,7 @@ None identified during Phase 3 scan. All major pages use selectors.
 
 1. **Created Data Boundary Index** (`/data/index.ts`)
    - Single import point for all data concerns
-   - Exports: types, mockDatabase, selectors, DTOs
+   - Exports: types, runtimeDB, selectors, DTOs
    - Developer documentation inline
 
 2. **Verified Selector Usage**
@@ -278,7 +278,7 @@ const dealer = getDealerById(id);
 
 **Incorrect:**
 ```typescript
-import { DEALERS } from '@/data/mockDatabase';
+import { DEALERS } from '@/data/runtimeDB';
 
 const dealer = DEALERS.find(d => d.id === id);
 ```
@@ -319,7 +319,7 @@ const dealers = [
 ## Centralization Checklist
 
 ### Data Layer ✅
-- [x] Mock data in `/data/mockDatabase.ts`
+- [x] Data cache in `/data/runtimeDB.ts`
 - [x] Selectors in `/data/selectors.ts`
 - [x] DTO selectors in `/data/dtoSelectors.ts`
 - [x] Types in `/data/types.ts`
@@ -350,7 +350,7 @@ const dealers = [
 
 | Need | File | Pattern |
 |------|------|---------|
-| Add mock data | `/data/mockDatabase.ts` | Add to DEALERS/LEADS/etc. |
+| Add data | `/data/supabaseRaw.ts` → `/data/runtimeDB.ts` | Data comes from Supabase |
 | Add selector | `/data/selectors.ts` | `export function getXById(id)` |
 | Add DTO | `/contracts/*.contract.ts` + `/data/dtoSelectors.ts` | Define interface + selector |
 | Add calculation | `/lib/metricsEngine.ts` or `/lib/incentiveEngine.ts` | `export function calculateX()` |
@@ -377,7 +377,7 @@ import { ROUTES } from '@/navigation/routes';
 **Incorrect imports:**
 ```typescript
 // DON'T bypass selectors
-import { DEALERS } from '@/data/mockDatabase';
+import { DEALERS } from '@/data/runtimeDB';
 
 // DON'T use raw entities in UI
 import { Dealer } from '@/data/types';
@@ -390,10 +390,10 @@ import { Dealer } from '@/data/types';
 **How to check for violations:**
 
 ```bash
-# Check for direct mockDatabase imports in components/
-grep -r "from.*mockDatabase" components/
+# Check for direct runtimeDB imports in components/
+grep -r "from.*runtimeDB" components/
 
-# Check for inline mock arrays in components/
+# Check for inline data arrays in components/
 grep -r "const.*=.*\[{.*id:" components/
 
 # Check for inline calculations (harder to detect)

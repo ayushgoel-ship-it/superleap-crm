@@ -26,9 +26,11 @@ import {
 import type { UserRole } from '../../lib/shared/appTypes';
 import type { LeadsFilterContext } from '../../lib/shared/appTypes';
 import { LeadDetailPageV2 } from './LeadDetailPageV2';
+import { DCFLeadDetailPage } from './DCFLeadDetailPage';
 import { LeadCreatePage } from './LeadCreatePage';
-import { getAllLeads, searchLeads } from '../../data/selectors';
-import { toLeadListVM, validateLeadIdForNavigation } from '../../data/adapters/leadAdapter';
+import { getAllLeads, searchLeads, getAnyLeadById } from '../../data/selectors';
+import { toLeadListVM, dcfToLeadCardVM, validateLeadIdForNavigation } from '../../data/adapters/leadAdapter';
+import { getFilteredLeads, getFilteredDCFLeads, classifyLeadStage } from '../../data/canonicalMetrics';
 import type { Lead } from '../../data/types';
 import type { LeadCardVM } from '../../data/adapters/leadAdapter';
 import { LeadPipelineCard } from '../leads/LeadPipelineCard';
@@ -42,11 +44,12 @@ import { toast } from 'sonner@2.0.3';
 
 // ── Types ──
 
-import { TimePeriod } from '../../lib/domain/constants';
-import { LEADS_TIME_OPTIONS } from '../filters/TimeFilterControl';
+import { TimePeriod, STOCK_CHANNEL_STAGE_FILTERS, DCF_STAGE_FILTERS } from '../../lib/domain/constants';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+import { toDCFLeadListVM } from '../../data/adapters/dcfAdapter';
 
 type ViewMode = 'cards' | 'table';
-type ChannelKey = 'all' | 'C2B' | 'C2D' | 'GS' | 'DCF';
+type ChannelKey = 'all' | 'NGS' | 'GS' | 'DCF';
 type SortKey = 'newest' | 'oldest' | 'value' | 'stage';
 
 interface StageGroup {
@@ -60,18 +63,12 @@ interface StageGroup {
 
 // ── Constants ──
 
-const TIME_FILTERS: { key: TimePeriod; label: string }[] = [
-  { key: TimePeriod.MTD, label: 'MTD' },
-  { key: TimePeriod.TODAY, label: 'Today' },
-  { key: TimePeriod.D_MINUS_1, label: 'D-1' },
-  { key: TimePeriod.LAST_7D, label: '7 Days' },
-  { key: TimePeriod.LAST_30D, label: '30 Days' },
-];
+/** Look up short label for a TimePeriod */
+const getTimeLabel = (p: TimePeriod): string => CANONICAL_TIME_LABELS[p] || p;
 
 const CHANNEL_PILLS: { key: ChannelKey; label: string; dot?: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'C2B', label: 'C2B' },
-  { key: 'C2D', label: 'C2D' },
+  { key: 'NGS', label: 'NGS' },
   { key: 'GS', label: 'GS' },
   { key: 'DCF', label: 'DCF', dot: 'bg-rose-500' },
 ];
@@ -84,20 +81,9 @@ interface StageFilterDef {
   patterns: string[]; // patterns to match against lead.stage (lowercase)
 }
 
-const STOCK_CHANNEL_STAGES: StageFilterDef[] = [
-  { key: 'lead-dropped', label: 'Lead Dropped', patterns: ['pr', 'lead created', 'lead_created'] },
-  { key: 'inspection-pending', label: 'Insp. Pending', patterns: ['pll', 'in progress', 'inspection scheduled', 'in_progress', 'inspection_scheduled'] },
-  { key: 'in-nego', label: 'In Nego', patterns: ['inspection done', 'inspection_completed', 'nego'] },
-  { key: 'bbnp', label: 'BBNP', patterns: ['stock-in', 'stockin', 'bought', 'bbnp', 'token'] },
-];
-
-const DCF_STAGES: StageFilterDef[] = [
-  { key: 'lead-dropped', label: 'Lead Dropped', patterns: ['pr', 'lead created', 'lead_created', 'dropped'] },
-  { key: 'offer-gen', label: 'Offer Gen.', patterns: ['offer', 'generated', 'pll', 'in progress', 'in_progress'] },
-  { key: 'in-nego', label: 'In Nego', patterns: ['nego', 'inspection'] },
-  { key: 'disbursed', label: 'Disbursed', patterns: ['stock-in', 'stockin', 'disburse', 'payout'] },
-  { key: 'doc-pending', label: 'Doc Pending', patterns: ['doc', 'post-disbursal', 'pending'] },
-];
+// Use canonical stage filters from constants (includes Stockin for GS/NGS)
+const STOCK_CHANNEL_STAGES: StageFilterDef[] = STOCK_CHANNEL_STAGE_FILTERS as unknown as StageFilterDef[];
+const DCF_STAGES: StageFilterDef[] = DCF_STAGE_FILTERS as unknown as StageFilterDef[];
 
 // ── Generic stage order for grouping ──
 
@@ -116,12 +102,20 @@ function daysAgo(dateStr: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000));
 }
 
-function classifyStage(stage: string): string {
-  const s = stage.toLowerCase();
-  for (const bucket of STAGE_ORDER) {
-    if (bucket.pattern.split('|').some(p => s.includes(p))) return bucket.label;
-  }
-  return 'Other';
+function classifyStage(stage: string, createdAt?: string): string {
+  // Use canonical stage classifier, then map to display labels
+  const canonical = classifyLeadStage(stage, createdAt);
+  const mapping: Record<string, string> = {
+    'New/PR': 'New / PR',
+    'Lead Dropped': 'Lost',
+    'Insp Pending': 'In Progress',
+    'In Nego': 'Inspection',
+    'BBNP': 'Stock-In',
+    'Stockin': 'Stock-In',
+    'Payout Done': 'Payout Done',
+    'Lost': 'Lost',
+  };
+  return mapping[canonical] || 'Other';
 }
 
 function formatMoney(n: number | null | undefined): string {
@@ -135,37 +129,6 @@ function formatMoney(n: number | null | undefined): string {
 function matchesStageFilter(leadStage: string, stageFilter: StageFilterDef): boolean {
   const s = leadStage.toLowerCase();
   return stageFilter.patterns.some(p => s.includes(p));
-}
-
-function isInTimeRange(createdAt: string, tf: TimePeriod): boolean {
-  const now = new Date();
-  const created = new Date(createdAt);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  switch (tf) {
-    case TimePeriod.TODAY:
-      return created >= today;
-    case TimePeriod.D_MINUS_1: {
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      return created >= yesterday && created < today;
-    }
-    case TimePeriod.LAST_7D: {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 7);
-      return created >= d;
-    }
-    case TimePeriod.LAST_30D: {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 30);
-      return created >= d;
-    }
-    case TimePeriod.MTD:
-    default: {
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      return created >= monthStart;
-    }
-  }
 }
 
 // ── Props ──
@@ -191,6 +154,8 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
   const [selectedChannel, setSelectedChannel] = useState<ChannelKey>('all');
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -222,10 +187,25 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
     return () => { if (callTimerRef.current) clearTimeout(callTimerRef.current); };
   }, []);
 
-  // ── Data ──
+  // ── Data (canonical time-filtered) ──
 
   const allLeads = useMemo(() => getAllLeads(), []);
-  const allVMs = useMemo(() => toLeadListVM(allLeads), [allLeads]);
+  const timeFilteredLeads = useMemo(
+    () => getFilteredLeads({ period: timeFilter }),
+    [timeFilter]
+  );
+  const leadVMs = useMemo(() => toLeadListVM(timeFilteredLeads), [timeFilteredLeads]);
+
+  // Merge DCF leads into unified pipeline
+  const timeFilteredDCF = useMemo(
+    () => getFilteredDCFLeads({ period: timeFilter }),
+    [timeFilter]
+  );
+  const dcfVMs = useMemo(
+    () => toDCFLeadListVM(timeFilteredDCF).map(dcfToLeadCardVM),
+    [timeFilteredDCF]
+  );
+  const allVMs = useMemo(() => [...leadVMs, ...dcfVMs], [leadVMs, dcfVMs]);
 
 
   // CEP Pending count (cross-channel, always computed)
@@ -254,20 +234,19 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
   const activeStages = useMemo(() => {
     if (selectedChannel === 'all') return null;
     if (selectedChannel === 'DCF') return DCF_STAGES;
-    return STOCK_CHANNEL_STAGES;
+    return STOCK_CHANNEL_STAGES; // NGS and GS both use stock channel stages
   }, [selectedChannel]);
 
   // ── Filtering pipeline ──
 
   const filteredVMs = useMemo(() => {
     let result = searchQuery
-      ? toLeadListVM(searchLeads(searchQuery))
+      ? toLeadListVM(searchLeads(searchQuery)).filter(l =>
+          allVMs.some(vm => vm.id === l.id) // intersect search with time-filtered set
+        )
       : allVMs;
 
-    // Time filter
-    result = result.filter(l => isInTimeRange(l.createdAt, timeFilter));
-
-    // Channel
+    // Channel (canonical: NGS/GS/DCF)
     if (selectedChannel !== 'all') {
       result = result.filter(l => l.channel === selectedChannel);
     }
@@ -297,7 +276,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
     });
 
     return result;
-  }, [allVMs, searchQuery, selectedChannel, selectedStage, activeStages, pendingMode, sortKey, timeFilter]);
+  }, [allVMs, searchQuery, selectedChannel, selectedStage, activeStages, pendingMode, sortKey]);
 
   // ── Stage groups (for Cards view) ──
 
@@ -425,6 +404,16 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
   // ── Sub-pages ──
 
   if (selectedLeadId) {
+    // Route to correct detail page based on lead source
+    const leadLookup = getAnyLeadById(selectedLeadId);
+    if (leadLookup?.source === 'dcf') {
+      return (
+        <DCFLeadDetailPage
+          loanId={selectedLeadId}
+          onBack={() => setSelectedLeadId(null)}
+        />
+      );
+    }
     return (
       <LeadDetailPageV2
         leadId={selectedLeadId}
@@ -554,25 +543,18 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
         </div>
 
         {/* ── Time filter row ── */}
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-0.5">
-          {TIME_FILTERS.map(({ key, label }) => {
-            const isActive = timeFilter === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setTimeFilter(key)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all duration-150
-                  ${isActive
-                    ? 'bg-slate-800 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
-                  }
-                `}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <TimeFilterControl
+          mode="chips"
+          chipStyle="pill"
+          value={timeFilter}
+          onChange={setTimeFilter}
+          options={CANONICAL_TIME_OPTIONS}
+          labelOverrides={CANONICAL_TIME_LABELS}
+          allowCustom
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+        />
 
         {/* ── Channel pills + Pending indicator (same row) ── */}
         <div className="flex items-center gap-2 pb-1">
@@ -707,7 +689,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
           <div className="mx-4 mt-3 flex items-center justify-between px-3.5 py-2 bg-slate-100/70 rounded-xl">
             <span className="text-[11px] font-medium text-slate-500">
               {filteredVMs.length} result{filteredVMs.length !== 1 ? 's' : ''}
-              {timeFilter !== TimePeriod.MTD && ` \u00b7 ${TIME_FILTERS.find(t => t.key === timeFilter)?.label}`}
+              {timeFilter !== TimePeriod.MTD && ` \u00b7 ${getTimeLabel(timeFilter)}`}
               {selectedChannel !== 'all' && ` \u00b7 ${selectedChannel}`}
               {selectedStage && activeStages && ` \u00b7 ${activeStages.find(s => s.key === selectedStage)?.label}`}
               {searchQuery && ` \u00b7 "${searchQuery}"`}
@@ -757,7 +739,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
                       [
                         selectedChannel !== 'all' ? selectedChannel : '',
                         selectedStage && activeStages ? activeStages.find(s => s.key === selectedStage)?.label : '',
-                        timeFilter !== TimePeriod.MTD ? TIME_FILTERS.find(t => t.key === timeFilter)?.label : '',
+                        timeFilter !== TimePeriod.MTD ? getTimeLabel(timeFilter) : '',
                       ].filter(Boolean).join(' + ') || 'current filters'
                     }. Try adjusting your filters.`
                   : 'Leads will appear here once they are created or assigned to you.'

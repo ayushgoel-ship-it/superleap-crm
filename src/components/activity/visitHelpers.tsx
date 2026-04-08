@@ -377,8 +377,9 @@ export function getVisitBlocker(visits: Visit[]): {
   }
 
   // Check for completed visit with no feedback
+  // Uses feedbackSubmitted flag (set explicitly on submit) as primary check
   const noFeedback = visits.find(
-    (v) => v.status === 'completed' && !v.outcome && !v.notes,
+    (v) => v.status === 'completed' && !v.feedbackSubmitted && !v.outcome && !v.notes,
   );
   if (noFeedback) {
     return {

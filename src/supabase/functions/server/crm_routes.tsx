@@ -456,7 +456,7 @@ crm.get("/v1/leads", async (c) => {
  * Query:
  *   page, page_size         — pagination (defaults 1 / 20)
  *   time_scope              — mtd | d-1 | last-7d | last-30d | lifetime
- *   channel                 — C2B | C2D | GS | DCF
+ *   channel                 — NGS | GS | DCF
  *   stage                   — any stage string
  *   kam_id                  — filter by assigned KAM employee_id
  *   dealer_id               — filter by dealer
@@ -469,7 +469,7 @@ crm.get("/v1/leads", async (c) => {
  *   { success, data: { items, page, page_size, total }, meta, error }
  *
  * Each item includes channel-correct secondary value:
- *   - C2B / C2D / GS → c24_quote
+ *   - NGS / GS → c24_quote
  *   - DCF            → ltv
  */
 crm.get("/v1/leads/list", async (c) => {

@@ -1,5 +1,41 @@
 /**
- * METRICS FROM DB — Computes all dashboard KPIs from canonical Supabase data
+ * METRICS FROM DB — Rank-based dashboard KPIs from Supabase native fields
+ *
+ * ┌─────────────────────────────────────────────────────────────────┐
+ * │  MODULE BOUNDARY                                               │
+ * │                                                                │
+ * │  This module provides:                                         │
+ * │  1. Rank-based metric computation (computeMetrics)             │
+ * │     Uses Supabase rank fields: regInspRank, regTokenRank,      │
+ * │     regStockinRank — only rank=1 entries count.                │
+ * │  2. Per-KAM metric aggregation (computeKAMMetrics)             │
+ * │  3. TL team overview (computeTLOverview)                       │
+ * │  4. Month projection utilities (getMonthProgress, projectToEOM)│
+ * │                                                                │
+ * │  WHEN TO USE THIS MODULE:                                      │
+ * │  - Main dashboard / home pages (HomePage, AdminHomePage)       │
+ * │  - Performance pages (PerformancePage)                         │
+ * │  - TL overview pages (TLDetailPage, TLIncentiveDashboard,      │
+ * │    TLIncentiveMobile)                                          │
+ * │  - KAM detail pages (KAMDetailPage)                            │
+ * │  - Admin pages (AdminDCFPage, TargetsModal)                    │
+ * │  - Any page needing rank-based inspections/tokens/stock-ins    │
+ * │                                                                │
+ * │  WHEN TO USE canonicalMetrics INSTEAD:                         │
+ * │  - DCF-specific pages (DCFPage, DCFPageTL, DCF drill-downs)   │
+ * │  - Pages needing STAGE-BASED classification (classifyLeadStage)│
+ * │  - Dealer activity stage derivation                            │
+ * │  - Lead detail pages needing range status or channel mapping   │
+ * │                                                                │
+ * │  CONSUMERS:                                                    │
+ * │  - HomePage.tsx                                                │
+ * │  - PerformancePage.tsx                                         │
+ * │  - TLDetailPage.tsx                                            │
+ * │  - TLIncentiveDashboard.tsx, TLIncentiveMobile.tsx             │
+ * │  - TLLeaderboardPage.tsx (also uses canonicalMetrics)          │
+ * │  - KAMDetailPage.tsx                                           │
+ * │  - AdminHomePage.tsx, AdminDCFPage.tsx, TargetsModal.tsx        │
+ * └─────────────────────────────────────────────────────────────────┘
  *
  * All metrics use RANK-BASED FILTERING:
  *   - Inspections: reg_insp_rank = 1 AND inspection_date IS NOT NULL
@@ -8,45 +44,28 @@
  *   - I2SI:        stock-ins / inspections * 100
  *
  * Channel derivation: gs_flag=1 → GS, gs_flag=0 → NGS (already done in adapter)
+ *
+ * TODO: Overlap with canonicalMetrics.ts — both modules have:
+ *   - Time range filtering (isIn here vs isInTimeRange there)
+ *   - I2SI calculation (stockIns / inspections * 100)
+ *   - DCF disbursal value aggregation (/ 100000 to lakhs)
+ *   - Call/visit filtering by period + kamId
+ *   - A DashboardMetrics interface (different shapes)
+ *   Consider unifying shared logic into a common utility if these modules
+ *   are ever refactored together.
  */
 
 import { getRuntimeDBSync } from '../../data/runtimeDB';
 import { TimePeriod } from '../domain/constants';
+import { getConfigTLTeamTargets } from '../configFromDB';
+import { resolveTimePeriodToRange } from '../time/resolveTimePeriod';
 import type { Lead, CallLog, VisitLog, DCFLead, Dealer } from '../../data/types';
 
 // ── Time Helpers ──
+// TODO: Duplicated logic — canonicalMetrics.ts has its own `isInTimeRange()` with the same semantics.
+// Consider extracting a shared `isDateInRange(dateStr, from, to)` utility.
 
-function getDateRange(period: TimePeriod): { from: Date; to: Date } {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-
-    switch (period) {
-        case TimePeriod.TODAY:
-            return { from: todayStart, to: tomorrowStart };
-        case TimePeriod.D_MINUS_1: {
-            const yesterday = new Date(todayStart);
-            yesterday.setDate(yesterday.getDate() - 1);
-            return { from: yesterday, to: todayStart };
-        }
-        case TimePeriod.MTD: {
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            return { from: monthStart, to: tomorrowStart };
-        }
-        case TimePeriod.LAST_MONTH: {
-            const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            return { from: lastMonthStart, to: thisMonthStart };
-        }
-        default: {
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            return { from: monthStart, to: tomorrowStart };
-        }
-    }
-}
-
-function isInRange(dateStr: string | undefined, from: Date, to: Date): boolean {
+function isIn(dateStr: string | undefined, from: Date, to: Date): boolean {
     if (!dateStr) return false;
     const d = new Date(dateStr);
     return d >= from && d < to;
@@ -63,6 +82,7 @@ export interface DashboardMetrics {
     wonLeads: number;
     lostLeads: number;
     dcfTotal: number;
+    dcfOnboarded: number; // dealers with dcf_onboarded='Y', filtered by dcfOnboardingDate
     dcfDisbursals: number;
     dcfDisbursedValue: number;
     dcfInProgress: number;
@@ -111,7 +131,9 @@ export function computeMetrics(
     kamId?: string
 ): DashboardMetrics {
     const db = getRuntimeDBSync();
-    const { from, to } = getDateRange(period);
+    const { fromISO, toISO } = resolveTimePeriodToRange(period);
+    const from = new Date(fromISO);
+    const to = new Date(toISO);
 
     // Filter by KAM (dealer-based scoping: lead.dealerCode belongs to KAM's dealers)
     const allLeadsForKam: Lead[] = db.leads.filter((l: Lead) => kamId ? l.kamId === kamId : true);
@@ -120,25 +142,25 @@ export function computeMetrics(
 
     // Inspections: reg_insp_rank=1 AND inspection_date in period
     const inspections = allLeadsForKam.filter((l: Lead) =>
-        l.regInspRank === 1 && l.inspectionDate && isInRange(l.inspectionDate, from, to)
+        l.regInspRank === 1 && l.inspectionDate && isIn(l.inspectionDate, from, to)
     ).length;
 
     // Tokens/PR: reg_token_rank=1 AND (token_date OR final_token_date) in period
     const tokens = allLeadsForKam.filter((l: Lead) => {
         if (l.regTokenRank !== 1) return false;
         const tDate = l.finalTokenDate || l.tokenDate;
-        return tDate && isInRange(tDate, from, to);
+        return tDate && isIn(tDate, from, to);
     }).length;
 
     // Stock-ins: reg_stockin_rank=1 AND (stockin_date OR final_si_date) in period
     const stockIns = allLeadsForKam.filter((l: Lead) => {
         if (l.regStockinRank !== 1) return false;
         const siDate = l.finalSiDate || l.stockinDate;
-        return siDate && isInRange(siDate, from, to);
+        return siDate && isIn(siDate, from, to);
     }).length;
 
     // Total leads created in period (all ranks)
-    const periodLeads = allLeadsForKam.filter((l: Lead) => isInRange(l.createdAt, from, to));
+    const periodLeads = allLeadsForKam.filter((l: Lead) => isIn(l.createdAt, from, to));
     const totalLeadsCount = allLeadsForKam.length;
 
     // Status counts (derived from dates)
@@ -152,7 +174,7 @@ export function computeMetrics(
 
     // ── CALLS ──
     const calls: CallLog[] = db.calls.filter((c: CallLog) => {
-        const inPeriod = isInRange(c.callDate, from, to);
+        const inPeriod = isIn(c.callDate, from, to);
         const matchesKam = kamId ? c.kamId === kamId : true;
         return inPeriod && matchesKam;
     });
@@ -164,25 +186,36 @@ export function computeMetrics(
 
     // ── VISITS ──
     const visits: VisitLog[] = db.visits.filter((v: VisitLog) => {
-        const inPeriod = isInRange(v.visitDate, from, to);
+        const inPeriod = isIn(v.visitDate, from, to);
         const matchesKam = kamId ? v.kamId === kamId : true;
         return inPeriod && matchesKam;
     });
     const completedVisits = visits.filter((v: VisitLog) => v.status === 'COMPLETED');
     const scheduledVisits = visits.filter((v: VisitLog) => v.status === 'NOT_STARTED');
 
-    // ── DCF ──
+    // ── DCF (time-filtered) ──
     const allDcfForKam: DCFLead[] = db.dcfLeads.filter((d: DCFLead) => kamId ? d.kamId === kamId : true);
-    const dcfDisbursed = allDcfForKam.filter((d: DCFLead) => d.overallStatus === 'disbursed' || !!d.disbursalDate);
-    const dcfInProgress = allDcfForKam.filter((d: DCFLead) => d.overallStatus === 'in_progress');
-    const dcfApproved = allDcfForKam.filter((d: DCFLead) => d.overallStatus === 'approved');
-    const dcfRejected = allDcfForKam.filter((d: DCFLead) => d.currentFunnel === 'REJECTED' || d.overallStatus === 'rejected');
+    // DCF leads created in the time period
+    const dcfInPeriod = allDcfForKam.filter((d: DCFLead) => isIn(d.createdAt, from, to));
+    // Disbursals: filter by disbursalDate within period (across all DCF leads for KAM, not just created in period)
+    const dcfDisbursed = allDcfForKam.filter((d: DCFLead) =>
+        (d.overallStatus === 'disbursed' || !!d.disbursalDate) && isIn(d.disbursalDate, from, to)
+    );
+    // Status breakdowns for leads created in period
+    const dcfInProgress = dcfInPeriod.filter((d: DCFLead) => d.overallStatus === 'in_progress');
+    const dcfApproved = dcfInPeriod.filter((d: DCFLead) => d.overallStatus === 'approved');
+    const dcfRejected = dcfInPeriod.filter((d: DCFLead) => d.currentFunnel === 'REJECTED' || d.overallStatus === 'rejected');
     const dcfDisbursedValue = dcfDisbursed.reduce((sum: number, d: DCFLead) => sum + (d.loanAmount || 0), 0) / 100000;
 
     // ── DEALERS ──
     const dealers: Dealer[] = db.dealers.filter((d: Dealer) => kamId ? d.kamId === kamId : true);
     const activeDealers = dealers.filter((d: Dealer) => d.status === 'active').length;
     const inactiveDealers = dealers.filter((d: Dealer) => d.status !== 'active').length;
+
+    // DCF-onboarded dealers (dcf_onboarded='Y') with onboarding date in period
+    const dcfOnboardedDealers = dealers.filter((d: Dealer) =>
+        d.dcfOnboarded === 'Y' && isIn(d.dcfOnboardingDate, from, to)
+    ).length;
 
     // ── UNIQUE DEALERS ──
     const uniqueDealersVisited = new Set(visits.map((v: VisitLog) => v.dealerId)).size;
@@ -206,7 +239,8 @@ export function computeMetrics(
         openLeads: openLeads.length,
         wonLeads: wonLeads.length,
         lostLeads: lostLeads.length,
-        dcfTotal: allDcfForKam.length,
+        dcfTotal: dcfInPeriod.length,
+        dcfOnboarded: dcfOnboardedDealers,
         dcfDisbursals: dcfDisbursed.length,
         dcfDisbursedValue,
         dcfInProgress: dcfInProgress.length,
@@ -266,15 +300,17 @@ export function computeTLOverview(period: TimePeriod): TLOverviewMetrics {
         ? Math.round(kamMetrics.reduce((sum, k) => sum + k.inputScore, 0) / kamMetrics.length)
         : 0;
 
+    const tlTargets = getConfigTLTeamTargets();
+
     return {
         teamStockIns: totalMetrics.stockIns,
-        teamStockInsTarget: 150,
+        teamStockInsTarget: tlTargets.teamSITarget,
         teamI2SI: totalMetrics.i2si,
-        teamI2SITarget: 65,
+        teamI2SITarget: tlTargets.teamI2SITarget,
         teamAvgInputScore: avgInputScore,
         dcfOnboardings: totalMetrics.dcfTotal,
         dcfGMV: totalMetrics.dcfDisbursedValue,
-        dcfGMVTarget: 50,
+        dcfGMVTarget: tlTargets.dcfGMVTarget,
         kamMetrics,
     };
 }

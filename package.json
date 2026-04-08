@@ -64,6 +64,7 @@
             "@types/react-dom": "^19.2.3",
             "@vitejs/plugin-react-swc": "^3.10.2",
             "tsx": "^4.21.0",
+            "typescript": "^6.0.2",
             "vite": "6.3.5"
       },
       "scripts": {

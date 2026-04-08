@@ -104,6 +104,34 @@ const ROLE_PERMISSIONS: Record<UserRole, {
     ]
   },
 
+  SUPER_ADMIN: {
+    actions: [
+      'IMPERSONATE',
+      'APPROVE_LOCATION_CHANGE',
+      'VIEW_ADMIN_SUMMARY',
+      'VIEW_TEAM_VC',
+      'VIEW_AUDIT_LOG',
+      'EXPORT_ADMIN_DATA',
+      'EDIT_TARGETS',
+      'VIEW_ALL_REGIONS',
+      'OVERRIDE_PRODUCTIVITY',
+      'MANAGE_USERS'
+    ],
+    routes: [
+      '/admin/*',
+      '/tl/*',
+      '/kam/*',
+      '/dealers/*',
+      '/leads/*',
+      '/calls/*',
+      '/visits/*',
+      '/dcf/*',
+      '/productivity',
+      '/incentive',
+      '/profile'
+    ]
+  },
+
   // ADMIN alias — data layer may store "ADMIN", UI normalizes to "Admin"
   ADMIN: {
     actions: [
@@ -182,7 +210,7 @@ export function canPerformAction(
   
   // Special case: IMPERSONATE requires real Admin role (not impersonated)
   if (action === 'IMPERSONATE') {
-    return authRole === 'Admin' || authRole === 'ADMIN';
+    return authRole === 'Admin' || authRole === 'ADMIN' || authRole === 'SUPER_ADMIN';
   }
   
   // For other actions: use activeRole permissions
@@ -214,10 +242,12 @@ export function getAllowedActions(role: UserRole): ActionKey[] {
  * Get default route for role after login
  */
 export function getDefaultRoute(role: UserRole): string {
-  const routes: Record<UserRole, string> = {
+  const routes: Partial<Record<UserRole, string>> = {
     KAM: '/kam/home',
     TL: '/tl/home',
-    Admin: '/admin/home'
+    Admin: '/admin/home',
+    ADMIN: '/admin/home',
+    SUPER_ADMIN: '/admin/home'
   };
   return routes[role] || '/';
 }
@@ -246,10 +276,10 @@ export function canTransitionToRole(
   fromRole: UserRole,
   toRole: UserRole
 ): boolean {
-  // Only Admin can transition to other roles
-  if (fromRole !== 'Admin') return false;
-  
-  // Admin can impersonate TL or KAM
+  // Only Admin or SUPER_ADMIN can transition to other roles
+  if (fromRole !== 'Admin' && fromRole !== 'ADMIN' && fromRole !== 'SUPER_ADMIN') return false;
+
+  // Admin/SUPER_ADMIN can impersonate TL or KAM
   return toRole === 'TL' || toRole === 'KAM';
 }
 
@@ -290,7 +320,7 @@ export function getPermissionExplanation(
   role: UserRole,
   action: ActionKey
 ): string {
-  const explanations: Record<ActionKey, Record<UserRole, string>> = {
+  const explanations: Partial<Record<ActionKey, Partial<Record<UserRole, string>>>> = {
     IMPERSONATE: {
       Admin: 'You can impersonate TL or KAM to view their perspective',
       TL: 'Only Admins can impersonate other users',

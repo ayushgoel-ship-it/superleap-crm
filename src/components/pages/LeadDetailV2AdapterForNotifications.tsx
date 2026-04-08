@@ -21,7 +21,7 @@ import type { UserRole } from '../../lib/shared/appTypes';
 interface NotificationLeadDetailProps {
   regNo: string;
   customer: string;
-  channel: 'C2B' | 'C2D' | 'GS' | 'DCF';
+  channel: 'NGS' | 'GS' | 'DCF';
   leadType: 'Seller' | 'Inventory';
   currentStage: string;
   onBack: () => void;

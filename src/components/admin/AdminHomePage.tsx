@@ -10,7 +10,7 @@
 import { useMemo } from 'react';
 import { Users, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
 import { TimePeriod } from '../../lib/domain/constants';
-import { Region, getAggregatedRegionMetrics, getTLsByRegions } from '../../data/adminOrgMock';
+import { Region, getAggregatedRegionMetrics, getTLsByRegions } from '../../data/adminOrgData';
 import { scaleTLMetrics, scaleMetric, scalePercent } from '../../data/adminFilterHelpers';
 import { computeMetrics, computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
 import { AdminCommonFilters } from './AdminCommonFilters';
@@ -18,10 +18,12 @@ import { useFilterScope } from '../../contexts/FilterContext';
 import { resolveTimePeriodToRange, type DateRange } from '../../lib/time/resolveTimePeriodToRange';
 import { useLoadingState } from '../premium/SkeletonLoader';
 import { EmptyState } from '../premium/EmptyState';
+import { getSITarget } from '../../lib/metricsEngine';
 import type { AdminPage } from '../../navigation';
 
 interface AdminHomePageProps {
   onNavigate?: (page: AdminPage) => void;
+  onViewTLDetail?: (tlId: string) => void;
 }
 
 // ── Shared Formatters ──
@@ -154,7 +156,7 @@ function InsightCard({ label, value, direction }: InsightCardProps) {
   );
 }
 
-export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
+export function AdminHomePage({ onNavigate, onViewTLDetail }: AdminHomePageProps = {}) {
   const { state, resetFilters } = useFilterScope('admin_home');
   const loading = useLoadingState('loaded');
 
@@ -174,18 +176,69 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
     return [regionId as Region];
   }, [regionId]);
 
-  // Get real metrics from metricsFromDB
-  const currentMetrics = useMemo(() => computeMetrics(timePeriod), [timePeriod]);
+  // Resolve KAM IDs in scope (based on region + TL filters)
+  const scopedKamIds = useMemo(() => {
+    const allTLs = getTLsByRegions(selectedRegions);
+    // If TL is selected, only that TL's KAMs
+    const tls = tlId ? allTLs.filter(t => t.tlId === tlId) : allTLs;
+    // If no filters, return null (means all)
+    if (!regionId && !tlId) return null;
+    const ids = new Set<string>();
+    tls.forEach(t => t.kams.forEach(k => ids.add(k.kamId)));
+    return ids;
+  }, [selectedRegions, tlId, regionId]);
+
+  // Get real metrics from metricsFromDB — scoped by region/TL filter
+  const currentMetrics = useMemo(() => {
+    if (!scopedKamIds) return computeMetrics(timePeriod);
+    // Aggregate metrics for all KAMs in scope
+    const kamMetricsAll = computeKAMMetrics(timePeriod);
+    const filtered = kamMetricsAll.filter(km => scopedKamIds.has(km.kamId));
+    if (filtered.length === 0) return computeMetrics(timePeriod); // fallback to global if empty scope
+    // Sum key metrics
+    return {
+      stockIns: filtered.reduce((s, km) => s + km.stockIns, 0),
+      inspections: filtered.reduce((s, km) => s + km.inspections, 0),
+      tokens: filtered.reduce((s, km) => s + km.tokens, 0),
+      totalLeads: filtered.reduce((s, km) => s + km.totalLeads, 0),
+      openLeads: filtered.reduce((s, km) => s + km.openLeads, 0),
+      wonLeads: filtered.reduce((s, km) => s + km.wonLeads, 0),
+      lostLeads: filtered.reduce((s, km) => s + km.lostLeads, 0),
+      dcfTotal: filtered.reduce((s, km) => s + km.dcfTotal, 0),
+      dcfOnboarded: filtered.reduce((s, km) => s + km.dcfOnboarded, 0),
+      dcfDisbursals: filtered.reduce((s, km) => s + km.dcfDisbursals, 0),
+      dcfDisbursedValue: filtered.reduce((s, km) => s + km.dcfDisbursedValue, 0),
+      dcfInProgress: filtered.reduce((s, km) => s + km.dcfInProgress, 0),
+      dcfApproved: filtered.reduce((s, km) => s + km.dcfApproved, 0),
+      dcfRejected: filtered.reduce((s, km) => s + km.dcfRejected, 0),
+      totalCalls: filtered.reduce((s, km) => s + km.totalCalls, 0),
+      connectedCalls: filtered.reduce((s, km) => s + km.connectedCalls, 0),
+      totalVisits: filtered.reduce((s, km) => s + km.totalVisits, 0),
+      completedVisits: filtered.reduce((s, km) => s + km.completedVisits, 0),
+      scheduledVisits: filtered.reduce((s, km) => s + km.scheduledVisits, 0),
+      i2si: (() => { const si = filtered.reduce((s, km) => s + km.stockIns, 0); const insp = filtered.reduce((s, km) => s + km.inspections, 0); return insp > 0 ? Math.round((si / insp) * 100) : 0; })(),
+      conversionRate: (() => { const si = filtered.reduce((s, km) => s + km.stockIns, 0); const insp = filtered.reduce((s, km) => s + km.inspections, 0); return insp > 0 ? Math.round((si / insp) * 100) : 0; })(),
+      callConnectRate: (() => { const t = filtered.reduce((s, km) => s + km.totalCalls, 0); const c = filtered.reduce((s, km) => s + km.connectedCalls, 0); return t > 0 ? Math.round((c / t) * 100) : 0; })(),
+      totalDealers: filtered.reduce((s, km) => s + km.totalDealers, 0),
+      activeDealers: filtered.reduce((s, km) => s + km.activeDealers, 0),
+      inactiveDealers: filtered.reduce((s, km) => s + km.inactiveDealers, 0),
+      channelBreakdown: {},
+      ragBreakdown: { green: 0, amber: 0, red: 0 },
+      avgCallDuration: 0,
+      uniqueDealersVisited: filtered.reduce((s, km) => s + km.uniqueDealersVisited, 0),
+      uniqueDealersCalled: filtered.reduce((s, km) => s + km.uniqueDealersCalled, 0),
+    };
+  }, [timePeriod, scopedKamIds]);
   const lastMonthMetrics = useMemo(() => computeMetrics(TimePeriod.LAST_MONTH), []);
 
   // Scale metrics by time period - MEMOIZED
   const metrics = useMemo(() => ({
     si: currentMetrics.stockIns,
-    siTarget: 150,
+    siTarget: getSITarget('TL'),
     i2si: currentMetrics.i2si,
-    c2d: currentMetrics.conversionRate,
+    ngs: currentMetrics.conversionRate,
     dcfLeads: currentMetrics.dcfTotal,
-    dcfOnb: currentMetrics.dcfTotal - currentMetrics.dcfDisbursals,
+    dcfOnb: currentMetrics.dcfOnboarded,
     dcfDisb: currentMetrics.dcfDisbursals,
     dcfGMV: currentMetrics.dcfDisbursedValue * 100000,
   }), [currentMetrics]);
@@ -194,26 +247,42 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
   const trends = useMemo(() => ({
     si: calculateTrend(metrics.si, lastMonthMetrics.stockIns),
     i2si: calculateTrend(metrics.i2si, lastMonthMetrics.i2si),
-    c2d: calculateTrend(metrics.c2d, lastMonthMetrics.conversionRate),
+    ngs: calculateTrend(metrics.ngs, lastMonthMetrics.conversionRate),
     gmv: calculateTrend(metrics.dcfGMV, lastMonthMetrics.dcfDisbursedValue * 100000),
-    onb: calculateTrend(metrics.dcfOnb, lastMonthMetrics.dcfTotal - lastMonthMetrics.dcfDisbursals),
+    onb: calculateTrend(metrics.dcfOnb, lastMonthMetrics.dcfOnboarded),
     disb: calculateTrend(metrics.dcfDisb, lastMonthMetrics.dcfDisbursals),
   }), [metrics, lastMonthMetrics]);
 
   // Get TL data from real KAM metrics - MEMOIZED
   const kamMetrics = useMemo(() => computeKAMMetrics(timePeriod), [timePeriod]);
-  const sortedTLs = useMemo(() =>
-    kamMetrics.map(km => ({
-      tlId: km.kamId,
-      tlName: km.kamName,
-      region: 'NCR',
-      siAch: km.stockIns,
-      siTarget: 20,
-      i2siPercent: km.i2si,
-      dcfDisbValueAch: km.dcfDisbursedValue * 100000,
-    })).sort((a, b) => (b.siAch / b.siTarget) - (a.siAch / a.siTarget)),
-    [kamMetrics]
-  );
+  const sortedTLs = useMemo(() => {
+    const tls = getTLsByRegions(selectedRegions);
+    const allTLs = tls.map(tl => {
+      // Find KAMs belonging to this TL
+      const tlKamMetrics = kamMetrics.filter(km =>
+        tl.kams.some(k => k.kamId === km.kamId)
+      );
+      const siAch = tlKamMetrics.reduce((sum, km) => sum + km.stockIns, 0);
+      const inspections = tlKamMetrics.reduce((sum, km) => sum + km.inspections, 0);
+      const i2si = inspections > 0 ? Math.round((siAch / inspections) * 100) : 0;
+      const gmv = tlKamMetrics.reduce((sum, km) => sum + km.dcfDisbursedValue * 100000, 0);
+      return {
+        tlId: tl.tlId,
+        tlName: tl.tlName,
+        region: tl.region,
+        kamCount: tl.kams.length,
+        siAch,
+        siTarget: getSITarget('TL'),
+        i2siPercent: i2si,
+        dcfDisbValueAch: gmv,
+      };
+    }).sort((a, b) => (b.siAch / Math.max(b.siTarget, 1)) - (a.siAch / Math.max(a.siTarget, 1)));
+    // FIX 4: If TL filter is selected, show only that TL
+    if (tlId) {
+      return allTLs.filter(tl => tl.tlId === tlId);
+    }
+    return allTLs;
+  }, [kamMetrics, selectedRegions, tlId]);
 
   // Loading state
   if (loading.isLoading) {
@@ -281,7 +350,7 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
           <div className="grid grid-cols-2 gap-3">
             <PremiumMetricCard
               title="SI"
-              value={formatCompact(metrics.si)}
+              value={`${formatCompact(metrics.si)} / ${formatCompact(metrics.siTarget)}`}
               trend={trends.si}
               accentColor="indigo"
               delay={0}
@@ -295,9 +364,9 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
             />
             <PremiumMetricCard
               title="NGS"
-              value={formatPct(metrics.c2d)}
-              trend={trends.c2d}
-              accentColor="violet"
+              value={formatPct(metrics.ngs)}
+              trend={trends.ngs}
+              accentColor="blue"
               delay={100}
             />
             <PremiumMetricCard
@@ -380,7 +449,7 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
                   return (
                     <button
                       key={tl.tlId}
-                      onClick={() => console.log('Drill to TL:', tl.tlId)}
+                      onClick={() => onViewTLDetail?.(tl.tlId)}
                       className="w-full px-4 py-3 hover:bg-slate-50 transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
@@ -396,7 +465,7 @@ export function AdminHomePage({ onNavigate }: AdminHomePageProps = {}) {
                             {tl.tlName}
                           </div>
                           <div className="text-xs text-slate-500 whitespace-nowrap overflow-hidden text-ellipsis">
-                            {tl.region} • Target: {formatCompact(tl.siTarget)}
+                            {tl.region} • {tl.kamCount} KAMs • Target: {formatCompact(tl.siTarget)}
                           </div>
                         </div>
 

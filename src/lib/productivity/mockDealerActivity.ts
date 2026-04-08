@@ -23,7 +23,7 @@ export function getDealerActivity(dealerId: string): DealerActivity {
     leads: dealerLeads.map(l => ({
       id: l.id,
       createdAt: l.createdAt,
-      type: l.channel || 'C2B',
+      type: l.channel || 'NGS',
     })),
     inspections: dealerLeads
       .filter(l => l.inspectionDate)

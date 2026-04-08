@@ -1,52 +1,54 @@
 /**
  * ADMIN COMMON FILTERS
- * 
+ *
  * Unified filter bar for ALL Admin tabs
  * Single-select for Region and TL (leader view)
- * 
+ *
  * Filter State Contract:
  * - time_period: TimePeriod enum
  * - region_id: string | null
  * - tl_id: string | null
- * 
- * Time Options: MTD, LMTD, LM, L7D, L30D, D-1
+ *
+ * Time Options:
+ *   Primary chips: MTD, D-1, LMTD
+ *   More dropdown: Last 30D, Last 3M, Last 6M, Custom
  */
 
 import { useState, useMemo } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { useFilterScope, type FilterScope } from '../../contexts/FilterContext';
 import { TimePeriod } from '../../lib/domain/constants';
-import { getTLsByRegions, type Region } from '../../data/adminOrgMock';
+import { getTLsByRegions, type Region } from '../../data/adminOrgData';
 import { getRuntimeDBSync } from '../../data/runtimeDB';
 
 interface AdminCommonFiltersProps {
   scope: FilterScope;
 }
 
-// Time options for Admin (leader view)
-const ADMIN_TIME_OPTIONS = [
-  TimePeriod.MTD,
-  TimePeriod.LMTD,
-  TimePeriod.LAST_MONTH,
-  TimePeriod.LAST_7D,
-  TimePeriod.LAST_30D,
-  TimePeriod.D_MINUS_1,
-] as const;
+import { CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 
-// Short labels for time periods
-const TIME_LABELS: Record<string, string> = {
-  [TimePeriod.MTD]: 'MTD',
-  [TimePeriod.LMTD]: 'LMTD',
-  [TimePeriod.LAST_MONTH]: 'LM',
-  [TimePeriod.LAST_7D]: 'L7D',
-  [TimePeriod.LAST_30D]: 'L30D',
-  [TimePeriod.D_MINUS_1]: 'D-1',
-};
+// Primary time chips shown directly
+const PRIMARY_TIME_OPTIONS: TimePeriod[] = [
+  TimePeriod.MTD,
+  TimePeriod.D_MINUS_1,
+  TimePeriod.LMTD,
+];
+
+// Secondary options inside "More" dropdown
+const SECONDARY_TIME_OPTIONS: TimePeriod[] = [
+  TimePeriod.LAST_30D,
+  TimePeriod.LAST_3M,
+  TimePeriod.LAST_6M,
+  TimePeriod.CUSTOM,
+];
+
+// Labels
+const TIME_LABELS = CANONICAL_TIME_LABELS;
 
 export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
   const { state, setFilter, resetFilters } = useFilterScope(scope);
 
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showMoreTimePicker, setShowMoreTimePicker] = useState(false);
   const [showRegionPicker, setShowRegionPicker] = useState(false);
   const [showTLPicker, setShowTLPicker] = useState(false);
 
@@ -58,17 +60,20 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
   // Available regions
   const regions: Region[] = ['NCR', 'West', 'South', 'East'];
 
-  // Available TLs — from real Supabase data via getRuntimeDBSync
+  // Available TLs — from org hierarchy via getRuntimeDBSync
   const availableTLs = useMemo(() => {
     const db = getRuntimeDBSync();
-    // Get unique KAMs from dealers (these are the people who appear in dashboards)
-    const kamMap = new Map<string, { tlId: string; tlName: string; region: string }>();
-    db.dealers.forEach(d => {
-      if (d.kamId && d.kamId !== 'unassigned' && !kamMap.has(d.kamId)) {
-        kamMap.set(d.kamId, { tlId: d.kamId, tlName: d.kamName || 'KAM', region: d.region || 'NCR' });
-      }
-    });
-    return Array.from(kamMap.values());
+    if (!db?.org?.tls) return [];
+    let tls = db.org.tls.map(tl => ({
+      tlId: tl.id,
+      tlName: tl.name || 'TL',
+      region: tl.region || 'NCR',
+    }));
+    // Filter by selected region if one is selected
+    if (currentRegion) {
+      tls = tls.filter(tl => tl.region === currentRegion);
+    }
+    return tls;
   }, [currentRegion]);
 
   // Labels
@@ -89,31 +94,60 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
   };
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-3">
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {/* Time Dropdown */}
-        <div className="relative flex-shrink-0">
-          <button
-            onClick={() => setShowTimePicker(!showTimePicker)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200 whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]"
-          >
-            <span className="truncate">{getTimeLabel()}</span>
-            <ChevronDown className="w-4 h-4 flex-shrink-0" />
-          </button>
+    <div className="bg-white border-b border-gray-200 px-4 py-2.5 space-y-2">
+      {/* Row 1: Time filters */}
+      <div className="flex items-center gap-2">
+        {PRIMARY_TIME_OPTIONS.map(period => {
+          const isActive = currentTime === period;
+          return (
+            <button
+              key={period}
+              onClick={() => setFilter({ time_period: period })}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border whitespace-nowrap transition-colors ${
+                isActive
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+              }`}
+            >
+              {TIME_LABELS[period]}
+            </button>
+          );
+        })}
 
-          {showTimePicker && (
+        {/* More Time Options Dropdown */}
+        <div className="relative">
+          {(() => {
+            const isSecondaryActive = SECONDARY_TIME_OPTIONS.includes(currentTime);
+            const moreLabel = isSecondaryActive ? (TIME_LABELS[currentTime] ?? String(currentTime)) : 'More';
+            return (
+              <button
+                onClick={() => setShowMoreTimePicker(!showMoreTimePicker)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium border whitespace-nowrap transition-colors ${
+                  isSecondaryActive
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                <span>{moreLabel}</span>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+            );
+          })()}
+
+          {showMoreTimePicker && (
             <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowTimePicker(false)} />
-              <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[100px]">
-                {ADMIN_TIME_OPTIONS.map(period => (
+              <div className="fixed inset-0 z-40" onClick={() => setShowMoreTimePicker(false)} />
+              <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[140px]">
+                {SECONDARY_TIME_OPTIONS.map(period => (
                   <button
                     key={period}
                     onClick={() => {
                       setFilter({ time_period: period });
-                      setShowTimePicker(false);
+                      setShowMoreTimePicker(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${currentTime === period ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                      }`}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${
+                      currentTime === period ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                    }`}
                   >
                     {TIME_LABELS[period]}
                   </button>
@@ -122,15 +156,22 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
             </>
           )}
         </div>
+      </div>
 
+      {/* Row 2: Region + TL + Clear */}
+      <div className="flex items-center gap-2">
         {/* Region Dropdown */}
-        <div className="relative flex-shrink-0">
+        <div className="relative">
           <button
             onClick={() => setShowRegionPicker(!showRegionPicker)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium border border-gray-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px]"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border whitespace-nowrap transition-colors ${
+              currentRegion
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+            }`}
           >
-            <span className="truncate">{getRegionLabel()}</span>
-            <ChevronDown className="w-4 h-4 flex-shrink-0" />
+            <span>Region: {currentRegion || 'All'}</span>
+            <ChevronDown className="w-3.5 h-3.5" />
           </button>
 
           {showRegionPicker && (
@@ -138,24 +179,16 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
               <div className="fixed inset-0 z-40" onClick={() => setShowRegionPicker(false)} />
               <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[140px]">
                 <button
-                  onClick={() => {
-                    setFilter({ region_id: null });
-                    setShowRegionPicker(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${!currentRegion ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                    }`}
+                  onClick={() => { setFilter({ region_id: null, tl_id: null }); setShowRegionPicker(false); }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${!currentRegion ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}`}
                 >
-                  All
+                  All Regions
                 </button>
                 {regions.map(region => (
                   <button
                     key={region}
-                    onClick={() => {
-                      setFilter({ region_id: region, tl_id: null }); // Reset TL when region changes
-                      setShowRegionPicker(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${currentRegion === region ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                      }`}
+                    onClick={() => { setFilter({ region_id: region, tl_id: null }); setShowRegionPicker(false); }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${currentRegion === region ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}`}
                   >
                     {region}
                   </button>
@@ -166,13 +199,17 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
         </div>
 
         {/* TL Dropdown */}
-        <div className="relative flex-shrink-0">
+        <div className="relative">
           <button
             onClick={() => setShowTLPicker(!showTLPicker)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium border border-gray-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px]"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border whitespace-nowrap transition-colors max-w-[180px] ${
+              currentTL
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+            }`}
           >
             <span className="truncate">{getTLLabel()}</span>
-            <ChevronDown className="w-4 h-4 flex-shrink-0" />
+            <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
           </button>
 
           {showTLPicker && (
@@ -180,27 +217,22 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
               <div className="fixed inset-0 z-40" onClick={() => setShowTLPicker(false)} />
               <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
                 <button
-                  onClick={() => {
-                    setFilter({ tl_id: null });
-                    setShowTLPicker(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 whitespace-nowrap ${!currentTL ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                    }`}
+                  onClick={() => { setFilter({ tl_id: null }); setShowTLPicker(false); }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${!currentTL ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}`}
                 >
-                  TL: All
+                  All TLs
                 </button>
+                {availableTLs.length === 0 && (
+                  <div className="px-4 py-2 text-xs text-gray-400">No TLs available</div>
+                )}
                 {availableTLs.map(tl => (
                   <button
                     key={tl.tlId}
-                    onClick={() => {
-                      setFilter({ tl_id: tl.tlId });
-                      setShowTLPicker(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${currentTL === tl.tlId ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                      }`}
+                    onClick={() => { setFilter({ tl_id: tl.tlId }); setShowTLPicker(false); }}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${currentTL === tl.tlId ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}`}
                   >
-                    <div className="whitespace-nowrap overflow-hidden text-ellipsis">{tl.tlName}</div>
-                    <div className="text-xs text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis">{tl.region}</div>
+                    <div className="truncate">{tl.tlName}</div>
+                    <div className="text-xs text-gray-400">{tl.region}</div>
                   </button>
                 ))}
               </div>
@@ -212,15 +244,10 @@ export function AdminCommonFilters({ scope }: AdminCommonFiltersProps) {
         {activeCount > 0 && (
           <button
             onClick={handleReset}
-            className="flex items-center gap-1 px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+            className="flex items-center gap-1 px-2.5 py-1.5 text-red-500 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
             <span>Clear</span>
-            {activeCount > 1 && (
-              <span className="ml-1 bg-gray-200 text-gray-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
-                {activeCount}
-              </span>
-            )}
           </button>
         )}
       </div>

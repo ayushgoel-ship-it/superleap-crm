@@ -15,8 +15,9 @@
  * └──────────────────────────────────────────────────────┘
  */
 
-import { MapPin, Clock, ChevronRight, Navigation } from 'lucide-react';
+import { MapPin, Clock, ChevronRight, Navigation, Star } from 'lucide-react';
 import { StatusChip, SegmentBadge } from '../premium/Chip';
+import { deriveDealerActivityStage, type DealerActivityStage } from '../../data/canonicalMetrics';
 
 export interface DealerCardData {
   id: string;
@@ -31,10 +32,14 @@ export interface DealerCardData {
   callsMTD: number;
   visitsMTD: number;
   leadsMTD: number;
+  inspectionsMTD: number;
   sisMTD: number;
+  dcfMTD: number;
   productivityPct: number;
   hasLocation: boolean;
   distanceKm?: number;
+  isTopDealer?: boolean;
+  category?: 'Top Dealer' | 'Tagged Dealer' | 'Untagged Dealer';
 }
 
 interface DealerAccountCardProps {
@@ -42,14 +47,24 @@ interface DealerAccountCardProps {
   onTap: () => void;
 }
 
+/**
+ * Derive dealer stage using the canonical deriveDealerActivityStage from canonicalMetrics.
+ * Single source of truth — no duplicated logic.
+ */
+const STAGE_VARIANT: Record<DealerActivityStage, 'success' | 'info' | 'warning' | 'danger'> = {
+  Transacting: 'success',
+  Inspecting: 'info',
+  'Lead Giving': 'warning',
+  Dormant: 'danger',
+  Inactive: 'danger',
+};
+
 function getStageFromMetrics(dealer: DealerCardData): { label: string; variant: 'success' | 'info' | 'warning' | 'danger' } {
-  if (dealer.status === 'dormant' || (dealer.leadsMTD === 0 && dealer.sisMTD === 0)) {
-    return { label: 'Dormant', variant: 'danger' };
-  }
-  if (dealer.sisMTD > 0) return { label: 'Transacting', variant: 'success' };
-  if (dealer.leadsMTD > 5) return { label: 'Inspecting', variant: 'info' };
-  if (dealer.leadsMTD > 0) return { label: 'Lead Giving', variant: 'warning' };
-  return { label: 'Inactive', variant: 'danger' };
+  const stage = deriveDealerActivityStage(
+    { leadsMTD: dealer.leadsMTD, inspectionsMTD: dealer.inspectionsMTD, sisMTD: dealer.sisMTD, dcfMTD: dealer.dcfMTD },
+    dealer.status,
+  );
+  return { label: stage, variant: STAGE_VARIANT[stage] };
 }
 
 export function DealerAccountCard({ dealer, onTap }: DealerAccountCardProps) {
@@ -77,6 +92,9 @@ export function DealerAccountCard({ dealer, onTap }: DealerAccountCardProps) {
               `}>
                 {dealer.name}
               </h3>
+              {dealer.isTopDealer && (
+                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 flex-shrink-0" />
+              )}
               <ChevronRight className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
             </div>
             <div className="flex items-center gap-2 mt-0.5">

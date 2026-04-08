@@ -32,9 +32,8 @@
 
 ### Business Verticals
 
-1. **C2B (Customer to Business)** - Customers selling cars to CARS24
-2. **C2D (Customer to Dealer)** - Direct customer-dealer connections
-3. **GS (Guaranteed Sale)** - CARS24 guarantees car sale
+1. **NGS (Non-Guaranteed Sale)** - Non-guaranteed sale channel
+2. **GS (Guaranteed Sale)** - CARS24 guarantees car sale
 4. **DCF (Dealer Credit Facility)** - Loans to customers buying cars from dealers
 
 ### Business Metrics Hierarchy
@@ -440,7 +439,7 @@ CARS24 Business
 
 **Implementation:**
 - `LocationUpdateModal.tsx` captures GPS + autocomplete
-- `mockDatabase.ts` tracks location history
+- `runtimeDB.ts` tracks location history
 - `TLLocationApprovalCard.tsx` TL approval UI
 
 **User Flow:**
@@ -492,13 +491,13 @@ CARS24 Business
 ### Common Filters Across Modules
 
 **Dealers:**
-- Channel: All, C2B, C2D, GS, DCF
+- Channel: All, NGS, GS, DCF
 - Status: All, Active, Inactive, At-risk
 - Lead Giving: All, Yes, No
 - Date Range: Custom picker
 
 **Leads:**
-- Channel: All, C2B, C2D, GS
+- Channel: All, NGS, GS
 - Status: All, Submitted, Appointment, Inspection, Stock-in, Lost
 - Lead Type: All, Seller, Inventory
 - Date Range: Custom picker

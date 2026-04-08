@@ -26,7 +26,6 @@ import type { UserRole } from '../../lib/shared/appTypes';
 import { useActivity, type CallAttempt, type Visit } from '../../contexts/ActivityContext';
 import { CallActivityCard, VisitActivityCard } from '../activity/ActivityCard';
 import { ProductivityStrip } from '../activity/ProductivityStrip';
-import { FilterChip } from '../premium/Chip';
 import { EmptyState } from '../premium/EmptyState';
 import { CardSkeleton } from '../premium/SkeletonLoader';
 import { TLVisitsView } from '../visits/TLVisitsView';
@@ -39,7 +38,7 @@ import { toast } from 'sonner@2.0.3';
 type ActivityFilter = 'all' | 'calls' | 'visits' | 'pending';
 import { TimePeriod } from '../../lib/domain/constants';
 import { getTimePeriodCutoffMs } from '../../lib/time/resolveTimePeriod';
-import { VISITS_TIME_OPTIONS } from '../filters/TimeFilterControl';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 
 /** A unified item that wraps either a call or a visit for the chronological feed. */
 interface FeedItem {
@@ -77,6 +76,8 @@ export function VisitsPage({
   const { calls, visits } = useActivity();
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('visits');
   const [timeScope, setTimeScope] = useState<TimePeriod>(TimePeriod.LAST_7D);
+  const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
+  const [customTo, setCustomTo] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -241,28 +242,20 @@ export function VisitsPage({
           )}
         </div>
 
-        {/* Date scope segmented control — hidden when Visits tab is active */}
+        {/* Date scope filter — hidden when Visits tab is active */}
         {activityFilter !== 'visits' && (
-        <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
-          {([
-            { key: TimePeriod.TODAY, label: 'Today' },
-            { key: TimePeriod.LAST_7D, label: 'Last 7 Days' },
-            { key: TimePeriod.MTD, label: 'MTD' },
-          ]).map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => handleTimeScopeChange(key)}
-              className={`flex-1 py-2 rounded-lg text-[11px] font-semibold transition-all duration-200 min-h-[36px]
-                ${timeScope === key
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-                }
-              `}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+          <TimeFilterControl
+            mode="chips"
+            chipStyle="pill"
+            value={timeScope}
+            onChange={(scope) => handleTimeScopeChange(scope)}
+            options={CANONICAL_TIME_OPTIONS}
+            labelOverrides={CANONICAL_TIME_LABELS}
+            allowCustom
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+          />
         )}
       </div>
 

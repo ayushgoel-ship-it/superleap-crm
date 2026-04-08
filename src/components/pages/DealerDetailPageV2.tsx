@@ -40,10 +40,13 @@ import {
 } from 'lucide-react';
 import {
   getDealerByCode, getLeadsByDealerId, getCallsByDealerId,
-  getVisitsByDealerId, getDCFLeadsByDealerId
+  getVisitsByDealerId, getDCFLeadsByDealerId, toggleTopDealer
 } from '../../data/selectors';
+import { getDealerLeadMetrics, getFilteredCalls, getFilteredVisits, deriveDealerActivityStage, type DealerLeadMetrics } from '../../data/canonicalMetrics';
+import { TimePeriod } from '../../lib/domain/constants';
 import type { UserRole } from '../../lib/shared/appTypes';
 import { StatusChip, FilterChip } from '../premium/Chip';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 import { EmptyState, InlineEmpty } from '../premium/EmptyState';
 import { CardSkeleton } from '../premium/SkeletonLoader';
 import { DCFOnboardingFlow, DCFOnboardingStatus } from '../dcf/DCFOnboardingFlow';
@@ -148,7 +151,11 @@ export function DealerDetailPageV2({
   onNavigateToVisitDetail, onNavigateToDCFDetail,
 }: DealerDetailPageV2Props) {
   const [activeSection, setActiveSection] = useState<Section>('overview');
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [forceUpdate, setForceUpdate] = useState(0);
   const [noteText, setNoteText] = useState('');
   const [notes, setNotes] = useState<{ id: string; text: string; time: string; author: string }[]>([
     { id: 'n1', text: 'Dealer mentioned they expect 5+ seller leads next week. Follow up Thursday.', time: new Date(Date.now() - 2 * 86400000).toISOString(), author: 'You' },
@@ -173,11 +180,17 @@ export function DealerDetailPageV2({
   const dcfLeads = dealer ? getDCFLeadsByDealerId(dealer.id) : [];
   const kamOwner = dealer?.kamName || 'Rajesh Kumar';
 
+  // ── Canonical metrics (timeframe-aware) ──
+  const canonicalDealerMetrics = useMemo(() => {
+    if (!dealer) return { leadsMTD: 0, inspectionsMTD: 0, sisMTD: 0, dcfMTD: 0 };
+    return getDealerLeadMetrics(dealer.id, { period: timePeriod });
+  }, [dealer, timePeriod]);
+
   // ── Metrics ──
   const metrics = useMemo(() => {
     const totalCalls = calls.length;
     const totalVisits = visits.length;
-    const productivePct = totalCalls > 0 ? Math.round(((calls.filter((c: any) => c.outcome === 'Connected' || c.outcome === 'Positive').length) / totalCalls) * 100) : 0;
+    const productivePct = totalCalls > 0 ? Math.round(((calls.filter((c: any) => c.isProductive).length) / totalCalls) * 100) : 0;
 
     const lastCall = calls.sort((a: any, b: any) => new Date(b.callDate).getTime() - new Date(a.callDate).getTime())[0];
     const lastVisit = visits.sort((a: any, b: any) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())[0];
@@ -190,7 +203,7 @@ export function DealerDetailPageV2({
     return {
       calls: totalCalls,
       visits: totalVisits,
-      productivePct: Math.min(100, productivePct || 65),
+      productivePct: Math.min(100, productivePct),
       lastActivity: mostRecent ? timeAgo(mostRecent.toISOString()) : 'No contact',
       lastActivityDays: mostRecent ? Math.floor((Date.now() - mostRecent.getTime()) / 86400000) : 999,
     };
@@ -425,7 +438,7 @@ export function DealerDetailPageV2({
     const contextCallCount = activityCalls.length;
     const totalCalls = metrics.calls + contextCallCount;
     const connectedCalls = activityCalls.filter(c => c.connected).length;
-    const totalConnected = (calls.filter((c: any) => c.outcome === 'Connected' || c.outcome === 'Positive').length) + connectedCalls;
+    const totalConnected = (calls.filter((c: any) => c.isProductive).length) + connectedCalls;
     const productivePct = totalCalls > 0 ? Math.round((totalConnected / totalCalls) * 100) : 0;
 
     // Check if any ActivityContext call is more recent
@@ -442,7 +455,7 @@ export function DealerDetailPageV2({
     return {
       ...metrics,
       calls: totalCalls,
-      productivePct: Math.min(100, productivePct || metrics.productivePct),
+      productivePct: Math.min(100, productivePct),
       lastActivity: lastActivityDays === 0 ? 'Just now' : lastActivityDays === 1 ? 'Yesterday' : lastActivityDays < 7 ? `${lastActivityDays}d ago` : metrics.lastActivity,
       lastActivityDays,
     };
@@ -472,20 +485,36 @@ export function DealerDetailPageV2({
           <HealthRing pct={healthScore} />
         </div>
 
-        {/* Tags */}
-        {tags.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap">
-            {tags.map((tag, i) => (
-              <StatusChip key={i} label={tag}
-                variant={tag === 'Top Dealer' ? 'info' : tag.includes('DCF') ? 'success' : 'neutral'}
-                size="sm"
-              />
-            ))}
-            {dealer?.segment && (
-              <StatusChip label={dealer.segment} variant="neutral" size="sm" />
-            )}
-          </div>
-        )}
+        {/* Tags + Top Dealer toggle */}
+        <div className="flex gap-1.5 flex-wrap items-center">
+          {tags.map((tag, i) => (
+            <StatusChip key={i} label={tag}
+              variant={tag === 'Top Dealer' ? 'info' : tag.includes('DCF') ? 'success' : 'neutral'}
+              size="sm"
+            />
+          ))}
+          {dealer?.segment && (
+            <StatusChip label={dealer.segment} variant="neutral" size="sm" />
+          )}
+          {/* Top Dealer toggle button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const newStatus = toggleTopDealer(dealerCode);
+              toast.success(newStatus ? 'Marked as Top Dealer' : 'Removed Top Dealer status');
+              setForceUpdate(prev => prev + 1);
+            }}
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold border transition-all active:scale-95
+              ${dealer?.isTopDealer
+                ? 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200'
+                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+              }`}
+            title={dealer?.isTopDealer ? 'Remove Top Dealer status' : 'Mark as Top Dealer'}
+          >
+            <Star className={`w-3 h-3 ${dealer?.isTopDealer ? 'fill-amber-500 text-amber-500' : 'text-slate-400'}`} />
+            {dealer?.isTopDealer ? 'Top Dealer' : 'Mark Top'}
+          </button>
+        </div>
 
         {/* Primary Actions — Call + Note only (visits are started via Activity page) */}
         <div className="flex gap-2">
@@ -597,12 +626,29 @@ export function DealerDetailPageV2({
 
                 {/* Performance summary */}
                 <div className="card-premium p-4">
-                  <h3 className="text-[13px] font-semibold text-slate-800 mb-3">Performance MTD</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[13px] font-semibold text-slate-800">Performance</h3>
+                    <TimeFilterControl
+                      mode="chips"
+                      chipStyle="pill"
+                      value={timePeriod}
+                      onChange={setTimePeriod}
+                      options={CANONICAL_TIME_OPTIONS}
+                      labelOverrides={CANONICAL_TIME_LABELS}
+                      allowCustom
+                      customFrom={customFrom}
+                      customTo={customTo}
+                      onCustomRangeChange={({ fromISO, toISO }) => {
+                        setCustomFrom(fromISO);
+                        setCustomTo(toISO);
+                      }}
+                    />
+                  </div>
                   <div className="space-y-3">
                     {[
-                      { label: 'Leads', value: leads.length, trend: 12, breakdown: `${leads.filter(l => l.leadType === 'Seller').length} Seller \u00b7 ${leads.filter(l => l.leadType === 'Inventory').length} Inventory` },
-                      { label: 'Inspections', value: Math.floor(leads.length * 0.67), trend: 8, breakdown: '' },
-                      { label: 'Stock-ins', value: Math.floor(leads.length * 0.4), trend: 5, breakdown: '' },
+                      { label: 'Leads', value: canonicalDealerMetrics.leadsMTD, trend: 12, breakdown: '' },
+                      { label: 'Inspections', value: canonicalDealerMetrics.inspectionsMTD, trend: 8, breakdown: '' },
+                      { label: 'Stock-ins', value: canonicalDealerMetrics.sisMTD, trend: 5, breakdown: '' },
                     ].map((m) => (
                       <div key={m.label} className="flex items-center justify-between">
                         <div>

@@ -9,8 +9,8 @@
  * This is the bridge between AdminScopeBar state and actual data display.
  */
 
-import type { Region, TLData } from './adminOrgMock';
-import { getTLsByRegions, MOCK_TL_DATA, MOCK_TL_METRICS, type TLMetrics } from './adminOrgMock';
+import type { Region, TLData } from './adminOrgData';
+import { getTLsByRegions, MOCK_TL_DATA, MOCK_TL_METRICS, type TLMetrics } from './adminOrgData';
 import { TimePeriod } from '../lib/domain/constants';
 import { getTimeMultiplier } from '../lib/time/resolveTimePeriod';
 
@@ -174,7 +174,11 @@ export function filterAdminLeads(filters: AdminLeadFilters): AdminLeadItem[] {
   return ADMIN_LEAD_DATA.filter(l => {
     if (filters.regions.length > 0 && !filters.regions.includes(l.region)) return false;
     if (filters.tlId && l.tlId !== filters.tlId) return false;
-    if (filters.channel !== 'all' && l.channel !== filters.channel) return false;
+    if (filters.channel !== 'all') {
+      // Map raw channel to canonical for comparison
+      const canonical = l.channel === 'NGS' ? 'NGS' : l.channel;
+      if (canonical !== filters.channel) return false;
+    }
     if (filters.type !== 'all' && l.type !== filters.type) return false;
     return true;
   });

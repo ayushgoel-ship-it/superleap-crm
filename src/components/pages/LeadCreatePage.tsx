@@ -27,7 +27,7 @@ export function LeadCreatePage({ dealerId, onBack, onSuccess }: LeadCreatePagePr
 
   // Form data
   const [formData, setFormData] = useState({
-    channel: 'C2B' as 'C2B' | 'C2D' | 'GS',
+    channel: 'NGS' as 'NGS' | 'GS',
     customerName: '',
     customerPhone: '',
     carMake: '',
@@ -137,7 +137,7 @@ export function LeadCreatePage({ dealerId, onBack, onSuccess }: LeadCreatePagePr
         <Card className="p-4">
           <h3 className="text-sm font-medium text-gray-900 mb-3">Lead Channel</h3>
           <div className="grid grid-cols-3 gap-2">
-            {(['C2B', 'C2D', 'GS'] as const).map((channel) => (
+            {(['NGS', 'GS'] as const).map((channel) => (
               <button
                 key={channel}
                 onClick={() => setFormData({ ...formData, channel })}

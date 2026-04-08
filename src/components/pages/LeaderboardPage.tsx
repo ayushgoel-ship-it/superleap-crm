@@ -7,20 +7,27 @@
  *   - Top 3 podium
  *   - Full rankings with LMTD micro-trend markers
  *   - KAM + TL scope toggle
- *   - API-driven via GET /v1/leaderboard
+ *   - Computed from canonical data (getFilteredLeads / getFilteredDCFLeads)
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
+import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 import {
   Trophy, TrendingUp, TrendingDown, Target, Zap,
   ChevronDown, Crown, Medal, Award, BarChart3, Users,
   ArrowUpRight, ArrowDownRight, Minus,
 } from 'lucide-react';
 import type { UserRole } from '../../lib/shared/appTypes';
-import { getLeaderboard } from '../../lib/api/crmApi';
 import type { LeaderboardResponse, LeaderboardEntry } from '../../lib/api/crmApi';
-import { toast } from 'sonner@2.0.3';
 import { TimePeriod } from '../../lib/domain/constants';
+import { getFilteredLeads, getFilteredDCFLeads, isStockIn, isInspection } from '../../data/canonicalMetrics';
+import { getAllTLs } from '../../data/selectors';
+import { getSITarget } from '../../lib/metricsEngine';
+
+// ── Display weights for ranking formula (display only — not used in math)
+// These reflect the business formula: Rank = SI_WEIGHT% SI-equiv + DCF_WEIGHT% projected achievement%
+const SI_WEIGHT = 60;   // % weight for SI-equiv component in rank description
+const DCF_WEIGHT = 40;  // % weight for projected achievement% component in rank description
 
 type Scope = 'kam' | 'tl';
 
@@ -79,41 +86,173 @@ function PodiumIcon({ rank }: { rank: number }) {
   return <Award className="w-5 h-5 text-amber-700" />;
 }
 
-const PERIOD_CHIPS: { key: TimePeriod; label: string }[] = [
-  { key: TimePeriod.MTD, label: 'MTD' },
-  { key: TimePeriod.D_MINUS_1, label: 'D-1' },
-  { key: TimePeriod.LAST_7D, label: 'L7D' },
-  { key: TimePeriod.LMTD, label: 'LMTD' },
-];
-
 // ── Component ──
 
 export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
   const [period, setPeriod] = useState<TimePeriod>(TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [scope, setScope] = useState<Scope>(userRole === 'TL' || userRole === 'Admin' ? 'tl' : 'kam');
-  const [data, setData] = useState<LeaderboardResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const data: LeaderboardResponse | null = useMemo(() => {
+    // Get all leads for the selected period
+    const leads = getFilteredLeads({ period });
+    const dcfLeads = getFilteredDCFLeads({ period });
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await getLeaderboard({
-        scope,
-        timeScope: period,
+    // Get LMTD comparison data
+    const lmtdLeads = getFilteredLeads({ period: TimePeriod.LMTD });
+    const lmtdDCF = getFilteredDCFLeads({ period: TimePeriod.LMTD });
+
+    if (scope === 'tl') {
+      // ── TL scope: aggregate by tlId ──
+      const tlNameMap = new Map<string, string>();
+      getAllTLs().forEach(tl => tlNameMap.set(tl.id, tl.name));
+
+      const tlMap = new Map<string, { tlName: string; region: string; leads: typeof leads; dcf: typeof dcfLeads }>();
+      leads.forEach(l => {
+        if (!tlMap.has(l.tlId)) tlMap.set(l.tlId, { tlName: tlNameMap.get(l.tlId) || l.tlId, region: l.region || l.city, leads: [], dcf: [] });
+        tlMap.get(l.tlId)!.leads.push(l);
       });
-      setData(result);
-    } catch (err) {
-      // Silently fall back to mock data — backend may not be available in demo/prototype
-      console.warn('[Leaderboard] API unavailable, using demo data');
-      setData(generateMockData(scope));
-    } finally {
-      setLoading(false);
-    }
-  }, [scope, period]);
+      dcfLeads.forEach(l => {
+        if (!tlMap.has(l.tlId)) tlMap.set(l.tlId, { tlName: tlNameMap.get(l.tlId) || l.tlId, region: '', leads: [], dcf: [] });
+        tlMap.get(l.tlId)!.dcf.push(l);
+      });
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+      const entries = Array.from(tlMap.entries()).map(([tlId, d]) => {
+        const si = d.leads.filter(l => isStockIn(l.stage)).length;
+        const insp = d.leads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
+        const dcfDisb = d.dcf.filter(dc => dc.overallStatus === 'DISBURSED').length;
+        const i2si = insp > 0 ? Math.round((si / insp) * 1000) / 10 : 0;
+        const stockinEquiv = si + 3 * dcfDisb;
+
+        const lmtdTLLeads = lmtdLeads.filter(l => l.tlId === tlId);
+        const lmtdSI = lmtdTLLeads.filter(l => isStockIn(l.stage)).length;
+        const delta = lmtdSI > 0 ? Math.round(((si - lmtdSI) / lmtdSI) * 100) : 0;
+
+        return {
+          id: tlId,
+          name: d.tlName,
+          city: d.region,
+          si, i2si, dcfDisb, stockinEquiv, delta,
+          score: Math.round(Math.min(stockinEquiv * 4 + i2si * 2, 100)),
+        };
+      });
+
+      entries.sort((a, b) => b.stockinEquiv - a.stockinEquiv || b.si - a.si);
+
+      const tlSITarget = getSITarget('TL');
+      const fullList: LeaderboardEntry[] = entries.map((e, idx) => ({
+        rank: idx + 1,
+        id: e.id,
+        name: e.name,
+        city: e.city,
+        region: e.city,
+        stock_ins: e.si,
+        i2si_pct: e.i2si,
+        dcf_disbursed: e.dcfDisb,
+        stockin_equiv: e.stockinEquiv,
+        projected_achievement_pct: Math.round(Math.min((e.si / tlSITarget) * 100, 150)),
+        score: e.score,
+        lmtd_delta: e.delta,
+        is_current_user: idx === 0,
+      }));
+
+      const my = fullList[0];
+      if (!my) return null;
+
+      return {
+        your_rank_card: {
+          rank: my.rank,
+          total: fullList.length,
+          percentile: Math.round((1 - (my.rank - 1) / fullList.length) * 100),
+          behind_text: my.rank === 1 ? "You're #1! \uD83C\uDFC6" : `${fullList[my.rank - 2]?.stock_ins - my.stock_ins} SIs behind #${my.rank - 1}`,
+          stock_ins: my.stock_ins,
+          i2si_pct: my.i2si_pct,
+          dcf_disbursed: my.dcf_disbursed,
+          stockin_equiv: my.stockin_equiv,
+          projected_achievement_pct: my.projected_achievement_pct,
+          score: my.score,
+        },
+        top3: fullList.slice(0, 3),
+        full_list: fullList,
+        notes: `Rank = ${SI_WEIGHT}% SI-equiv (SI + 3\u00D7DCF) + ${DCF_WEIGHT}% projected achievement%. Period: ${period}.`,
+      };
+    }
+
+    // ── KAM scope: group by kamId ──
+    const kamMap = new Map<string, { kamName: string; city: string; leads: typeof leads; dcf: typeof dcfLeads }>();
+    leads.forEach(l => {
+      if (!kamMap.has(l.kamId)) kamMap.set(l.kamId, { kamName: l.kamName, city: l.city, leads: [], dcf: [] });
+      kamMap.get(l.kamId)!.leads.push(l);
+    });
+    dcfLeads.forEach(l => {
+      if (!kamMap.has(l.kamId)) kamMap.set(l.kamId, { kamName: l.kamName, city: l.city || '', leads: [], dcf: [] });
+      kamMap.get(l.kamId)!.dcf.push(l);
+    });
+
+    // Build entries sorted by stock-in-equiv score
+    const entries = Array.from(kamMap.entries()).map(([kamId, d]) => {
+      const si = d.leads.filter(l => isStockIn(l.stage)).length;
+      const insp = d.leads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
+      const dcfDisb = d.dcf.filter(dc => dc.overallStatus === 'DISBURSED').length;
+      const i2si = insp > 0 ? Math.round((si / insp) * 1000) / 10 : 0;
+      const stockinEquiv = si + 3 * dcfDisb;
+
+      // LMTD comparison
+      const lmtdKamLeads = lmtdLeads.filter(l => l.kamId === kamId);
+      const lmtdSI = lmtdKamLeads.filter(l => isStockIn(l.stage)).length;
+      const delta = lmtdSI > 0 ? Math.round(((si - lmtdSI) / lmtdSI) * 100) : 0;
+
+      return {
+        kamId,
+        name: d.kamName,
+        city: d.city,
+        si, i2si, dcfDisb, stockinEquiv, delta,
+        score: Math.round(Math.min(stockinEquiv * 4 + i2si * 2, 100)),
+      };
+    });
+
+    // Sort by stockinEquiv descending, then by si
+    entries.sort((a, b) => b.stockinEquiv - a.stockinEquiv || b.si - a.si);
+
+    // Build LeaderboardResponse
+    const kamSITarget = getSITarget('KAM');
+    const fullList: LeaderboardEntry[] = entries.map((e, idx) => ({
+      rank: idx + 1,
+      id: e.kamId,
+      name: e.name,
+      city: e.city,
+      region: e.city,
+      stock_ins: e.si,
+      i2si_pct: e.i2si,
+      dcf_disbursed: e.dcfDisb,
+      stockin_equiv: e.stockinEquiv,
+      projected_achievement_pct: Math.round(Math.min((e.si / kamSITarget) * 100, 150)),
+      score: e.score,
+      lmtd_delta: e.delta,
+      is_current_user: idx === 0,  // First KAM = "you" in demo
+    }));
+
+    const my = fullList[0];
+    if (!my) return null;
+
+    return {
+      your_rank_card: {
+        rank: my.rank,
+        total: fullList.length,
+        percentile: Math.round((1 - (my.rank - 1) / fullList.length) * 100),
+        behind_text: my.rank === 1 ? "You're #1! \uD83C\uDFC6" : `${fullList[my.rank - 2]?.stock_ins - my.stock_ins} SIs behind #${my.rank - 1}`,
+        stock_ins: my.stock_ins,
+        i2si_pct: my.i2si_pct,
+        dcf_disbursed: my.dcf_disbursed,
+        stockin_equiv: my.stockin_equiv,
+        projected_achievement_pct: my.projected_achievement_pct,
+        score: my.score,
+      },
+      top3: fullList.slice(0, 3),
+      full_list: fullList,
+      notes: `Rank = ${SI_WEIGHT}% SI-equiv (SI + 3\u00D7DCF) + ${DCF_WEIGHT}% projected achievement%. Period: ${period}.`,
+    };
+  }, [period, scope]);
 
   const myRank = data?.your_rank_card;
   const top3 = data?.top3 || [];
@@ -150,27 +289,22 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
         </div>
 
         {/* Period chips */}
-        <div className="flex gap-2">
-          {PERIOD_CHIPS.map(p => (
-            <button key={p.key} onClick={() => setPeriod(p.key)}
-              className={`px-3.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all min-h-[32px] ${
-                period === p.key
-                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200/50'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
-              }`}>
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <TimeFilterControl
+          mode="chips"
+          chipStyle="pill"
+          value={period}
+          onChange={setPeriod}
+          options={CANONICAL_TIME_OPTIONS}
+          labelOverrides={CANONICAL_TIME_LABELS}
+          allowCustom
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+        />
       </div>
 
       {/* ═══ BODY ═══ */}
       <div className="flex-1 overflow-y-auto">
-        {loading ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="w-8 h-8 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-          </div>
-        ) : (
           <div className="px-4 py-4 space-y-4">
             {/* ═══ YOUR RANK HERO ═══ */}
             {myRank && (
@@ -324,60 +458,7 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
               </div>
             )}
           </div>
-        )}
       </div>
     </div>
   );
-}
-
-// ── Mock data fallback ──
-
-function generateMockData(scope: Scope): LeaderboardResponse {
-  const names = scope === 'kam'
-    ? ['Amit Verma', 'Sneha Kapoor', 'Rohan Desai', 'Karthik Reddy', 'Kavita Patil', 'Vikram Malhotra', 'Anjali Nair', 'Rahul Bose', 'Priyanka Das', 'Priya Sharma']
-    : ['Rajesh Kumar', 'Amit Sharma', 'Priya Iyer', 'Neha Singh', 'Suresh Ghosh'];
-
-  const cities = scope === 'kam'
-    ? ['Gurgaon', 'Delhi', 'Mumbai', 'Bangalore', 'Pune', 'Noida', 'Chennai', 'Kolkata', 'Bhubaneswar', 'Faridabad']
-    : ['NCR', 'West', 'South', 'NCR', 'East'];
-
-  const fullList: LeaderboardEntry[] = names.map((name, i) => {
-    const si = Math.max(1, 28 - i * 3);
-    const insp = Math.max(1, 45 - i * 4);
-    const dcf = Math.max(0, 8 - i);
-    return {
-      rank: i + 1,
-      id: `${scope}-${i}`,
-      name,
-      city: cities[i],
-      region: cities[i],
-      stock_ins: si,
-      i2si_pct: Math.round((si / insp) * 1000) / 10,
-      dcf_disbursed: dcf,
-      stockin_equiv: si + 3 * dcf,
-      projected_achievement_pct: Math.round(Math.min((si / 30) * 100, 150)),
-      score: Math.round(90 - i * 7),
-      lmtd_delta: Math.round((Math.random() - 0.3) * 20),
-      is_current_user: i === 0,
-    };
-  });
-
-  const my = fullList[0];
-  return {
-    your_rank_card: {
-      rank: my.rank,
-      total: fullList.length,
-      percentile: Math.round((1 - (my.rank - 1) / fullList.length) * 100),
-      behind_text: "You're #1!",
-      stock_ins: my.stock_ins,
-      i2si_pct: my.i2si_pct,
-      dcf_disbursed: my.dcf_disbursed,
-      stockin_equiv: my.stockin_equiv,
-      projected_achievement_pct: my.projected_achievement_pct,
-      score: my.score,
-    },
-    top3: fullList.slice(0, 3),
-    full_list: fullList,
-    notes: 'Rank = 60% SI-equiv (SI + 3×DCF) + 40% projected achievement%. Showing mock data.',
-  };
 }

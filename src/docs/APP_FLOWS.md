@@ -20,13 +20,12 @@
 | **Notification** | System alerts for lead stage changes, visit reminders, payout updates, etc. Displayed in NotificationCenterPage. |
 | **DCF** | Dealer Car Finance. A loan product vertical where dealers get onboarded, leads are tracked through a disbursal funnel, and commissions are earned. |
 | **OCB** | Online Car Buying. A business channel (not a primary CRM vertical in current implementation). |
-| **C2B** | Consumer-to-Business. A business channel (seller leads). |
-| **C2D** | Consumer-to-Dealer. A business channel (inventory/buyer leads). |
+| **NGS** | Non-Guaranteed Sale. A business channel (seller and inventory/buyer leads). |
 | **GS** | Gold Standard. A business channel / quality tier. |
 | **SI** | Stock-In. The primary KPD metric — cars stocked in from dealer referrals. |
 | **RAG** | Red-Amber-Green status indicator for metrics and leads. |
 | **CEP** | Customer Expected Price. The price the customer expects to receive for their vehicle. Primary value metric on lead cards. If missing, it is treated as a high-priority action item for the KAM ("CEP Pending"). |
-| **C24 Quote** | The price Cars24 offers the customer for their vehicle. Used for C2B, C2D, and GS channels. Displayed as the secondary value on lead cards (below CEP). Replaces the deprecated "Revenue" terminology. |
+| **C24 Quote** | The price Cars24 offers the customer for their vehicle. Used for NGS and GS channels. Displayed as the secondary value on lead cards (below CEP). Replaces the deprecated "Revenue" terminology. |
 | **LTV** | Loan-To-Value / Loan amount approved for the customer. Used exclusively for the DCF channel. Displayed as the secondary value on lead cards (below CEP). Replaces the deprecated "Revenue" terminology. |
 
 ---
@@ -39,7 +38,7 @@
 - "Revenue" implies CARS24 company earnings, which is not what KAMs track or act on.
 - The correct concepts are:
   - **CEP** (Customer Expected Price) — what the customer wants (primary)
-  - **C24 Quote** — what Cars24 offers back (secondary, for C2B/C2D/GS)
+  - **C24 Quote** — what Cars24 offers back (secondary, for NGS/GS)
   - **LTV** — the loan amount approved (secondary, for DCF only)
 - CEP is always the primary value. C24 Quote / LTV are comparison values.
 - If CEP is missing ("CEP Pending"), it is a high-priority KAM action — surfaced with a red indicator on lead cards and a dedicated "CEP Pending" filter chip on the Leads page.
@@ -66,7 +65,7 @@
 **How it surfaces:**
 
 1. **Pending Pill (LeadsPageV3)**
-   - Compact pill, right-aligned next to channel filters (C2B / C2D / GS / DCF)
+   - Compact pill, right-aligned next to channel filters (NGS / GS / DCF)
    - Red dot + "Pending" label + count badge (e.g. `Pending · 6`)
    - Subtle rose background with rose border when inactive; solid rose-600 when active
    - Hidden when count = 0 (no leads need CEP)
@@ -93,7 +92,7 @@
    - Message: "All leads have CEP captured. Great work!"
 
 **Pending is a mode, not a list segmentation:**
-- Works across ALL channels (C2B, C2D, GS, DCF)
+- Works across ALL channels (NGS, GS, DCF)
 - Independent of time filter (MTD / Today / etc.) and channel filter
 - Can be combined with any channel + stage selection
 
@@ -202,7 +201,7 @@ Between the hero split cards and the Incentive Impact section, a micro insight l
 
 **Admin Dashboard:**
 
-Same LMTD marker format applied to Org-level metrics: SI, I2SI, C2D I2B, DCF Leads, DCF Onboardings, DCF Disbursements, DCF GMV.
+Same LMTD marker format applied to Org-level metrics: SI, I2SI, NGS I2B, DCF Leads, DCF Onboardings, DCF Disbursements, DCF GMV.
 
 **Rationale:**
 - Targets define commitment — "What did we promise?"
@@ -318,17 +317,17 @@ Source: `lib/domain/constants.ts` (AppRoute enum), `navigation/routes.ts` (ROUTE
 | `DEMO_LOCATION_UPDATE` | `demo-location-update` | `LocationUpdateDemoPage` | Admin only (direct nav) | RequireAuth + RequireProfileComplete |
 | `DEMO_VISIT_FEEDBACK` | `demo-visit-feedback` | `VisitFeedbackDemo` | Admin only (direct nav) | RequireAuth + RequireProfileComplete |
 
-### 2.2 Deprecated Routes (defined but unmounted — Phase 4.5)
+### 2.2 Removed Routes (deleted in Wave 2)
 
-These route constants exist in `AppRoute` enum / `ROUTES` with `@deprecated` markers. They have **no switch case** in App.tsx and **0 usage references** outside their definitions. Kept for type compatibility; candidates for removal in a future phase.
+These route constants have been fully removed from the `AppRoute` enum, `ROUTES` object, and codebase:
 
-| Route Constant | Key | Reason for Deprecation |
-|---------------|-----|----------------------|
-| `VISIT_DETAIL` | `visit-detail` | Unmounted — visit detail handled inline by VisitsPage |
-| `CALL_DETAIL` | `call-detail` | Unmounted — call detail handled inline by VisitsPage |
-| `TL_CALL_DETAIL` | `tl-call-detail` | Unmounted — planned TL call review, never implemented |
-| `VISIT_CHECKIN` | `visit-checkin` | Unmounted — check-in handled inline by VisitsPage |
-| `DCF_ONBOARDING_FORM` | `dcf-onboarding-form` | Unmounted — `DCF_ONBOARDING` (`dcf-onboarding`) is the live route |
+| Former Route Constant | Former Key | Reason for Removal |
+|----------------------|-----------|-------------------|
+| `VISIT_DETAIL` | `visit-detail` | Visit detail handled inline by VisitsPage |
+| `CALL_DETAIL` | `call-detail` | Call detail handled inline by VisitsPage |
+| `TL_CALL_DETAIL` | `tl-call-detail` | Planned TL call review, never implemented |
+| `VISIT_CHECKIN` | `visit-checkin` | Check-in handled inline by VisitsPage |
+| `DCF_ONBOARDING_FORM` | `dcf-onboarding-form` | `DCF_ONBOARDING` (`dcf-onboarding`) is the live route |
 
 ### 2.3 Route Parity Status
 
@@ -434,7 +433,7 @@ See `docs/DECISIONS/ROUTE_PARITY_PHASE4_5.md` for the full reconciliation audit.
 
 ### 3.7 Leads — LeadsPageV3
 
-- **Purpose:** Browse, search, filter leads across all channels (C2B, C2D, GS)
+- **Purpose:** Browse, search, filter leads across all channels (NGS, GS)
 - **Route:** `leads`
 - **Allowed roles:** KAM, TL, Admin (impersonating)
 - **Entry points:** Bottom nav "Leads" tab, HomePage
@@ -706,7 +705,7 @@ See `docs/DECISIONS/ROUTE_PARITY_PHASE4_5.md` for the full reconciliation audit.
 - **Entry points:** HomePage, indirect navigation
 - **Required DTOs:** `IncentiveSummaryDTO`, `IncentiveDetailDTO`
 - **UI actions:**
-  - View SI breakdown by channel (C2B, C2D, GS)
+  - View SI breakdown by channel (NGS, GS)
   - View current slab and multiplier
   - Navigate to Leaderboard -> `leaderboard`
   - Open TL Incentive dashboard -> `showTLIncentive` (TL role, renders `TLIncentiveDashboard`/`TLIncentiveMobile`)
@@ -893,7 +892,7 @@ App.tsx conditionally renders:
 
 ### 5.1 Lead Status / Sub-Stage Transitions
 
-Derived from mock data patterns in `data/mockDatabase.ts` and `data/types.ts`:
+Derived from data patterns in `data/runtimeDB.ts` and `data/types.ts`:
 
 ```
 Lead Stages:
@@ -1136,7 +1135,7 @@ E. Next Actions — multi-select + follow-up date
 |---------|--------|-------------|
 | Token flow / Collect Token | **Removed** | CEP capture |
 | Revenue (terminology) | **Removed** | CEP (primary), C24 Quote / LTV (secondary) |
-| LeadCard.tsx / LeadCardV3.tsx | Archive candidate | LeadPipelineCard.tsx |
+| LeadCard.tsx / LeadCardV3.tsx | **Deleted** | LeadPipelineCard.tsx |
 | KAMVisitsViewNew / KAMCallsViewNew | Archive candidate | — |
 
 ---

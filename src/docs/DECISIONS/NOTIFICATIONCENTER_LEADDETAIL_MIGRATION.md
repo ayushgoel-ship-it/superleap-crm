@@ -19,7 +19,7 @@ if (selectedLead) {
     <LeadDetailPage
       regNo={selectedLead.regNo}       // e.g., "C24-876542"
       customer={selectedLead.customer}   // e.g., "Priya Singh"
-      channel={selectedLead.channel}     // e.g., "C2D"
+      channel={selectedLead.channel}     // e.g., "NGS"
       leadType={selectedLead.leadType}   // e.g., "Inventory"
       currentStage={selectedLead.currentStage}  // e.g., "lead_created"
       onBack={() => setSelectedLead(null)}
@@ -53,7 +53,7 @@ NotificationCenter passes `regNo`, `customer`, `channel`, etc. — but NOT `lead
 | `leadId` | ❌ Not passed | ✅ Required | ✅ Required |
 | `regNo` | ✅ `"C24-876542"` | ❌ Unused | ❌ Unused |
 | `customer` | ✅ `"Priya Singh"` | ❌ Unused | ❌ Unused |
-| `channel` | ✅ `"C2D"` | ❌ Unused | ❌ Unused |
+| `channel` | ✅ `"NGS"` | ❌ Unused | ❌ Unused |
 | `leadType` | ✅ `"Inventory"` | ❌ Unused | ❌ Unused |
 | `currentStage` | ✅ `"lead_created"` | ❌ Unused | ❌ Unused |
 | `onBack` | ✅ `() => setSelectedLead(null)` | ✅ Required | ✅ Required |

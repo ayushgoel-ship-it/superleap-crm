@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
-import { 
-  evaluateProductivity, 
-  ProductivityEvaluationResult, 
-  DealerMetricsSnapshot 
+import {
+  evaluateProductivity,
+  ProductivityEvaluationResult,
+  DealerMetricsSnapshot
 } from '../lib/productivityEngine';
 
 export type CallStatus = 'pending-feedback' | 'completed' | 'no-answer' | 'busy';
@@ -69,6 +69,7 @@ export interface Visit {
   lat?: number;
   lng?: number;
   originContext?: OriginContext;
+  feedbackSubmitted?: boolean; // Explicit flag: set to true when feedback is saved
 }
 
 interface ActivityContextValue {
@@ -346,6 +347,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
       productiveStatus: 'pending',
     };
     setCalls(prev => [newCall, ...prev]);
+
     return newCall;
   };
 
@@ -363,6 +365,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
       if (prev.some(v => v.id === newVisit.id)) return prev;
       return [newVisit, ...prev];
     });
+
     return newVisit;
   };
 

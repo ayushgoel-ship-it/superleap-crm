@@ -284,7 +284,7 @@
 
 ### Protected Files (Never Archive)
 - `/components/figma/ImageWithFallback.tsx` - Figma integration
-- `/data/mockDatabase.ts` - Single source of truth
+- `/data/runtimeDB.ts` - Single source of truth (Supabase cache)
 - `/lib/metricsEngine.ts` - Canonical metrics
 - `/lib/incentiveEngine.ts` - Canonical incentives
 - `/lib/productivityEngine.ts` - Canonical productivity

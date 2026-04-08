@@ -1,4 +1,4 @@
-export type UserRole = "KAM" | "TL" | "Admin" | "ADMIN";
+export type UserRole = "KAM" | "TL" | "Admin" | "ADMIN" | "SUPER_ADMIN";
 
 export interface UserProfile {
   userId: string;
@@ -12,6 +12,7 @@ export interface UserProfile {
   homeLng?: number;
   city?: string; // User's home city
   passwordLastChangedAt?: string; // ISO
+  mustResetPassword?: boolean;
   createdAt: string; // ISO
   updatedAt: string; // ISO
 }

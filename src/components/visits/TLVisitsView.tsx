@@ -211,7 +211,7 @@ export function TLVisitsView() {
         {
           id: '1',
           type: 'lead',
-          description: 'New C2B lead created – DL6CAC9999',
+          description: 'New NGS lead created – DL6CAC9999',
           date: '10 Dec 2025',
         },
         {

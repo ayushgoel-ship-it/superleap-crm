@@ -1,6 +1,6 @@
 import { ChevronDown, X } from 'lucide-react';
 import { useState } from 'react';
-import { Region, getAllRegions, getTLsByRegions, TLData } from '../../data/adminOrgMock';
+import { Region, getAllRegions, getTLsByRegions, TLData } from '../../data/adminOrgData';
 import { TimePeriod } from '../../lib/domain/constants';
 import { ADMIN_TIME_OPTIONS } from '../filters/TimeFilterControl';
 

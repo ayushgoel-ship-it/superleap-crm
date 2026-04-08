@@ -969,7 +969,7 @@ export function VisitsTabContent({
           return new Date(tb).getTime() - new Date(ta).getTime();
         });
       const lastVisit = dealerVisits[0] || null;
-      const feedbackPending = lastVisit ? !(lastVisit.outcome || lastVisit.notes) : false;
+      const feedbackPending = lastVisit ? !(lastVisit.feedbackSubmitted || lastVisit.outcome || lastVisit.notes) : false;
 
       const markerColor = getDealerMarkerColor({
         feedbackPending,
@@ -1176,12 +1176,13 @@ export function VisitsTabContent({
       if (data.leadShared && data.leadStatus) outcomeDetails.push(`Leads: ${data.leadStatus}`);
       if (data.dcfDiscussed && data.dcfStatus) outcomeDetails.push(`DCF: ${data.dcfStatus}`);
 
-      // 1. Update local state (backward-compatible with Visit type)
+      // 1. Update local state — set feedbackSubmitted flag so blocker clears immediately
       updateVisit(visitId, {
         meetingPerson: data.meetingPersonRole === 'Other' ? (data.meetingPersonOtherText || 'Other') : data.meetingPersonRole,
         outcome: outcomeDetails.join(' | '),
         notes: data.note || 'Feedback submitted',
         purpose: ['Visit Feedback'],
+        feedbackSubmitted: true,
       });
 
       setFeedbackModalVisit(null);
