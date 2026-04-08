@@ -209,6 +209,7 @@ function DealerKamTab() {
   const [kams, setKams] = useState<UserLite[]>([]);
   const [search, setSearch] = useState('');
   const [filterKam, setFilterKam] = useState<string>('all');
+  const [filterCity, setFilterCity] = useState<string>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [targetKam, setTargetKam] = useState<string>('');
   const [preview, setPreview] = useState<ReassignImpact | null>(null);
@@ -226,16 +227,19 @@ function DealerKamTab() {
   }
   useEffect(() => { load(); }, []);
 
+  const cities = useMemo(() => Array.from(new Set(dealers.map(d => d.dealer_city).filter(Boolean))).sort(), [dealers]);
+
   const filtered = useMemo(() => {
     let list = dealers;
     if (filterKam === 'unassigned') list = list.filter(d => !d.kam_id);
     else if (filterKam !== 'all') list = list.filter(d => d.kam_id === filterKam);
+    if (filterCity !== 'all') list = list.filter(d => d.dealer_city === filterCity);
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter(d => d.dealer_name?.toLowerCase().includes(q) || d.dealer_code?.toLowerCase().includes(q) || d.dealer_city?.toLowerCase().includes(q));
+      list = list.filter(d => d.dealer_name?.toLowerCase().includes(q) || String(d.dealer_code).toLowerCase().includes(q) || d.dealer_city?.toLowerCase().includes(q));
     }
     return list.slice(0, 500);
-  }, [dealers, search, filterKam]);
+  }, [dealers, search, filterKam, filterCity]);
 
   function toggleSelect(id: string) {
     const next = new Set(selected);
@@ -264,6 +268,16 @@ function DealerKamTab() {
     load();
   }
 
+  async function doUnassign() {
+    if (selected.size === 0) return;
+    if (!confirm(`Unassign ${selected.size} dealer(s) from their KAM?`)) return;
+    const r = await reassignDealers(Array.from(selected), null, false);
+    if (r.error) { toast.error(r.error); return; }
+    toast.success(`Unassigned ${selected.size} dealers`);
+    setSelected(new Set());
+    load();
+  }
+
   const kamMap = useMemo(() => new Map(kams.map(k => [k.user_id, k.name])), [kams]);
 
   return (
@@ -287,6 +301,10 @@ function DealerKamTab() {
           <option value="unassigned">Unassigned</option>
           {kams.map(k => <option key={k.user_id} value={k.user_id}>{k.name}</option>)}
         </select>
+        <select value={filterCity} onChange={e => setFilterCity(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm">
+          <option value="all">All Cities</option>
+          {cities.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
 
       {selected.size > 0 && (
@@ -297,6 +315,7 @@ function DealerKamTab() {
             {kams.map(k => <option key={k.user_id} value={k.user_id}>{k.name}</option>)}
           </select>
           <button onClick={doDryRun} disabled={!targetKam} className="px-3 py-1 bg-indigo-600 text-white rounded text-sm disabled:opacity-40">Preview Impact</button>
+          <button onClick={doUnassign} className="px-3 py-1 bg-white border border-red-300 text-red-700 rounded text-sm hover:bg-red-50">Unassign</button>
         </div>
       )}
 
@@ -400,7 +419,17 @@ function BulkUploadModal({ kams, onClose, onDone }: { kams: UserLite[]; onClose:
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-slate-900 mb-2">Bulk Dealer ↔ KAM Upload</h3>
-        <p className="text-sm text-slate-500 mb-3">CSV columns: <code>dealer_code,kam_id</code></p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm text-slate-500">CSV columns: <code>dealer_code,kam_id</code></p>
+          <button onClick={() => {
+            const sample = kams[0];
+            const csv = `dealer_code,kam_id\n# Replace with real dealer codes and KAM user_ids\n# Example KAM: ${sample?.name || 'Name'} = ${sample?.user_id || 'kam-uuid'}\nDEALER001,${sample?.user_id || 'kam-uuid'}`;
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'dealer_kam_template.csv'; a.click();
+            URL.revokeObjectURL(url);
+          }} className="text-xs text-indigo-600 hover:text-indigo-800 underline">Download template</button>
+        </div>
         <textarea value={csvText} onChange={e => setCsvText(e.target.value)} rows={10}
           placeholder={`dealer_code,kam_id\nD001,${kams[0]?.user_id || 'kam-uuid'}\n...`}
           className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono" />

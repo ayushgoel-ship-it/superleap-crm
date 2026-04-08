@@ -113,13 +113,16 @@ export function resolveTimePeriodToRange(
       return { fromISO: toISO(new Date(2020, 0, 1)), toISO: toISO(tomorrow) };
 
     case TimePeriod.CUSTOM: {
+      // Defensive: if custom dates aren't set yet (user just clicked "Custom" but
+      // hasn't picked a range), fall back to MTD instead of throwing — the picker
+      // will re-render with a valid range as soon as the user applies one.
       if (!customFrom || !customTo) {
-        throw new Error('TimePeriod.CUSTOM requires both customFrom and customTo ISO strings.');
+        return { fromISO: toISO(firstOfMonth(today)), toISO: toISO(tomorrow) };
       }
       const from = new Date(customFrom);
       const to = new Date(customTo);
-      if (from > to) {
-        throw new Error(`Custom range invalid: from (${customFrom}) is after to (${customTo}).`);
+      if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) {
+        return { fromISO: toISO(firstOfMonth(today)), toISO: toISO(tomorrow) };
       }
       return { fromISO: from.toISOString(), toISO: to.toISOString() };
     }

@@ -7,6 +7,8 @@ import { TimePeriod } from '../../lib/domain/constants';
 import { getAllDealers } from '../../data/selectors';
 import { getDCFTargets } from '../../lib/metricsEngine';
 import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
 
 // Approval ratio: expected share of leads that reach approved/disbursed status.
 // Used to derive per-dealer approval target from their lead count.
@@ -22,7 +24,7 @@ interface DCFPageProps {
   onNavigateToDCFDisbursals?: () => void;
   onNavigateToDCFDealerDetail?: (dealerId: string) => void;
   onNavigateToDCFOnboardingDetail?: (dealerId: string) => void;
-  onDateRangeChange?: (dateRange: string) => void;
+  onDateRangeChange?: (dateRange: string, customFrom?: string, customTo?: string) => void;
   userRole?: 'KAM' | 'TL';
 }
 
@@ -58,34 +60,11 @@ export function DCFPageTL({
   const [statusFilter, setStatusFilter] = useState<DCFStatusFilter>('All');
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   
-  // TL-specific: KAM filter
-  const [selectedKAM, setSelectedKAM] = useState('all');
-  const [showKAMDropdown, setShowKAMDropdown] = useState(false);
-  
-  const kamOptions: KAMOption[] = useMemo(() => {
-    const dcfLeads = getFilteredDCFLeads({ period: TimePeriod.LIFETIME });
-    const kamMap = new Map<string, string>();
-    dcfLeads.forEach(l => {
-      if (l.kamId && l.kamName) kamMap.set(l.kamId, l.kamName);
-    });
-    return [
-      { id: 'all', name: 'All KAMs' },
-      ...Array.from(kamMap.entries()).map(([id, name]) => ({ id, name })),
-    ];
-  }, []);
-  
-  const handleKAMSelect = (kamId: string) => {
-    setSelectedKAM(kamId);
-    setShowKAMDropdown(false);
-  };
+  // TL/Admin scope — team KAMs + optional single-KAM overlay via KAMFilter.
+  const { effectiveKamIds, actorName, role: actorRole } = useActorScope();
 
-  // BUG: customFrom/customTo state values are tracked but NOT passed into the
-  // MetricFilters below, so custom date ranges selected in TimeFilterControl
-  // are silently ignored for dealer data. The time filter chips will appear
-  // selected but dealer metrics will still use the period enum boundaries.
-  // TODO: Pass customFrom and customTo into MetricFilters once behavior change is approved.
   const allDealers = useMemo(() => {
-    const filters: MetricFilters = { period };
+    const filters: MetricFilters = { period, customFrom, customTo, kamIds: effectiveKamIds };
 
     const dcfLeads = getFilteredDCFLeads(filters);
     const dealers = getAllDealers();
@@ -125,12 +104,12 @@ export function DCFPageTL({
           disbursalAmount: Math.round(disbursalAmount * 10) / 10,
         };
       });
-  }, [period]);
+  }, [period, customFrom, customTo, effectiveKamIds]);
 
   // Filter dealers by KAM
-  const filteredByKAM = selectedKAM === 'all' 
-    ? allDealers 
-    : allDealers.filter(d => d.kamId === selectedKAM);
+  // Scoping is applied inside getFilteredDCFLeads via effectiveKamIds, so
+  // allDealers is already team-restricted (and further narrowed by KAMFilter).
+  const filteredByKAM = allDealers;
 
   // Filter dealers based on selected status
   const filteredDealers = filteredByKAM.filter((dealer) => {
@@ -269,63 +248,34 @@ export function DCFPageTL({
     return stepMap[onboarding.currentStep] || { step: 1, label: 'Form Filled' };
   };
 
-  const selectedKAMName = kamOptions.find(k => k.id === selectedKAM)?.name || 'All KAMs';
-
   return (
     <div className="p-4 space-y-6">
-      {/* Date Range Selector + KAM Filter */}
+      {/* TL header: name + KAM filter */}
+      {(actorRole === 'TL' || actorRole === 'Admin') && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Team Lead</div>
+            <div className="text-[14px] font-bold text-slate-900 truncate">{actorName || 'Team Lead'}</div>
+          </div>
+          <KAMFilter sticky />
+        </div>
+      )}
+
+      {/* Date Range Selector */}
       <div className="flex items-center justify-between gap-3">
-        {/* Date Range Pills */}
         <div className="flex-1 overflow-x-auto">
           <TimeFilterControl
             mode="chips"
             chipStyle="pill"
             value={period}
-            onChange={setPeriod}
+            onChange={(p) => { setPeriod(p); onDateRangeChange?.(p, customFrom, customTo); }}
             options={CANONICAL_TIME_OPTIONS}
             labelOverrides={CANONICAL_TIME_LABELS}
             allowCustom
             customFrom={customFrom}
             customTo={customTo}
-            onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+            onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); onDateRangeChange?.(period, fromISO, toISO); }}
           />
-        </div>
-
-        {/* KAM Dropdown */}
-        <div className="relative flex-shrink-0">
-          <button
-            onClick={() => setShowKAMDropdown(!showKAMDropdown)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
-          >
-            <span className="text-gray-500">KAM:</span>
-            <span className="font-medium">{selectedKAMName}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
-          </button>
-
-          {/* KAM Dropdown Menu */}
-          {showKAMDropdown && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setShowKAMDropdown(false)}
-              />
-              <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
-                {kamOptions.map((kam) => (
-                  <button
-                    key={kam.id}
-                    onClick={() => handleKAMSelect(kam.id)}
-                    className={`w-full px-3 py-2 text-left text-sm transition-colors ${
-                      selectedKAM === kam.id
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    {kam.name}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
         </div>
       </div>
 

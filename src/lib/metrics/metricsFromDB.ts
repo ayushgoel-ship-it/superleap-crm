@@ -45,14 +45,11 @@
  *
  * Channel derivation: gs_flag=1 → GS, gs_flag=0 → NGS (already done in adapter)
  *
- * TODO: Overlap with canonicalMetrics.ts — both modules have:
- *   - Time range filtering (isIn here vs isInTimeRange there)
- *   - I2SI calculation (stockIns / inspections * 100)
- *   - DCF disbursal value aggregation (/ 100000 to lakhs)
- *   - Call/visit filtering by period + kamId
- *   - A DashboardMetrics interface (different shapes)
- *   Consider unifying shared logic into a common utility if these modules
- *   are ever refactored together.
+ * Note: time-range predicate now shared via `lib/date/range.ts`
+ * (`isDateInRange`) — aliased locally as `isIn` to minimize call-site churn.
+ * Input-score composite shared via `lib/metrics/inputScore.ts`.
+ * Remaining overlap with canonicalMetrics.ts (I2SI, DCF aggregation, dashboard
+ * shapes) is intentional: the two modules serve different page surfaces.
  */
 
 import { getRuntimeDBSync } from '../../data/runtimeDB';
@@ -60,16 +57,12 @@ import { TimePeriod } from '../domain/constants';
 import { getConfigTLTeamTargets } from '../configFromDB';
 import { resolveTimePeriodToRange } from '../time/resolveTimePeriod';
 import type { Lead, CallLog, VisitLog, DCFLead, Dealer } from '../../data/types';
+import { computeInputScore } from './inputScore';
+import { isDateInRange } from '../date/range';
 
 // ── Time Helpers ──
-// TODO: Duplicated logic — canonicalMetrics.ts has its own `isInTimeRange()` with the same semantics.
-// Consider extracting a shared `isDateInRange(dateStr, from, to)` utility.
-
-function isIn(dateStr: string | undefined, from: Date, to: Date): boolean {
-    if (!dateStr) return false;
-    const d = new Date(dateStr);
-    return d >= from && d < to;
-}
+// Local alias to minimize diff; canonical impl lives in lib/date/range.ts.
+const isIn = isDateInRange;
 
 // ── Types ──
 
@@ -128,10 +121,12 @@ export interface TLOverviewMetrics {
 
 export function computeMetrics(
     period: TimePeriod,
-    kamId?: string
+    kamId?: string,
+    customFrom?: string,
+    customTo?: string
 ): DashboardMetrics {
     const db = getRuntimeDBSync();
-    const { fromISO, toISO } = resolveTimePeriodToRange(period);
+    const { fromISO, toISO } = resolveTimePeriodToRange(period, new Date(), customFrom, customTo);
     const from = new Date(fromISO);
     const to = new Date(toISO);
 
@@ -279,11 +274,7 @@ export function computeKAMMetrics(period: TimePeriod): KAMMetrics[] {
         const dealer = db.dealers.find((d: Dealer) => d.kamId === kamId);
         const kamName = dealer?.kamName || 'KAM';
 
-        const visitScore = Math.min(metrics.completedVisits / 3, 1) * 30;
-        const callScore = Math.min(metrics.totalCalls / 5, 1) * 30;
-        const dealerScore = Math.min(metrics.uniqueDealersCalled / 3, 1) * 20;
-        const convScore = Math.min(metrics.conversionRate / 50, 1) * 20;
-        const inputScore = Math.round(visitScore + callScore + dealerScore + convScore);
+        const inputScore = computeInputScore(metrics);
 
         return { ...metrics, kamId, kamName, inputScore };
     });

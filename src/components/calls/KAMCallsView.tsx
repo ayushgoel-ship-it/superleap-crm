@@ -5,6 +5,7 @@ import type { UnifiedFeedbackData } from '../activity/visitHelpers';
 import * as visitApi from '../../api/visit.api';
 import { toast } from 'sonner@2.0.3';
 import { useActivity } from '../../contexts/ActivityContext';
+import { useAuth } from '../auth/AuthProvider';
 
 type CallOutcome = 'connected_positive' | 'connected_neutral' | 'connected_negative' | 'not_reachable' | 'switched_off' | 'wrong_number' | 'call_back_later';
 type ProductiveStatus = 'productive' | 'non_productive' | 'unknown';
@@ -62,7 +63,8 @@ export interface KAMCallsViewProps {
 }
 
 export function KAMCallsView({ onNavigateToCallFeedback }: KAMCallsViewProps) {
-  const { addCall } = useActivity(); // Add this to use ActivityContext
+  const { addCall, refresh: refreshActivity } = useActivity(); // Add this to use ActivityContext
+  const { activeActor } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<'suggested' | 'today' | 'all'>('suggested');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCallFeedback, setShowCallFeedback] = useState(false);
@@ -220,7 +222,7 @@ export function KAMCallsView({ onNavigateToCallFeedback }: KAMCallsViewProps) {
           dealerName: currentCallAttempt.dealer.name,
           dealerCode: currentCallAttempt.dealer.code,
           dealerCity: currentCallAttempt.dealer.city,
-          userId: 'current-user',
+          userId: activeActor?.userId || '',
           kamName: currentCallAttempt.kam || 'Current User',
         });
         await visitApi.submitCallFeedback(currentCallAttempt.callId, {
@@ -243,6 +245,7 @@ export function KAMCallsView({ onNavigateToCallFeedback }: KAMCallsViewProps) {
         console.error('[KAMCallsView] Failed to persist call feedback to DB:', err);
       }
 
+      refreshActivity();
       toast.success('Call feedback submitted');
       setShowCallFeedback(false);
       setCurrentCallAttempt(null);

@@ -115,7 +115,7 @@ function toLeadCardVM(lead: Lead): LeadCardVM {
 
   return {
     id: lead.id,
-    customerName: lead.customerName,
+    customerName: lead.appId || lead.id || 'Lead',
     carDisplay: carDisplay || 'Unknown Vehicle',
     regNo: lead.regNo || lead.registrationNumber || 'N/A',
     channel: lead.channel,
@@ -123,7 +123,7 @@ function toLeadCardVM(lead: Lead): LeadCardVM {
     stage: lead.currentStage || lead.stage,
     status: lead.status,
     cep: lead.cep ?? null,
-    secondaryValue: lead.c24Quote ?? lead.expectedRevenue ?? 0,
+    secondaryValue: lead.c24Quote ?? 0,
     revenue: lead.actualRevenue || lead.expectedRevenue || 0,
     createdAt: lead.createdAt,
     inspectionDate: lead.inspectionDate,
@@ -156,13 +156,13 @@ export function validateLeadIdForNavigation(leadId: string): void {
 export function dcfToLeadCardVM(dcf: {
   id: string; customerName: string; car: string; phone: string;
   channel: string; stage: string; overallStatus: string;
-  loanAmount: number | null; createdAt: string;
+  loanAmount: number | null; finalOfferLtv?: number | null; createdAt: string;
   dealerName: string; dealerCode: string; dealerId: string;
   kamName: string; city: string; disbursalDate?: string;
 }): LeadCardVM {
   return {
     id: dcf.id,
-    customerName: dcf.customerName,
+    customerName: dcf.id || 'DCF Lead',
     carDisplay: dcf.car,
     regNo: 'N/A',
     channel: 'DCF',
@@ -170,7 +170,7 @@ export function dcfToLeadCardVM(dcf: {
     stage: dcf.stage,
     status: dcf.overallStatus === 'disbursed' ? 'Won' : 'Active',
     cep: null,
-    secondaryValue: dcf.loanAmount || 0,
+    secondaryValue: dcf.finalOfferLtv ?? null,
     revenue: dcf.loanAmount || 0,
     createdAt: dcf.createdAt,
     dealerName: dcf.dealerName,

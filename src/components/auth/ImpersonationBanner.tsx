@@ -41,30 +41,32 @@ export function ImpersonationBanner() {
   
   return (
     <div className="fixed top-0 left-0 right-0 z-[100] bg-amber-500 text-white shadow-lg">
-      <div className="container mx-auto px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="container mx-auto px-3 sm:px-4 py-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <AlertCircle className="size-5 flex-shrink-0" />
-          
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-semibold">Impersonating:</span>
-            <span>{targetName}</span>
-            <span className="opacity-75">({targetRole})</span>
+
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm min-w-0">
+            <span className="font-semibold hidden sm:inline">Viewing as:</span>
+            <span className="font-semibold sm:hidden">As:</span>
+            <span className="truncate">{targetName}</span>
+            <span className="opacity-75 flex-shrink-0">({targetRole})</span>
             {durationText && (
-              <span className="opacity-60 text-xs ml-2">
+              <span className="opacity-60 text-xs ml-2 hidden md:inline">
                 Started {durationText}
               </span>
             )}
           </div>
         </div>
-        
+
         <Button
           variant="ghost"
           size="sm"
           onClick={clearImpersonation}
-          className="text-white hover:bg-amber-600 hover:text-white"
+          className="text-white hover:bg-amber-600 hover:text-white flex-shrink-0 px-2 sm:px-3"
+          aria-label="Return to Admin"
         >
-          <X className="size-4 mr-1" />
-          Exit Impersonation
+          <X className="size-4 sm:mr-1" />
+          <span className="hidden sm:inline">Return to Admin</span>
         </Button>
       </div>
     </div>

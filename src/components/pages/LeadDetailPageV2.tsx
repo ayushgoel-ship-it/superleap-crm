@@ -16,6 +16,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
+import { getSession } from '../../lib/auth/authService';
 import {
   ArrowLeft, Phone, MessageCircle, Calendar, ChevronDown, ChevronUp,
   CheckCircle2, Clock, MoreHorizontal, User, MapPin,
@@ -171,17 +172,17 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     },
     {
       id: 'inspection-done', label: 'Inspection Done',
-      status: (['PLL', 'PR', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
-      timestamp: ['PLL', 'PR', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
-      details: ['PLL', 'PR', 'Stock-in'].includes(lead.stage) ? [
+      status: (['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
+      timestamp: ['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
+      details: ['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? [
         { label: 'LMS link', value: 'APP ID: DL6CAC9999' },
       ] : [],
     },
     {
       id: 'hb-discovered', label: 'HB Discovered',
-      status: (['PLL', 'PR', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
-      timestamp: ['PLL', 'PR', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
-      details: ['PLL', 'PR', 'Stock-in'].includes(lead.stage) ? [
+      status: (['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
+      timestamp: ['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
+      details: ['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? [
         { label: 'TP (Target Price)', value: '\u20B94,60,000' },
         { label: 'C24 Price', value: '\u20B94,35,000' },
         { label: 'Margin', value: '7% (\u20B930,000)' },
@@ -189,18 +190,18 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     },
     {
       id: 'ocb-raised', label: 'OCB Raised',
-      status: (['PR', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
-      timestamp: ['PR', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
-      details: ['PR', 'Stock-in'].includes(lead.stage) ? [
+      status: (['BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
+      timestamp: ['BBNP', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
+      details: ['BBNP', 'Stock-in'].includes(lead.stage) ? [
         { label: 'OCB / Nego Price', value: '\u20B94,50,000' },
         { label: 'TP band', value: '\u20B94,45,000 \u2013 \u20B94,55,000' },
       ] : [],
     },
     {
-      id: 'pr-punched', label: 'PR Punched',
-      status: (['PR', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
-      timestamp: ['PR', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
-      details: ['PR', 'Stock-in'].includes(lead.stage) ? [
+      id: 'bbnp', label: 'BBNP',
+      status: (['BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
+      timestamp: ['BBNP', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
+      details: ['BBNP', 'Stock-in'].includes(lead.stage) ? [
         { label: 'Customer payout (CP)', value: '\u20B94,05,000' },
       ] : [],
     },
@@ -235,7 +236,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     const s = lead.stage;
     if (s === 'Inspection Scheduled') return { label: 'Confirm Inspection', icon: Calendar };
     if (['PLL'].includes(s)) return { label: 'Raise OCB', icon: Zap };
-    if (['PR'].includes(s)) return { label: 'Push PR', icon: FileText };
+    if (['BBNP'].includes(s)) return { label: 'Push BBNP', icon: FileText };
     return { label: 'Call Customer', icon: Phone };
   }, [lead.stage]);
 
@@ -302,7 +303,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
         dealerName: lead?.dealerName || '',
         dealerCode: lead?.dealerCode || '',
         dealerCity: lead?.city || '',
-        userId: 'current-user',
+        userId: getSession()?.activeActorId || getSession()?.userId || '',
         kamName: lead?.kamName || 'Current User',
       });
       await visitApi.submitCallFeedback(callId, {
@@ -347,7 +348,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
             <ArrowLeft className="w-5 h-5 text-slate-700" />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-[16px] font-bold text-slate-900 truncate">{lead.customerName}</h1>
+            <h1 className="text-[16px] font-bold text-slate-900 truncate">{lead.appId || lead.id}</h1>
             <button
               onClick={() => copyToClipboard(lead.customerPhone, 'Phone')}
               className="flex items-center gap-1 mt-0.5 group"

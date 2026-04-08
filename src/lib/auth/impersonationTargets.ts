@@ -1,5 +1,6 @@
 import { ImpersonationTarget } from './types';
 import { getRuntimeDBSync } from '../../data/runtimeDB';
+import { getTLById } from '../../data/selectors';
 
 /**
  * Impersonation targets derived from the Supabase users table.
@@ -31,7 +32,13 @@ function buildTargetsFromDB(): { kams: ImpersonationTarget[]; tls: Impersonation
   db.dealers.forEach((d: any) => {
     if (d.tlId && d.tlId !== 'tl-default' && !tlSeen.has(d.tlId)) {
       tlSeen.add(d.tlId);
-      tls.push({ userId: d.tlId, name: `TL-${d.tlId}`, role: 'TL', city: d.city || 'NCR' });
+      const tlRecord = getTLById(d.tlId);
+      tls.push({
+        userId: d.tlId,
+        name: tlRecord?.name || d.tlName || 'Team Lead',
+        role: 'TL',
+        city: d.city || 'NCR',
+      });
     }
   });
 

@@ -32,6 +32,7 @@ type RuntimeDB = {
 };
 
 let cache: RuntimeDB | null = null;
+let inflight: Promise<RuntimeDB> | null = null;
 
 // Default org structure when no org data is available yet
 const DEFAULT_ORG: AdminOrg = {
@@ -135,9 +136,9 @@ function enrichDealerMetrics(dealers: Dealer[], leads: Lead[], dcfLeads: DCFLead
 
 function enrichFromDealerOwnership(leads: Lead[], dcfLeads: DCFLead[], dealers: Dealer[]): { leads: Lead[]; dcfLeads: DCFLead[] } {
   // Build dealer → ownership map
-  const dealerMap = new Map<string, { name: string; kamId: string; kamName: string; tlId: string }>();
+  const dealerMap = new Map<string, { name: string; kamId: string; kamName: string; tlId: string; tlName: string }>();
   for (const d of dealers) {
-    dealerMap.set(d.code, { name: d.name, kamId: d.kamId, kamName: d.kamName, tlId: d.tlId });
+    dealerMap.set(d.code, { name: d.name, kamId: d.kamId, kamName: d.kamName, tlId: d.tlId, tlName: (d as any).tlName || '' });
   }
 
   const enrichedLeads = leads.map(l => {
@@ -149,6 +150,7 @@ function enrichFromDealerOwnership(leads: Lead[], dcfLeads: DCFLead[], dealers: 
         kamId: owner.kamId,
         kamName: owner.kamName,
         tlId: owner.tlId,
+        tlName: owner.tlName,
       };
     }
     return { ...l, dealerName: l.dealerName || `Dealer-${l.dealerCode}` };
@@ -162,6 +164,7 @@ function enrichFromDealerOwnership(leads: Lead[], dcfLeads: DCFLead[], dealers: 
         kamId: owner.kamId,
         kamName: owner.kamName,
         tlId: owner.tlId,
+        tlName: owner.tlName,
       };
     }
     return d;
@@ -194,8 +197,10 @@ function enrichCallsVisits(calls: CallLog[], visits: VisitLog[], dealers: Dealer
 // ── Main load function ──
 
 export async function loadRuntimeDB(): Promise<RuntimeDB> {
-  console.log('[RuntimeDB] loadRuntimeDB called, cache exists:', !!cache);
+  console.log('[RuntimeDB] loadRuntimeDB called, cache exists:', !!cache, 'inflight:', !!inflight);
   if (cache) return cache;
+  if (inflight) return inflight;
+  inflight = (async () => {
 
   // Use allSettled so one failing fetch doesn't crash everything
   const results = await Promise.allSettled([
@@ -265,6 +270,12 @@ export async function loadRuntimeDB(): Promise<RuntimeDB> {
   console.log(`[RuntimeDB] Loaded: ${cache.dealers.length} dealers, ${cache.leads.length} leads, ${cache.dcfLeads.length} dcf, ${cache.calls.length} calls, ${cache.visits.length} visits, ${cache.untaggedDealers.length} untagged`);
 
   return cache;
+  })();
+  try {
+    return await inflight;
+  } finally {
+    inflight = null;
+  }
 }
 
 // helpers

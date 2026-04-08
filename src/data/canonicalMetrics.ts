@@ -47,14 +47,10 @@
  *     → compute counts, rates, breakdowns
  *     → consume in pages
  *
- * TODO: Overlap with metricsFromDB.ts — both modules have:
- *   - Time range filtering (isInTimeRange here vs isIn there)
- *   - I2SI calculation (stockIns / inspections * 100)
- *   - DCF disbursal value aggregation (/ 100000 to lakhs)
- *   - Call/visit filtering by period + kamId
- *   - A DashboardMetrics interface (different shapes)
- *   Consider unifying shared logic into a common utility if these modules
- *   are ever refactored together.
+ * Note: time-range predicate is now shared via `lib/date/range.ts`
+ * (`isDateInRange`) — wrapped here as `isInTimeRange` for callsite stability.
+ * Remaining overlap with metricsFromDB.ts (I2SI, DCF aggregation, dashboard
+ * shapes) is intentional: the two modules serve different page surfaces.
  */
 
 import { getRuntimeDBSync } from './runtimeDB';
@@ -75,31 +71,43 @@ export function mapChannelToCanonical(raw: string): CanonicalChannel {
 }
 
 // ── Time filtering ──
-// TODO: Duplicated logic — metricsFromDB.ts has its own `isIn()` with the same semantics.
-// Consider extracting a shared `isDateInRange(dateStr, from, to)` utility.
+// Thin wrapper around canonical isDateInRange that resolves a TimePeriod
+// to a concrete [from, to) range.
+import { isDateInRange } from '../lib/date/range';
 
 function isInTimeRange(dateStr: string | undefined, period: TimePeriod, customFrom?: string, customTo?: string): boolean {
   if (!dateStr) return false;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return false;
   let range: { fromISO: string; toISO: string };
   try {
     range = resolveTimePeriodToRange(period, new Date(), customFrom, customTo);
   } catch {
     return false;
   }
-  const from = new Date(range.fromISO);
-  const to = new Date(range.toISO);
-  return d >= from && d < to;
+  return isDateInRange(dateStr, new Date(range.fromISO), new Date(range.toISO));
 }
 
 // ── Filter options ──
 
 export interface MetricFilters {
   period: TimePeriod;
+  /** Single-KAM scope (KAM role or single-KAM filter overlay). */
   kamId?: string;
+  /**
+   * Multi-KAM scope (TL role: TL's team of KAMs, or Admin cascade).
+   * When present, results are restricted to rows whose kamId ∈ kamIds.
+   * `kamId` (singular) takes precedence if both are set.
+   */
+  kamIds?: string[];
   customFrom?: string;
   customTo?: string;
+}
+
+function matchesKamScope(rowKamId: string | undefined, filters: MetricFilters): boolean {
+  if (filters.kamId) return rowKamId === filters.kamId;
+  if (filters.kamIds && filters.kamIds.length > 0) {
+    return !!rowKamId && filters.kamIds.includes(rowKamId);
+  }
+  return true;
 }
 
 // ── Filtered data getters ──
@@ -107,36 +115,28 @@ export interface MetricFilters {
 export function getFilteredLeads(filters: MetricFilters): Lead[] {
   let leads = getRuntimeDBSync().leads;
   leads = leads.filter(l => isInTimeRange(l.createdAt, filters.period, filters.customFrom, filters.customTo));
-  if (filters.kamId) {
-    leads = leads.filter(l => l.kamId === filters.kamId);
-  }
+  leads = leads.filter(l => matchesKamScope(l.kamId, filters));
   return leads;
 }
 
 export function getFilteredDCFLeads(filters: MetricFilters): DCFLead[] {
   let leads = getRuntimeDBSync().dcfLeads;
   leads = leads.filter(l => isInTimeRange(l.createdAt, filters.period, filters.customFrom, filters.customTo));
-  if (filters.kamId) {
-    leads = leads.filter(l => l.kamId === filters.kamId);
-  }
+  leads = leads.filter(l => matchesKamScope(l.kamId, filters));
   return leads;
 }
 
 export function getFilteredCalls(filters: MetricFilters): CallLog[] {
   let calls = getRuntimeDBSync().calls;
   calls = calls.filter(c => isInTimeRange(c.callDate, filters.period, filters.customFrom, filters.customTo));
-  if (filters.kamId) {
-    calls = calls.filter(c => c.kamId === filters.kamId);
-  }
+  calls = calls.filter(c => matchesKamScope(c.kamId, filters));
   return calls;
 }
 
 export function getFilteredVisits(filters: MetricFilters): VisitLog[] {
   let visits = getRuntimeDBSync().visits;
   visits = visits.filter(v => isInTimeRange(v.checkInAt || v.visitDate, filters.period, filters.customFrom, filters.customTo));
-  if (filters.kamId) {
-    visits = visits.filter(v => v.kamId === filters.kamId);
-  }
+  visits = visits.filter(v => matchesKamScope(v.kamId, filters));
   return visits;
 }
 

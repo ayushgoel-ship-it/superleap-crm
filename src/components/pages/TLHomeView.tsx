@@ -28,6 +28,11 @@ import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from
 import { getFilteredLeads, getFilteredDCFLeads, isStockIn, isInspection } from '../../data/canonicalMetrics';
 import type { MetricFilters } from '../../data/canonicalMetrics';
 import { getConfigIncentiveSlabs, getConfigScoreGates, getConfigDCFPayoutRules, getConfigI2SITarget, getConfigSITarget } from '../../lib/configFromDB';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
+import { TLInputMetricsCard } from '../tl/TLInputMetricsCard';
+import { TLTeamOutputStrip } from '../tl/TLTeamOutputStrip';
+import { TLIncentiveCard } from '../tl/TLIncentiveCard';
 
 // ── Types ──
 
@@ -37,6 +42,7 @@ type TLPeriod = TimePeriod;
 type KAMStatus = 'On Track' | 'Needs Attention' | 'Critical';
 
 interface KAMData {
+  id: string;
   name: string;
   city: string;
   inputScore: number;
@@ -84,7 +90,7 @@ interface TLIncentiveData {
 interface TLHomeViewProps {
   selectedPeriod: TimePeriod;
   onPeriodChange: (period: TimePeriod) => void;
-  onKAMClick?: (kamName: string, kamCity: string) => void;
+  onKAMClick?: (kamName: string, kamCity: string, kamId: string) => void;
 }
 
 // ── LMTD Helpers ──
@@ -123,16 +129,21 @@ function LmtdMarker({ direction, label, variant = 'dark' }: { direction: Momentu
 
 // ── Canonical Data by Period ──
 
-function getTLData(period: TLPeriod): {
+function getTLData(
+  period: TLPeriod,
+  customFrom: string | undefined,
+  customTo: string | undefined,
+  kamIds: string[] | undefined,
+): {
   overview: TLOverview;
   kamData: KAMData[];
   incentive: TLIncentiveData;
   lmtd: TLLmtd;
 } {
-  const filters: MetricFilters = { period };
+  const filters: MetricFilters = { period, customFrom, customTo, kamIds };
   const leads = getFilteredLeads(filters);
   const dcfLeads = getFilteredDCFLeads(filters);
-  const lmtdFilters: MetricFilters = { period: TimePeriod.LMTD };
+  const lmtdFilters: MetricFilters = { period: TimePeriod.LMTD, kamIds };
   const lmtdLeads = getFilteredLeads(lmtdFilters);
   const lmtdDCF = getFilteredDCFLeads(lmtdFilters);
 
@@ -164,6 +175,7 @@ function getTLData(period: TLPeriod): {
     const lmtdSIPct = siTargetPerKAM > 0 ? Math.round((lmtdSI / siTargetPerKAM) * 100) : 0;
 
     return {
+      id: kamId,
       name: data.kamName,
       city: data.city,
       inputScore: Math.min(95, 60 + Math.round(si * 1.5)), // Derived score
@@ -296,7 +308,8 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
   const [showIncentiveDrawer, setShowIncentiveDrawer] = useState(false);
   const [momentumExpanded, setMomentumExpanded] = useState(false);
 
-  const { overview, kamData, incentive, lmtd } = getTLData(timePeriod);
+  const { effectiveKamIds, actorName, role } = useActorScope();
+  const { overview, kamData, incentive, lmtd } = getTLData(timePeriod, customFrom, customTo, effectiveKamIds);
 
   // Computed insights (ALL LOGIC PRESERVED)
   const kamsBelowI2SI = kamData.filter(k => k.i2si < k.i2siTarget).length;
@@ -355,8 +368,19 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
   return (
     <div className="animate-fade-in">
 
+      {/* ═══ TL Header: Name + KAM filter ═══ */}
+      {(role === 'TL' || role === 'Admin') && (
+        <div className="px-4 pt-4 pb-1 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Team Lead</div>
+            <div className="text-[15px] font-bold text-slate-900 truncate">{actorName || 'Team Lead'}</div>
+          </div>
+          <KAMFilter />
+        </div>
+      )}
+
       {/* ═══ Period Chips ═══ */}
-      <div className="px-4 pt-5 pb-2">
+      <div className="px-4 pt-3 pb-2">
         <TimeFilterControl
           mode="chips"
           chipStyle="pill"
@@ -494,6 +518,22 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
       </div>
 
       {/* ═════════════════════════════════════════════════
+           1.5️⃣ TEAM INPUT METRICS + TEAM OUTPUT STRIP
+         ══════════════════════════════════════════════════ */}
+      <TLInputMetricsCard
+        effectiveKamIds={effectiveKamIds}
+        period={timePeriod}
+        customFrom={customFrom || undefined}
+        customTo={customTo || undefined}
+      />
+      <TLTeamOutputStrip
+        effectiveKamIds={effectiveKamIds}
+        period={timePeriod}
+        customFrom={customFrom || undefined}
+        customTo={customTo || undefined}
+      />
+
+      {/* ═════════════════════════════════════════════════
            2️⃣ INCENTIVE VIEW COMMAND BUTTON
          ══════════════════════════════════════════════════ */}
       <div className="px-4 mt-3 flex items-center gap-2">
@@ -513,6 +553,16 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
         </span>
         <span className="text-[10px] text-slate-400">projected</span>
       </div>
+
+      {/* ═════════════════════════════════════════════════
+           2.5️⃣ TL INCENTIVE CARD (locked formula)
+         ══════════════════════════════════════════════════ */}
+      <TLIncentiveCard
+        effectiveKamIds={effectiveKamIds}
+        period={timePeriod}
+        customFrom={customFrom || undefined}
+        customTo={customTo || undefined}
+      />
 
       {/* ══════════════════════════════════════════════════
            3️⃣ PRODUCTIVITY SNAPSHOT + MOMENTUM RISK
@@ -633,7 +683,7 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
             return (
               <button
                 key={kam.name}
-                onClick={() => onKAMClick?.(kam.name, kam.city)}
+                onClick={() => onKAMClick?.(kam.name, kam.city, kam.id)}
                 className={`w-full card-premium p-3.5 text-left active:scale-[0.99] transition-all duration-150
                   ${status === 'Critical' ? 'ring-1 ring-rose-200' : status === 'Needs Attention' ? 'ring-1 ring-amber-200' : ''}
                 `}

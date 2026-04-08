@@ -123,11 +123,11 @@ export interface ReassignImpact {
   leads_affected: number;
   calls_affected: number;
   visits_affected: number;
-  new_kam_id: string;
+  new_kam_id: string | null;
   new_tl_id: string | null;
 }
 
-export async function reassignDealers(dealer_ids: string[], new_kam_id: string, dry_run = false) {
+export async function reassignDealers(dealer_ids: string[], new_kam_id: string | null, dry_run = false) {
   const r = await invoke<{ ok: true; dry_run?: boolean; impact: ReassignImpact }>(
     'mgmt-reassign-dealers',
     { dealer_ids, new_kam_id, dry_run },

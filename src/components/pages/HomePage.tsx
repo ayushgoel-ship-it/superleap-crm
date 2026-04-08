@@ -19,6 +19,10 @@ import {
 import { getSITarget } from '../../lib/metricsEngine';
 import { calculateActualProjectedIncentive, type IncentiveContext } from '../../lib/incentiveEngine';
 import { getConfigSITarget, getConfigI2SITarget } from '../../lib/configFromDB';
+import { useKamScope } from '../../lib/auth/useKamScope';
+import { prorateTarget } from '../../lib/metrics/prorateTarget';
+import { computeInputScore } from '../../lib/metrics/inputScore';
+import { SectionHeader } from '../primitives';
 
 interface HomePageProps {
   userRole: UserRole;
@@ -27,9 +31,10 @@ interface HomePageProps {
 }
 
 export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivity }: HomePageProps) {
+  const kamScopeId = useKamScope();
   const [showSimulator, setShowSimulator] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>(TimePeriod.MTD);
-  const [selectedKAM, setSelectedKAM] = useState<{ name: string, city: string } | null>(null);
+  const [selectedKAM, setSelectedKAM] = useState<{ id: string, name: string, city: string } | null>(null);
   const [showInspectingDealersDetail, setShowInspectingDealersDetail] = useState(false);
   const [expandedInspections, setExpandedInspections] = useState(false);
   const [expandedI2SI, setExpandedI2SI] = useState(false);
@@ -73,6 +78,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
   if (selectedKAM) {
     return (
       <KAMDetailPage
+        kamId={selectedKAM.id}
         kamName={selectedKAM.name}
         kamCity={selectedKAM.city}
         onBack={() => setSelectedKAM(null)}
@@ -85,13 +91,13 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
       <TLHomeView
         selectedPeriod={selectedPeriod}
         onPeriodChange={setSelectedPeriod}
-        onKAMClick={(name, city) => setSelectedKAM({ name, city })}
+        onKAMClick={(name, city, id) => setSelectedKAM({ id, name, city })}
       />
     );
   }
 
-  // ── Real data from Supabase ──
-  const metrics = computeMetrics(selectedPeriod);
+  // ── Real data from Supabase (KAM-scoped when role=KAM) ──
+  const metrics = computeMetrics(selectedPeriod, kamScopeId, customFrom, customTo);
   const { daysElapsed: daysElapsedInMonth, totalDays: totalDaysInMonth } = getMonthProgress();
 
   // Mapped data shape for the dashboard
@@ -115,20 +121,33 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
     inspections: metrics.totalLeads,
     quality: metrics.callConnectRate,
     a2c: metrics.conversionRate,
-    inputScore: Math.round(
-      (Math.min(metrics.completedVisits / 3, 1) * 30) +
-      (Math.min(metrics.totalCalls / 5, 1) * 30) +
-      (Math.min(metrics.uniqueDealersCalled / 3, 1) * 20) +
-      (Math.min(metrics.conversionRate / 50, 1) * 20)
-    ),
+    inputScore: computeInputScore(metrics),
     uniqueRaise: metrics.activeDealers > 0 ? Math.round((metrics.uniqueDealersCalled / metrics.activeDealers) * 100) : 0,
     avgInspectingDealers: metrics.uniqueDealersVisited > 0 ? metrics.uniqueDealersVisited : 0,
   };
 
+  // ── Targets — both numerators (above) and denominators (here) MUST follow the
+  // selected TimePeriod. Count-style targets (Stock-in, Inspections, DCF, visits,
+  // connects) are stored monthly and prorated via prorateTarget(). Rate-style
+  // targets (I2SI%, A2C%, Quality%, Unique Raise%) are NOT prorated — a percent
+  // doesn't shrink with the window.
+  const monthlyInspectionsTarget = 250;
+  const monthlySITarget = getConfigSITarget('KAM');
+  const monthlyDCFDisbursementTarget = 25;
+  const monthlyVisitsTarget = 8 * 30; // ~8/day baseline → 240/month
+  const monthlyConnectsTarget = 60; // 60 connects/month baseline
+  const monthlyInputScoreTarget = 85; // input-score is a 0-100 composite, not prorated
+  const prorateOpts = { customFrom, customTo };
   const targets = {
-    inspections: selectedPeriod === TimePeriod.TODAY || selectedPeriod === TimePeriod.D_MINUS_1 ? 10 : 250,
+    inspections: prorateTarget(monthlyInspectionsTarget, selectedPeriod, prorateOpts),
     i2si: getConfigI2SITarget('KAM'),
     a2c: 65,
+    stockIn: prorateTarget(monthlySITarget, selectedPeriod, prorateOpts),
+    dcfDisbursals: prorateTarget(monthlyDCFDisbursementTarget, selectedPeriod, prorateOpts),
+    visits: prorateTarget(monthlyVisitsTarget, selectedPeriod, prorateOpts),
+    connects: prorateTarget(monthlyConnectsTarget, selectedPeriod, prorateOpts),
+    inspectingDealersPerDay: 3, // already a per-day rate
+    inputScore: monthlyInputScoreTarget,
   };
 
   const getInspectionsBreakdown = () => {
@@ -373,9 +392,9 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
           <span className="text-[11px] font-medium text-indigo-600">View all</span>
         </div>
         <div className="space-y-3">
-          <TargetCard title="Stock-in" target={getConfigSITarget('KAM')} achieved={data.stockIns} unit="units" />
-          <TargetCard title="I2SI%" target={getConfigI2SITarget('KAM')} achieved={data.i2si} unit="%" inverse />
-          <TargetCard title="DCF Disbursement" target={25} achieved={data.dcfDisbursals} unit="loans" />
+          <TargetCard title="Stock-in" target={targets.stockIn} achieved={data.stockIns} unit="units" />
+          <TargetCard title="I2SI%" target={targets.i2si} achieved={data.i2si} unit="%" inverse />
+          <TargetCard title="DCF Disbursement" target={targets.dcfDisbursals} achieved={data.dcfDisbursals} unit="loans" />
         </div>
       </div>
 
@@ -461,12 +480,13 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
           {/* Input Score Card */}
           <InputScoreCard
             data={{
-              visits: metrics.completedVisits, targetVisits: 8, connects: metrics.connectedCalls, targetConnects: 60,
-              avgInspectingDealers: metrics.uniqueDealersVisited, targetInspectingDealers: 3,
+              visits: metrics.completedVisits, targetVisits: targets.visits,
+              connects: metrics.connectedCalls, targetConnects: targets.connects,
+              avgInspectingDealers: metrics.uniqueDealersVisited, targetInspectingDealers: targets.inspectingDealersPerDay,
               uniqueRaisePercent: data.uniqueRaise, targetUniqueRaise: 75,
               raiseQuality: metrics.callConnectRate / 100, hbtpValue: 1.0, targetQualityRatio: 0.85,
             }}
-            targetScore={85}
+            targetScore={targets.inputScore}
             mode="KAM"
           />
 
@@ -586,9 +606,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
         <div className="space-y-4">
           {/* Top of Funnel */}
           <div>
-            <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Top of Funnel
-            </h3>
+            <SectionHeader title="Top of Funnel" />
             <div className="space-y-3">
               {(() => {
                 const currentDay = daysElapsedInMonth;
@@ -642,7 +660,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
               <MetricCard
                 title="I2SI%"
                 value={`${data.i2si}%`}
-                subtitle={`Inspection to SI \u2022 Target: ${targets.i2si}%`}
+                subtitle={`Inspection to SI \u2022 Target: ${targets.i2si}% (static)`}
                 trend={{ direction: data.i2si >= targets.i2si ? 'up' : 'down', value: '3%' }}
                 status={getI2SIRAG(data.i2si, targets.i2si)}
                 clickable
@@ -670,9 +688,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
 
           {/* Bottom of Funnel */}
           <div>
-            <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Bottom of Funnel
-            </h3>
+            <SectionHeader title="Bottom of Funnel" />
             <div className="space-y-3">
               <MetricCard
                 title="Quality %"
@@ -706,7 +722,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
               <MetricCard
                 title="A2C% (Accepted to Converted)"
                 value={`${data.a2c}%`}
-                subtitle={`Stock-in rate \u2022 Target: ${targets.a2c}%`}
+                subtitle={`Stock-in rate \u2022 Target: ${targets.a2c}% (static)`}
                 trend={{ direction: data.a2c >= targets.a2c ? 'up' : 'down', value: '7%' }}
                 status={getI2SIRAG(data.a2c, targets.a2c)}
                 clickable

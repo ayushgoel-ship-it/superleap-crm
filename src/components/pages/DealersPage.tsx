@@ -37,10 +37,12 @@ import { ViewModeSelector } from '../shared/ViewModeSelector';
 import { DealerDetailPageV2 } from './DealerDetailPageV2';
 import { DealerAccountCard, type DealerCardData } from '../dealers/DealerAccountCard';
 import { toast } from 'sonner@2.0.3';
-import { getAllDealers } from '../../data/selectors';
+import { getAllDealers, getDealersByKAM } from '../../data/selectors';
+import { useKamScope } from '../../lib/auth/useKamScope';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
 import { getRuntimeDBSync } from '../../data/runtimeDB';
 import { TimePeriod } from '../../lib/domain/constants';
-import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 import { deriveDealerActivityStage, isInspection, isStockIn } from '../../data/canonicalMetrics';
 import { resolveTimePeriodToRange } from '../../lib/time/resolveTimePeriod';
 
@@ -80,17 +82,23 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 ];
 
 // ── Helpers ──
-function mapDBDealerToCard(d: any): DealerCardData {
-  // Compute real MTD metrics from actual Supabase data
+function mapDBDealerToCard(d: any, period: TimePeriod = TimePeriod.MTD, customFrom?: string, customTo?: string): DealerCardData {
+  // Compute real metrics from actual Supabase data using canonical resolver
   const db = getRuntimeDBSync();
-  const { fromISO: monthStartISO } = resolveTimePeriodToRange(TimePeriod.MTD);
-  const monthStart = new Date(monthStartISO);
+  const { fromISO, toISO } = resolveTimePeriodToRange(period, new Date(), customFrom, customTo);
+  const rangeStart = new Date(fromISO);
+  const rangeEnd = new Date(toISO);
+  const inRange = (s?: string) => {
+    if (!s) return false;
+    const t = new Date(s);
+    return t >= rangeStart && t < rangeEnd;
+  };
 
   const dealerLeads = db.leads.filter(l => l.dealerId === d.id);
-  const dealerLeadsMTD = dealerLeads.filter(l => new Date(l.createdAt) >= monthStart);
-  const dealerCalls = db.calls.filter(c => c.dealerId === d.id && new Date(c.callDate) >= monthStart);
-  const dealerVisits = db.visits.filter(v => v.dealerId === d.id && new Date(v.visitDate) >= monthStart);
-  const dealerDCFLeads = db.dcfLeads.filter(l => l.dealerId === d.id && new Date(l.createdAt) >= monthStart);
+  const dealerLeadsMTD = dealerLeads.filter(l => inRange(l.createdAt));
+  const dealerCalls = db.calls.filter(c => c.dealerId === d.id && inRange(c.callDate));
+  const dealerVisits = db.visits.filter(v => v.dealerId === d.id && inRange(v.visitDate));
+  const dealerDCFLeads = db.dcfLeads.filter(l => l.dealerId === d.id && inRange(l.createdAt));
 
   const leadsMTD = dealerLeadsMTD.length;
   const inspectionsMTD = dealerLeadsMTD.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
@@ -171,19 +179,41 @@ export function DealersPage({
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showContextBanner, setShowContextBanner] = useState(!!navigationContext);
   const [summaryRange, setSummaryRange] = useState<SummaryRange>('mtd');
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>(TimePeriod.MTD);
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+  // DealersPage uses MTD as the canonical period — there is no per-page time
+  // filter (removed). Summary range pill (MTD / Last 30d) gates the portfolio
+  // KPI strip only.
+  const timePeriod = TimePeriod.MTD;
+  const customFrom = '';
+  const customTo = '';
 
-  // ── Data loading ──
+  // ── Data loading (role-aware: KAM → self, TL → team, Admin → all or overlay) ──
+  const kamScopeId = useKamScope();
+  const { effectiveKamIds, role: actorRole } = useActorScope();
   const [rawDealers, setRawDealers] = useState<any[]>([]);
   useEffect(() => {
-    setRawDealers(getAllDealers());
-  }, []);
+    if (kamScopeId) {
+      setRawDealers(getDealersByKAM(kamScopeId));
+    } else if (effectiveKamIds && effectiveKamIds.length > 0) {
+      // Union of dealers owned by the actor's effective KAM set.
+      const seen = new Set<string>();
+      const union: any[] = [];
+      for (const kid of effectiveKamIds) {
+        for (const d of getDealersByKAM(kid)) {
+          if (!seen.has(d.id)) {
+            seen.add(d.id);
+            union.push(d);
+          }
+        }
+      }
+      setRawDealers(union);
+    } else {
+      setRawDealers(getAllDealers());
+    }
+  }, [kamScopeId, effectiveKamIds]);
 
   const dealers: DealerCardData[] = useMemo(
-    () => rawDealers.map(mapDBDealerToCard),
-    [rawDealers]
+    () => rawDealers.map(d => mapDBDealerToCard(d, timePeriod, customFrom, customTo)),
+    [rawDealers, timePeriod, customFrom, customTo]
   );
 
   // ── Summary metrics (NOT filtered by status chips) ──
@@ -337,6 +367,11 @@ export function DealersPage({
 
       {/* ── Title Bar + Search + Sort ── */}
       <div className="glass-nav border-b border-slate-200/60 px-4 pt-4 pb-3 space-y-3">
+        {(actorRole === 'TL' || actorRole === 'Admin') && (
+          <div className="flex items-center justify-end">
+            <KAMFilter sticky />
+          </div>
+        )}
         {/* Navigation Context Banner */}
         {showContextBanner && navigationContext === 'daily-inspecting-dealers' && (
           <div className="flex items-start gap-2.5 px-3.5 py-3 bg-indigo-50 border border-indigo-100 rounded-2xl animate-scale-in">
@@ -411,44 +446,9 @@ export function DealersPage({
         </div>
       </div>
 
-      {/* ── Time Filter ── */}
-      <div className="px-4 pt-2">
-        <TimeFilterControl
-          mode="chips"
-          chipStyle="pill"
-          value={timePeriod}
-          onChange={setTimePeriod}
-          options={CANONICAL_TIME_OPTIONS}
-          labelOverrides={CANONICAL_TIME_LABELS}
-          allowCustom
-          customFrom={customFrom}
-          customTo={customTo}
-          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
-        />
-      </div>
-
       {/* ── Portfolio Summary Section ── */}
       <div className="mx-4 mt-3 space-y-2.5">
-        {/* Range toggle */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Portfolio</h2>
-          <div className="flex bg-slate-100 rounded-lg p-0.5">
-            {([
-              { key: 'mtd' as SummaryRange, label: 'MTD' },
-              { key: 'last-30' as SummaryRange, label: 'Last 30d' },
-            ]).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setSummaryRange(key)}
-                className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all duration-200
-                  ${summaryRange === key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}
-                `}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <h2 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Portfolio</h2>
 
         {/* KPI pills */}
         <div className="grid grid-cols-5 gap-1.5 bg-slate-100/60 rounded-2xl p-1.5">

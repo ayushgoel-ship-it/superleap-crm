@@ -17,6 +17,7 @@ export interface DCFLeadCardVM {
   car: string;
   carValue: number;
   loanAmount: number | null;
+  finalOfferLtv: number | null;
   city: string;
   dealerName: string;
   dealerCode: string;
@@ -121,6 +122,7 @@ function toDCFLeadCardVM(lead: DCFLead): DCFLeadCardVM {
     car: lead.car,
     carValue: lead.carValue,
     loanAmount: lead.loanAmount ?? null,
+    finalOfferLtv: lead.finalOfferLtv ?? null,
     city: lead.city,
     dealerName: lead.dealerName,
     dealerCode: lead.dealerCode,

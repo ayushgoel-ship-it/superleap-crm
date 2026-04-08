@@ -10,6 +10,8 @@ interface DCFDealerDetailPageProps {
   onBack: () => void;
   dealerId: string;
   dateRange: string;
+  customFrom?: string;
+  customTo?: string;
 }
 
 interface LeadSummary {
@@ -40,17 +42,17 @@ function statusToStageColor(status: string): string {
   return 'gray';
 }
 
-export function DCFDealerDetailPage({ onBack, dealerId, dateRange }: DCFDealerDetailPageProps) {
+export function DCFDealerDetailPage({ onBack, dealerId, dateRange, customFrom, customTo }: DCFDealerDetailPageProps) {
   // Derive dealer + DCF data from canonical sources
   const { dealer, recentLeads, recentDisbursals } = useMemo(() => {
     const period = (Object.values(TimePeriod).includes(dateRange as TimePeriod)
       ? dateRange as TimePeriod
       : TimePeriod.MTD);
     const rawDealer = getDealerById(dealerId);
-    const dcfLeads = getFilteredDCFLeads({ period }).filter(l => l.dealerId === dealerId);
+    const dcfLeads = getFilteredDCFLeads({ period, customFrom, customTo }).filter(l => l.dealerId === dealerId);
     const disbursed = dcfLeads.filter(l => l.overallStatus === 'DISBURSED');
     const totalDisbursalAmount = disbursed.reduce((s, l) => s + (l.loanAmount ?? 0), 0);
-    const metrics = getDealerLeadMetrics(dealerId, { period });
+    const metrics = getDealerLeadMetrics(dealerId, { period, customFrom, customTo });
     const activityStage = deriveDealerActivityStage(metrics, rawDealer?.status);
 
     const dealerData = {
@@ -89,7 +91,7 @@ export function DCFDealerDetailPage({ onBack, dealerId, dateRange }: DCFDealerDe
     }));
 
     return { dealer: dealerData, recentLeads: leads, recentDisbursals: disbs };
-  }, [dealerId]);
+  }, [dealerId, dateRange, customFrom, customTo]);
 
   const filterChips = [
     { label: 'Channel', value: 'DCF' },

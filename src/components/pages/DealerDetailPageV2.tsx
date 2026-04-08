@@ -30,7 +30,7 @@
  * └─────────────────────────────────────────────────────┘
  */
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft, Phone, MapPin, StickyNote, ChevronRight,
   Clock, TrendingUp, FileText, Users,
@@ -43,6 +43,7 @@ import {
   getVisitsByDealerId, getDCFLeadsByDealerId, toggleTopDealer
 } from '../../data/selectors';
 import { getDealerLeadMetrics, getFilteredCalls, getFilteredVisits, deriveDealerActivityStage, type DealerLeadMetrics } from '../../data/canonicalMetrics';
+import { setDealerIsTop } from '../../data/supabaseRaw';
 import { TimePeriod } from '../../lib/domain/constants';
 import type { UserRole } from '../../lib/shared/appTypes';
 import { StatusChip, FilterChip } from '../premium/Chip';
@@ -51,10 +52,9 @@ import { EmptyState, InlineEmpty } from '../premium/EmptyState';
 import { CardSkeleton } from '../premium/SkeletonLoader';
 import { DCFOnboardingFlow, DCFOnboardingStatus } from '../dcf/DCFOnboardingFlow';
 import { useActivity } from '../../contexts/ActivityContext';
+import { useAuth } from '../auth/AuthProvider';
 import { UnifiedFeedbackModal } from '../activity/VisitModals';
-import type { UnifiedFeedbackData } from '../activity/visitHelpers';
-import * as visitApi from '../../api/visit.api';
-import { enqueue } from '../../lib/feedbackRetryQueue';
+import { useCanonicalCallFlow } from '../../lib/activity/useCanonicalCallFlow';
 import { toast } from 'sonner@2.0.3';
 
 // ── Types ──
@@ -183,8 +183,8 @@ export function DealerDetailPageV2({
   // ── Canonical metrics (timeframe-aware) ──
   const canonicalDealerMetrics = useMemo(() => {
     if (!dealer) return { leadsMTD: 0, inspectionsMTD: 0, sisMTD: 0, dcfMTD: 0 };
-    return getDealerLeadMetrics(dealer.id, { period: timePeriod });
-  }, [dealer, timePeriod]);
+    return getDealerLeadMetrics(dealer.id, { period: timePeriod, customFrom, customTo });
+  }, [dealer, timePeriod, customFrom, customTo]);
 
   // ── Metrics ──
   const metrics = useMemo(() => {
@@ -260,133 +260,26 @@ export function DealerDetailPageV2({
     toast.success('Note added');
   };
 
-  // ── Call flow state machine ──
-  // States: idle → calling → feedback → done
-  type CallFlowState = 'idle' | 'calling' | 'feedback' | 'prompt';
-  const [callFlowState, setCallFlowState] = useState<CallFlowState>('idle');
-  const [callStartTime, setCallStartTime] = useState<number>(0);
-  const [pendingCallId, setPendingCallId] = useState<string | null>(null);
-  const callTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ActivityContext for tracking calls
-  const { addCall, updateCall, getCallsByDealer } = useActivity();
-
-  // Merge ActivityContext calls into timeline for real-time updates
+  // ── Canonical call flow (shared with KAMStartTab via useCanonicalCallFlow) ──
+  // Previously this component had a stale flow that called registerCall a
+  // SECOND time at submit-time with a fallback `call-${Date.now()}` id when
+  // pendingCallId was null. That non-UUID id failed the UUID_RE guard in
+  // visit.api.ts and crashed the page. The hook owns dial-time
+  // addCall→registerCall (real UUID) and submit-time submitCallFeedback
+  // (UPDATE only, no second registerCall).
+  const callFlow = useCanonicalCallFlow({ origin: 'dealer_detail' });
+  const { getCallsByDealer } = useActivity();
+  useAuth(); // preserve auth side-effects (cookie refresh, etc)
   const activityCalls = dealer ? getCallsByDealer(dealer.id) : [];
 
   const handleInitiateCall = () => {
-    const phone = dealer?.phone || '+919876543210';
-    const now = Date.now();
-    setCallStartTime(now);
-    setCallFlowState('calling');
-
-    // Open device dialer
-    window.open(`tel:${phone}`, '_self');
-
-    // Create a pending-feedback call entry immediately
-    const dummySnapshot = { leads: 0, inspections: 0, stockIns: 0, dcfLeads: 0, dcfOnboarded: 0, dcfDisbursed: 0 };
-    const newCall = addCall({
+    callFlow.startCall({
       dealerId: dealer?.id || dealerCode,
       dealerName,
       dealerCode,
       dealerCity,
-      kamName: kamOwner,
-      createdAt: new Date().toISOString(),
-      status: 'pending-feedback',
-      connected: false,
-      tags: [],
-      originContext: {
-        origin: 'dealer_detail',
-        dealerId: dealer?.id,
-        dealerName,
-        dealerCode,
-      },
-      beforeSnapshot: dummySnapshot,
-      afterSnapshot: dummySnapshot,
-      productiveStatus: 'pending',
+      phone: dealer?.phone,
     });
-    setPendingCallId(newCall.id);
-
-    // After a brief delay (simulating call returning to app), show feedback sheet
-    // In production, this would be triggered by app resume or telephony API
-    callTimerRef.current = setTimeout(() => {
-      setCallFlowState('feedback');
-    }, 3000);
-  };
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (callTimerRef.current) clearTimeout(callTimerRef.current);
-    };
-  }, []);
-
-  const handleCallFeedbackSubmit = async (feedback: UnifiedFeedbackData) => {
-    const callId = pendingCallId || `call-${Date.now()}`;
-    if (pendingCallId) {
-      updateCall(pendingCallId, {
-        status: 'completed',
-        connected: true,
-        outcome: `Rating: ${feedback.rating}/5 | Met: ${feedback.meetingPersonRole}`,
-        notes: feedback.note || 'Feedback submitted',
-        duration: Math.max(1, Math.floor((Date.now() - callStartTime) / 1000)),
-        productiveStatus: feedback.leadShared ? 'productive' : 'non_productive',
-        productiveReason: feedback.leadShared ? 'Lead discussion during call' : 'Standard call',
-      });
-    }
-    setPendingCallId(null);
-    setCallFlowState('idle');
-    toast.success('Call feedback saved', {
-      description: `${dealerName} · Rating: ${feedback.rating}/5`,
-    });
-
-    // Persist to DB
-    try {
-      await visitApi.registerCall({
-        id: callId,
-        dealerId: dealer?.id || dealerCode,
-        dealerName,
-        dealerCode,
-        dealerCity,
-        userId: 'current-user',
-        kamName: kamOwner,
-        durationSeconds: Math.max(1, Math.floor((Date.now() - callStartTime) / 1000)),
-      });
-      await visitApi.submitCallFeedback(callId, {
-        interactionType: 'CALL',
-        meetingPersonRole: feedback.meetingPersonRole,
-        meetingPersonOtherText: feedback.meetingPersonOtherText,
-        leadShared: feedback.leadShared,
-        leadStatus: feedback.leadStatus,
-        sellerLeadCount: feedback.sellerLeadCount,
-        buyerLeadCount: feedback.buyerLeadCount,
-        inspectionExpected: feedback.inspectionExpected,
-        dcfDiscussed: feedback.dcfDiscussed,
-        dcfStatus: feedback.dcfStatus,
-        dcfCreditRange: feedback.dcfCreditRange,
-        dcfDocsCollected: feedback.dcfDocsCollected,
-        note: feedback.note,
-        rating: feedback.rating,
-      });
-    } catch (err: any) {
-      console.error('[DealerDetail] Failed to persist call feedback:', err);
-      enqueue('call-feedback', callId, feedback as any);
-      toast.info('Feedback queued for retry');
-    }
-  };
-
-  const handleCallFeedbackSkip = () => {
-    // Call still appears as "pending-feedback" in Activity
-    setPendingCallId(null);
-    setCallFlowState('idle');
-    toast.info('Call logged as feedback pending', {
-      description: 'You can add feedback later from Activity',
-    });
-  };
-
-  const handleCallFeedbackClose = () => {
-    // User closed the sheet — show prompt mode
-    setCallFlowState('prompt');
   };
 
   // Enhanced timeline: merge mock DB entries + ActivityContext entries
@@ -503,6 +396,8 @@ export function DealerDetailPageV2({
               const newStatus = toggleTopDealer(dealerCode);
               toast.success(newStatus ? 'Marked as Top Dealer' : 'Removed Top Dealer status');
               setForceUpdate(prev => prev + 1);
+              // Persist canonically to dealers_master.is_top via Supabase.
+              setDealerIsTop(dealerCode, newStatus).catch(() => {});
             }}
             className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold border transition-all active:scale-95
               ${dealer?.isTopDealer
@@ -520,17 +415,17 @@ export function DealerDetailPageV2({
         <div className="flex gap-2">
           <button
             onClick={handleInitiateCall}
-            disabled={callFlowState !== 'idle'}
+            disabled={!!callFlow.pendingCall}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold
                        rounded-xl active:scale-95 transition-all min-h-[44px]
-                       ${callFlowState === 'calling' ? 'bg-emerald-600 text-white animate-pulse' :
+                       ${callFlow.pendingCall ? 'bg-emerald-600 text-white animate-pulse' :
                          nextAction.label === 'Call' ? 'bg-indigo-600 text-white hover:bg-indigo-700' :
                          'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}
                        disabled:opacity-60
             `}
           >
             <Phone className="w-3.5 h-3.5" />
-            {callFlowState === 'calling' ? 'Calling...' : 'Call'}
+            {callFlow.pendingCall ? 'Calling...' : 'Call'}
           </button>
           <button onClick={() => { setActiveSection('notes'); setTimeout(() => document.getElementById('note-input')?.focus(), 100); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold
@@ -929,52 +824,21 @@ export function DealerDetailPageV2({
         )}
       </div>
 
-      {/* ═══ CALL FEEDBACK OVERLAY ═══ */}
-      {callFlowState === 'feedback' && (
+      {/* ═══ CALL FEEDBACK OVERLAY (canonical hook) ═══ */}
+      {callFlow.pendingCall && (
         <UnifiedFeedbackModal
           interactionType="CALL"
           dealerName={dealerName}
-          visitId={pendingCallId || ''}
-          onSubmit={handleCallFeedbackSubmit}
+          visitId={callFlow.pendingCall.id}
+          onSubmit={callFlow.submitFeedback}
           closeable
-          onClose={handleCallFeedbackClose}
+          onClose={() => {
+            callFlow.closeFeedback();
+            toast.info('Call logged as feedback pending', {
+              description: 'You can add feedback later from Activity',
+            });
+          }}
         />
-      )}
-
-      {/* ═══ CALL FEEDBACK PROMPT (lightweight) ═══ */}
-      {callFlowState === 'prompt' && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={handleCallFeedbackSkip} />
-          <div className="relative w-full max-w-lg mx-4 mb-6">
-            <div className="bg-white rounded-2xl shadow-xl shadow-slate-300/40 border border-slate-100 p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
-                  <Phone className="w-4 h-4 text-indigo-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-slate-800">Add call feedback?</p>
-                  <p className="text-[11px] text-slate-400">{dealerName}</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCallFlowState('feedback')}
-                  className="flex-1 py-2.5 bg-indigo-600 text-white text-[12px] font-semibold rounded-xl
-                             hover:bg-indigo-700 active:scale-95 transition-all"
-                >
-                  Add feedback
-                </button>
-                <button
-                  onClick={handleCallFeedbackSkip}
-                  className="px-4 py-2.5 bg-slate-100 text-slate-600 text-[12px] font-semibold rounded-xl
-                             hover:bg-slate-200 active:scale-95 transition-all"
-                >
-                  Skip
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

@@ -3,18 +3,25 @@ import { ArrowLeft, IndianRupee } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { getFilteredDCFLeads } from '../../data/canonicalMetrics';
 import { TimePeriod } from '../../lib/domain/constants';
+import { useKamScope } from '../../lib/auth/useKamScope';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
 
 interface DCFDisbursalsListPageProps {
   onBack: () => void;
   dateRange: string;
+  customFrom?: string;
+  customTo?: string;
 }
 
-export function DCFDisbursalsListPage({ onBack, dateRange }: DCFDisbursalsListPageProps) {
+export function DCFDisbursalsListPage({ onBack, dateRange, customFrom, customTo }: DCFDisbursalsListPageProps) {
+  const kamScopeId = useKamScope();
+  const { effectiveKamIds, role: actorRole } = useActorScope();
   const disbursals = useMemo(() => {
     const period = (Object.values(TimePeriod).includes(dateRange as TimePeriod)
       ? dateRange as TimePeriod
       : TimePeriod.MTD);
-    const raw = getFilteredDCFLeads({ period }).filter(l => l.overallStatus === 'DISBURSED');
+    const raw = getFilteredDCFLeads({ period, kamId: kamScopeId, kamIds: effectiveKamIds, customFrom, customTo }).filter(l => l.overallStatus === 'DISBURSED');
     return raw.map(lead => ({
       id: lead.id,
       loanId: lead.id,
@@ -27,7 +34,7 @@ export function DCFDisbursalsListPage({ onBack, dateRange }: DCFDisbursalsListPa
       disbursedDate: (lead as any).disbursalDate ?? lead.createdAt,
       tenure: lead.tenure ? `${lead.tenure} months` : '–',
     }));
-  }, [dateRange]);
+  }, [dateRange, kamScopeId, effectiveKamIds, customFrom, customTo]);
 
   const filterChips = [
     { label: 'Section', value: 'Loans' },
@@ -51,7 +58,8 @@ export function DCFDisbursalsListPage({ onBack, dateRange }: DCFDisbursalsListPa
           <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-gray-900">DCF Disbursals</h1>
+          <h1 className="text-gray-900 flex-1">DCF Disbursals</h1>
+          {(actorRole === 'TL' || actorRole === 'Admin') && <KAMFilter />}
         </div>
         
         {/* Filter Chips */}

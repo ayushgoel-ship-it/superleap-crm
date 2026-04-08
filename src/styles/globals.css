@@ -212,6 +212,25 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* === Semantic status tokens (Wave D1) ===
+   * Single source for success / warning / danger / info / neutral.
+   * Migrate emerald/amber/rose, green/amber/red, success/info/warning palettes here. */
+  --color-semantic-success: #059669;     /* emerald-600 */
+  --color-semantic-success-bg: #ecfdf5;  /* emerald-50  */
+  --color-semantic-success-border: #a7f3d0; /* emerald-200 */
+  --color-semantic-warning: #d97706;     /* amber-600 */
+  --color-semantic-warning-bg: #fffbeb;  /* amber-50  */
+  --color-semantic-warning-border: #fde68a; /* amber-200 */
+  --color-semantic-danger: #e11d48;      /* rose-600 */
+  --color-semantic-danger-bg: #fff1f2;   /* rose-50  */
+  --color-semantic-danger-border: #fecdd3; /* rose-200 */
+  --color-semantic-info: #4f46e5;        /* indigo-600 */
+  --color-semantic-info-bg: #eef2ff;     /* indigo-50  */
+  --color-semantic-info-border: #c7d2fe; /* indigo-200 */
+  --color-semantic-neutral: #475569;     /* slate-600 */
+  --color-semantic-neutral-bg: #f8fafc;  /* slate-50  */
+  --color-semantic-neutral-border: #e2e8f0; /* slate-200 */
 }
 
 @layer base {

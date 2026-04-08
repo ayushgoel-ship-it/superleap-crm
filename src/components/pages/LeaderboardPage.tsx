@@ -23,6 +23,8 @@ import { TimePeriod } from '../../lib/domain/constants';
 import { getFilteredLeads, getFilteredDCFLeads, isStockIn, isInspection } from '../../data/canonicalMetrics';
 import { getAllTLs } from '../../data/selectors';
 import { getSITarget } from '../../lib/metricsEngine';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
 
 // ── Display weights for ranking formula (display only — not used in math)
 // These reflect the business formula: Rank = SI_WEIGHT% SI-equiv + DCF_WEIGHT% projected achievement%
@@ -93,10 +95,12 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [scope, setScope] = useState<Scope>(userRole === 'TL' || userRole === 'Admin' ? 'tl' : 'kam');
+  const { effectiveKamIds, role: actorRole, actorName } = useActorScope();
   const data: LeaderboardResponse | null = useMemo(() => {
-    // Get all leads for the selected period
-    const leads = getFilteredLeads({ period });
-    const dcfLeads = getFilteredDCFLeads({ period });
+    // For KAM-scope, apply effectiveKamIds so TL sees only their team.
+    const kamScopeIds = scope === 'kam' ? effectiveKamIds : undefined;
+    const leads = getFilteredLeads({ period, customFrom, customTo, kamIds: kamScopeIds });
+    const dcfLeads = getFilteredDCFLeads({ period, customFrom, customTo, kamIds: kamScopeIds });
 
     // Get LMTD comparison data
     const lmtdLeads = getFilteredLeads({ period: TimePeriod.LMTD });
@@ -252,7 +256,7 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
       full_list: fullList,
       notes: `Rank = ${SI_WEIGHT}% SI-equiv (SI + 3\u00D7DCF) + ${DCF_WEIGHT}% projected achievement%. Period: ${period}.`,
     };
-  }, [period, scope]);
+  }, [period, scope, customFrom, customTo, effectiveKamIds]);
 
   const myRank = data?.your_rank_card;
   const top3 = data?.top3 || [];
@@ -269,9 +273,15 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
             </div>
             <div>
               <h1 className="text-[16px] font-bold text-slate-900">Leaderboard</h1>
-              <p className="text-[11px] text-slate-400 font-medium">{scope === 'kam' ? 'KAM Rankings' : 'TL Rankings'}</p>
+              <p className="text-[11px] text-slate-400 font-medium">
+                {scope === 'kam' ? 'KAM Rankings' : 'TL Rankings'}
+                {(actorRole === 'TL' || actorRole === 'Admin') && actorName ? ` \u00b7 ${actorName}` : ''}
+              </p>
             </div>
           </div>
+          {(actorRole === 'TL' || actorRole === 'Admin') && scope === 'kam' && (
+            <KAMFilter />
+          )}
 
           {/* Scope toggle (visible for TL/Admin) */}
           {(userRole === 'TL' || userRole === 'Admin') && (

@@ -188,13 +188,17 @@ export function LeadPipelineCard({
             </div>
             <div>
               <div className="text-[9px] text-slate-400 font-medium tracking-wide uppercase">{secondaryLabel}</div>
-              {isCepPending ? (
-                <div className="text-[10px] text-slate-300">—</div>
-              ) : (
-                <div className={`text-[12px] font-bold tabular-nums ${lead.secondaryValue > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
-                  {lead.secondaryValue > 0 ? formatMoney(lead.secondaryValue) : '--'}
-                </div>
-              )}
+              {(() => {
+                const v = lead.secondaryValue;
+                const hasValue = v != null && !Number.isNaN(v as number) && (v as number) > 0;
+                return (
+                  <div className={`text-[12px] font-bold tabular-nums ${hasValue ? 'text-emerald-600' : 'text-slate-300'}`}>
+                    {hasValue
+                      ? (isDCF ? `${Math.round(v as number)}%` : formatMoney(v as number))
+                      : '--'}
+                  </div>
+                );
+              })()}
               {rangeChip && (
                 <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded-md text-[8px] font-semibold border ${rangeChip.bg} ${rangeChip.text} ${rangeChip.border}`}>
                   {rangeChip.label}

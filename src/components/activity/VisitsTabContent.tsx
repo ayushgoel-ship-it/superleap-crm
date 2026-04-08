@@ -22,10 +22,13 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   MapPin, Navigation, AlertTriangle, Info, ChevronRight, Clock,
   User, MessageSquare, LocateFixed, Search, X,
-  List, Map as MapIcon, Loader2,
+  List, Map as MapIcon, Loader2, CheckCircle2, Phone, ClipboardCheck,
 } from 'lucide-react';
 import { useActivity, type Visit } from '../../contexts/ActivityContext';
-import { getAllDealers } from '../../data/selectors';
+import { getAllDealers, getDealersByKAM } from '../../data/selectors';
+import { useKamScope } from '../../lib/auth/useKamScope';
+import { applyDealerFilter, type DealerFilterState } from '../../lib/activity/dealerActivityFilter';
+import { useAuth } from '../auth/AuthProvider';
 import { StatusChip } from '../premium/Chip';
 import { toast } from 'sonner@2.0.3';
 
@@ -53,8 +56,7 @@ import { DealerMapView } from './DealerMapView';
 import * as visitApi from '../../api/visit.api';
 import { enqueue, getPendingCount } from '../../lib/feedbackRetryQueue';
 
-// Persistent user ID for DB operations
-const CURRENT_USER_ID = 'current-user';
+// NOTE: do not hardcode a user ID — resolve from useAuth()/useKamScope() at call sites.
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PROPS
@@ -63,6 +65,31 @@ const CURRENT_USER_ID = 'current-user';
 interface VisitsTabContentProps {
   onNavigateToVisitFeedback?: (visitId: string) => void;
   onNavigateToVisitCheckIn?: (dealerId: string, dealerName: string) => void;
+  /** Optional: when provided, filters the dealer list using canonical 4-flag filter. */
+  dealerFilter?: DealerFilterState;
+  /** Optional: precomputed inspecting key set (id+code). Required when dealerFilter is set. */
+  inspectingKeys?: Set<string>;
+  /** Optional: precomputed active-dealer key set (id+code) for Activity filter. */
+  activeKeys?: Set<string>;
+  /**
+   * When true, locks the layout to the Dealers list:
+   *   - hides the Today/Past/Dealers sub-tab bar
+   *   - hides the "pending feedback" warning
+   *   - hides the "Past Visits" + "Suggested Visit" sections
+   *   - renders the redesigned KAM dealer card (with Call + Start Visit) instead
+   *     of the legacy DealerRow.
+   */
+  lockToDealers?: boolean;
+  /** Lookup of inspection-30d counts keyed by dealerId AND dealerCode. */
+  inspectionCountByKey?: Map<string, number>;
+  /** Set of dealer keys (id+code) called in last 30d. */
+  called30dKeys?: Set<string>;
+  /** Set of dealer keys (id+code) visited in last 30d. */
+  visited30dKeys?: Set<string>;
+  /** Initiate-call handler — wired by KAMStartTab to the canonical call flow. */
+  onCallDealer?: (dealerId: string, dealerName: string, dealerCode: string) => void;
+  /** Optional slot rendered between the pinned StartVisitBlock and the dealer list. */
+  dealerListHeader?: import('react').ReactNode;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -137,7 +164,7 @@ function StartVisitBlock({
             className="px-4 py-2.5 bg-rose-600 text-white text-[12px] font-semibold rounded-xl
                        hover:bg-rose-700 active:scale-95 transition-all min-h-[38px] flex-shrink-0"
           >
-            End Visit
+            Finish Visit
           </button>
         ) : (
           <button
@@ -311,6 +338,91 @@ function DealerSearchBar({
             {label}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 5a. KAM Dealer Card (Start tab — compact, with Call + Start Visit) ──
+
+function KAMDealerCard({
+  dealer,
+  inspections30d,
+  called30d,
+  visited30d,
+  onCall,
+  onStartVisit,
+}: {
+  dealer: DealerWithDistance;
+  inspections30d: number;
+  called30d: boolean;
+  visited30d: boolean;
+  onCall: (dealerId: string, dealerName: string, dealerCode: string) => void;
+  onStartVisit: (dealerId: string, dealerName: string) => void;
+}) {
+  const initials = dealerInitials(dealer.name);
+  return (
+    <div className="bg-white rounded-2xl p-3 border border-slate-100 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+          <span className="text-[12px] font-bold text-slate-500">{initials}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-[13px] font-semibold text-slate-800 truncate">{dealer.name}</h4>
+          <span className="text-[11px] text-slate-400">{dealer.code}</span>
+        </div>
+        {dealer.distanceKm != null && (
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums flex-shrink-0 border
+            ${dealer.distanceKm <= 2
+              ? 'bg-blue-50 border-blue-200 text-blue-700'
+              : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+            {formatDistance(dealer.distanceKm)}
+          </span>
+        )}
+      </div>
+
+      {/* Stats row */}
+      <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 border border-violet-100 text-violet-700 text-[10px] font-semibold">
+          <ClipboardCheck className="w-3 h-3" />
+          {inspections30d} insp · 30d
+        </span>
+        <span
+          title="Called in last 30 days"
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border
+            ${called30d
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-slate-50 border-slate-200 text-slate-400'}`}
+        >
+          <Phone className="w-3 h-3" />
+          {called30d ? 'Called 30d' : 'No call 30d'}
+        </span>
+        <span
+          title="Visited in last 30 days"
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border
+            ${visited30d
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-slate-50 border-slate-200 text-slate-400'}`}
+        >
+          <MapPin className="w-3 h-3" />
+          {visited30d ? 'Visited 30d' : 'No visit 30d'}
+        </span>
+      </div>
+
+      {/* Actions */}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          onClick={() => onCall(dealer.id, dealer.name, dealer.code)}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-[12px] font-semibold border border-indigo-100 hover:bg-indigo-100 active:scale-[0.98] transition-all"
+        >
+          <Phone className="w-3.5 h-3.5" /> Call
+        </button>
+        <button
+          onClick={() => onStartVisit(dealer.id, dealer.name)}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-600 text-white text-[12px] font-semibold hover:bg-indigo-700 active:scale-[0.98] transition-all"
+        >
+          <MapPin className="w-3.5 h-3.5" /> Start Visit
+        </button>
       </div>
     </div>
   );
@@ -765,6 +877,15 @@ function TimeFilterBar({
 export function VisitsTabContent({
   onNavigateToVisitFeedback,
   onNavigateToVisitCheckIn,
+  dealerFilter,
+  inspectingKeys,
+  activeKeys,
+  lockToDealers = false,
+  inspectionCountByKey,
+  called30dKeys,
+  visited30dKeys,
+  onCallDealer,
+  dealerListHeader,
 }: VisitsTabContentProps) {
   // ── Location state ──
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -781,6 +902,9 @@ export function VisitsTabContent({
   const [searchQuery, setSearchQuery] = useState('');
   const [listFilters, setListFilters] = useState<Set<ListFilterKey>>(new Set());
   const [showDealerSheet, setShowDealerSheet] = useState(false);
+  const [visitsSubTab, setVisitsSubTab] = useState<'today' | 'past' | 'dealers'>(
+    lockToDealers ? 'dealers' : 'today',
+  );
 
   // ── Modal state ──
   const [geoFenceState, setGeoFenceState] = useState<GeoFenceState | null>(null);
@@ -789,17 +913,37 @@ export function VisitsTabContent({
   const [blockerModal, setBlockerModal] = useState<{ reason: string; hasNoFeedback: boolean; blockingVisit: Visit | null } | null>(null);
 
   // ── Context ──
-  const { visits, addVisit, updateVisit } = useActivity();
-  const allDealers = useMemo(() => getAllDealers(), []);
+  const { visits, addVisit, updateVisit, refresh: refreshActivity } = useActivity();
+  const kamId = useKamScope();
+  const { activeActor } = useAuth();
+  const currentUserId = activeActor?.userId || '';
+  // Scope dealer list to current KAM if KAM-scoped; otherwise fall back to all
+  const allDealers = useMemo(
+    () => {
+      const base = kamId ? getDealersByKAM(kamId) : getAllDealers();
+      if (!dealerFilter) return base;
+      return applyDealerFilter({
+        dealers: base,
+        filter: dealerFilter,
+        inspectingKeys: inspectingKeys || new Set<string>(),
+        activeKeys: activeKeys || new Set<string>(),
+        kamScopeId: kamId || undefined,
+      });
+    },
+    [kamId, dealerFilter, inspectingKeys, activeKeys],
+  );
 
   // ── Hydrate from DB on mount ──
+  // NOTE: ActivityContext now handles visits/calls hydration centrally (including
+  // periodic refresh + focus refresh). We only run the blocker check here.
   const [dbHydrated, setDbHydrated] = useState(false);
   useEffect(() => {
     if (dbHydrated) return;
+    if (!currentUserId) return;
     setDbHydrated(true);
 
     // 1. Check DB for blockers (ACTIVE / COMPLETED_NO_FEEDBACK — visits + calls)
-    visitApi.checkBlocker(CURRENT_USER_ID).then((blocker) => {
+    visitApi.checkBlocker(currentUserId).then((blocker) => {
       if (blocker.blocked && blocker.blockingVisit) {
         const bv = blocker.blockingVisit;
         // Merge DB visit into local state if not already there
@@ -830,39 +974,9 @@ export function VisitsTabContent({
       console.error('[VisitsTab] DB blocker check failed (using local state):', err);
     });
 
-    // 2. Hydrate recent visit history from DB
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    visitApi.listVisits(CURRENT_USER_ID, thirtyDaysAgo).then((dbVisits) => {
-      for (const dbv of dbVisits) {
-        const exists = visits.find((v) => v.id === dbv.id);
-        if (!exists && dbv.status === 'CLOSED') {
-          const fb = dbv.feedback;
-          addVisit({
-            id: dbv.id,
-            dealerId: dbv.dealerId,
-            dealerName: dbv.dealerName,
-            dealerCode: dbv.dealerCode,
-            dealerCity: dbv.dealerCity,
-            kamName: dbv.kamName,
-            status: 'completed',
-            checkInTime: dbv.startAt,
-            checkOutTime: dbv.endAt || undefined,
-            createdAt: dbv.createdAt,
-            lat: dbv.lat ?? undefined,
-            lng: dbv.lng ?? undefined,
-            meetingPerson: fb?.meetingPersonRole,
-            outcome: fb ? `Rating: ${fb.rating}/5 | Met: ${fb.meetingPersonRole}` : undefined,
-            notes: fb?.note || undefined,
-          });
-        }
-      }
-      if (dbVisits.length > 0) {
-        console.log(`[VisitsTab] Hydrated ${dbVisits.length} visits from DB`);
-      }
-    }).catch((err) => {
-      console.error('[VisitsTab] DB visit hydration failed:', err);
-    });
-  }, []);
+    // 2. Visits are now hydrated centrally by ActivityContext — trigger one refresh.
+    refreshActivity();
+  }, [currentUserId]);
 
   // ── Geolocation ──
   const requestLocation = useCallback(() => {
@@ -1114,52 +1228,32 @@ export function VisitsTabContent({
         lng: userLocation?.lng,
       });
 
-      // 2. Persist to DB (fire-and-forget with error logging)
-      // Pass the client-generated ID so server uses the same ID
-      visitApi.startVisit({
-        id: newVisit.id,
-        dealerId: dealer.id,
-        dealerName: dealer.name,
-        dealerCode: dealer.code,
-        dealerCity: dealer.city,
-        userId: CURRENT_USER_ID,
-        kamName: 'Current User',
-        lat: userLocation?.lat ?? null,
-        lng: userLocation?.lng ?? null,
-        distanceAtStart,
-        gpsAccuracyAtStart: userLocation?.accuracy ?? null,
-        geoVerified: true,
-      }).catch((err) => {
-        console.error('[VisitsTab] Failed to persist visit start to DB:', err);
-      });
+      // Note: ActivityContext.addVisit already persists via visitApi.startVisit
+      // using the same client-generated UUID, so no second insert is needed here.
+      void distanceAtStart;
+      void currentUserId;
 
       toast.success('Visit started', { description: `Checked in at ${dealer.name}` });
     },
     [allDealers, enrichedDealers, addVisit, userLocation, onNavigateToVisitCheckIn],
   );
 
-  // ── End visit → open mandatory feedback ──
+  // ── Finish visit → open mandatory feedback modal ──
+  //
+  // IMPORTANT: do NOT update the visit status here. The contract is:
+  //   • Tap Finish Visit → opens UnifiedFeedbackModal (VISIT mode)
+  //   • Submit feedback → submitVisitFeedback flips DB row to status='completed'
+  //     + writes feedback_data + check_out_at → refresh → block resets.
+  //   • Close modal without submit → visit row stays status='scheduled' (in
+  //     progress). StartVisitBlock still shows "Finish Visit" so the user can
+  //     retry. Nothing is lost.
   const handleEndVisit = useCallback(() => {
     if (!activeVisit) return;
-
-    // 1. Update local state
-    updateVisit(activeVisit.id, {
-      status: 'completed',
-      checkOutTime: new Date().toISOString(),
-    });
-
-    // 2. Persist end to DB
-    visitApi.endVisit(activeVisit.id).catch((err) => {
-      console.error('[VisitsTab] Failed to persist visit end to DB:', err);
-    });
-
-    // Open mandatory feedback
     setFeedbackModalVisit({
       visitId: activeVisit.id,
       dealerName: activeVisit.dealerName,
     });
-    toast.success('Visit ended', { description: `Checked out from ${activeVisit.dealerName}` });
-  }, [activeVisit, updateVisit]);
+  }, [activeVisit]);
 
   // ── Submit feedback ──
   const handleSubmitFeedback = useCallback(
@@ -1176,13 +1270,17 @@ export function VisitsTabContent({
       if (data.leadShared && data.leadStatus) outcomeDetails.push(`Leads: ${data.leadStatus}`);
       if (data.dcfDiscussed && data.dcfStatus) outcomeDetails.push(`DCF: ${data.dcfStatus}`);
 
-      // 1. Update local state — set feedbackSubmitted flag so blocker clears immediately
+      // 1. Update local state — mark visit completed + feedbackSubmitted so the
+      // pinned StartVisitBlock flips back from "Finish Visit" to "Start Visit"
+      // immediately (activeVisit memo filters status === 'in-progress').
       updateVisit(visitId, {
         meetingPerson: data.meetingPersonRole === 'Other' ? (data.meetingPersonOtherText || 'Other') : data.meetingPersonRole,
         outcome: outcomeDetails.join(' | '),
         notes: data.note || 'Feedback submitted',
         purpose: ['Visit Feedback'],
         feedbackSubmitted: true,
+        status: 'completed',
+        checkOutTime: new Date().toISOString(),
       });
 
       setFeedbackModalVisit(null);
@@ -1305,7 +1403,7 @@ export function VisitsTabContent({
         oldLng: updateLocationTarget.dealerLng,
         newLat: userLocation.lat,
         newLng: userLocation.lng,
-        userId: CURRENT_USER_ID,
+        userId: currentUserId,
         userName: 'Current User',
         reason: reason as visitApi.LocationUpdateReason,
         reasonNote,
@@ -1363,7 +1461,7 @@ export function VisitsTabContent({
       <GpsAccuracyBanner accuracy={userLocation?.accuracy ?? null} />
 
       {/* ═══ Pending Feedback Warning ═══ */}
-      {pendingFeedbackCount > 0 && !activeVisit && (
+      {!lockToDealers && pendingFeedbackCount > 0 && !activeVisit && (
         <div className="flex items-center gap-2.5 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
           <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
           <p className="text-[11px] text-amber-800 font-medium flex-1">
@@ -1392,10 +1490,34 @@ export function VisitsTabContent({
         )}
       </div>
 
-      {/* ═══ SECTION 2: Suggested Visit ═══ */}
-      {suggestedDealer && !activeVisit ? (
+      {/* Optional header slot (e.g. DealerFilterBar) — sits between pinned Start block and the list */}
+      {dealerListHeader && <div>{dealerListHeader}</div>}
+
+      {/* ═══ SUB-TABS (Today | Past Visits | Dealers) — hidden in lockToDealers mode ═══ */}
+      {!lockToDealers && (
+        <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
+          {([
+            { key: 'today' as const, label: 'Today' },
+            { key: 'past' as const, label: 'Past Visits' },
+            { key: 'dealers' as const, label: `Dealers (${filteredDealers.length})` },
+          ]).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setVisitsSubTab(key)}
+              className={`flex-1 py-2 rounded-lg text-[12px] font-semibold transition-all
+                ${visitsSubTab === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ═══ SECTION 2: Suggested Visit (Today only) ═══ */}
+      {visitsSubTab === 'today' && suggestedDealer && !activeVisit && (
         <SuggestedVisitCard dealer={suggestedDealer} onStartVisit={attemptStartVisit} />
-      ) : !activeVisit ? (
+      )}
+      {visitsSubTab === 'today' && !suggestedDealer && !activeVisit && (
         <div className="px-1">
           <h3 className="text-[13px] font-semibold text-slate-700 mb-2">Suggested Visit</h3>
           <div className="bg-slate-50 rounded-2xl p-4 text-center">
@@ -1403,9 +1525,10 @@ export function VisitsTabContent({
             <p className="text-[12px] text-slate-400">No suggested visits right now</p>
           </div>
         </div>
-      ) : null}
+      )}
 
       {/* ═══ SECTION 3: All Dealers (search + filters + list/map toggle) ═══ */}
+      {visitsSubTab === 'dealers' && (
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[13px] font-semibold text-slate-700">
@@ -1427,14 +1550,40 @@ export function VisitsTabContent({
 
             {filteredDealers.length > 0 ? (
               <div className="space-y-2">
-                {filteredDealers.map((dealer) => (
-                  <DealerRow
-                    key={dealer.id}
-                    dealer={dealer}
-                    onStartVisit={attemptStartVisit}
-                    onFillFeedback={handleFillFeedback}
-                  />
-                ))}
+                {filteredDealers.map((dealer) => {
+                  if (lockToDealers) {
+                    const idKey = String(dealer.id);
+                    const codeKey = String(dealer.code);
+                    const inspections =
+                      (inspectionCountByKey?.get(idKey) ?? 0) ||
+                      (inspectionCountByKey?.get(codeKey) ?? 0);
+                    const called =
+                      !!called30dKeys && (called30dKeys.has(idKey) || called30dKeys.has(codeKey));
+                    const visited =
+                      !!visited30dKeys && (visited30dKeys.has(idKey) || visited30dKeys.has(codeKey));
+                    return (
+                      <KAMDealerCard
+                        key={dealer.id}
+                        dealer={dealer}
+                        inspections30d={inspections}
+                        called30d={called}
+                        visited30d={visited}
+                        onCall={(id, name, code) =>
+                          onCallDealer ? onCallDealer(id, name, code) : undefined
+                        }
+                        onStartVisit={attemptStartVisit}
+                      />
+                    );
+                  }
+                  return (
+                    <DealerRow
+                      key={dealer.id}
+                      dealer={dealer}
+                      onStartVisit={attemptStartVisit}
+                      onFillFeedback={handleFillFeedback}
+                    />
+                  );
+                })}
               </div>
             ) : (
               <div className="bg-slate-50 rounded-2xl p-6 text-center">
@@ -1468,7 +1617,10 @@ export function VisitsTabContent({
         )}
       </div>
 
+      )}
+
       {/* ═══ SECTION 4: Past Visits (with time filter inside) ═══ */}
+      {visitsSubTab === 'past' && (
       <div>
         <div className="flex items-center justify-between px-1 mb-2">
           <h3 className="text-[13px] font-semibold text-slate-700">Past Visits</h3>
@@ -1507,6 +1659,8 @@ export function VisitsTabContent({
         )}
       </div>
 
+      )}
+
       {/* ═══ MODALS ═══ */}
 
       {/* Dealer Selection Bottom Sheet */}
@@ -1540,6 +1694,8 @@ export function VisitsTabContent({
           interactionType="VISIT"
           dealerName={feedbackModalVisit.dealerName}
           visitId={feedbackModalVisit.visitId}
+          closeable
+          onClose={() => setFeedbackModalVisit(null)}
           onSubmit={handleSubmitFeedback}
         />
       )}

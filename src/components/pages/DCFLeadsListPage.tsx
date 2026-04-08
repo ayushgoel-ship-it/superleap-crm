@@ -4,21 +4,28 @@ import { Badge } from '../ui/badge';
 import { getFilteredDCFLeads } from '../../data/canonicalMetrics';
 import { toDCFLeadListVM } from '../../data/adapters/dcfAdapter';
 import { TimePeriod } from '../../lib/domain/constants';
+import { useKamScope } from '../../lib/auth/useKamScope';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
 
 interface DCFLeadsListPageProps {
   onBack: () => void;
   onLeadClick: (loanId: string) => void;
   dateRange: string;
+  customFrom?: string;
+  customTo?: string;
 }
 
-export function DCFLeadsListPage({ onBack, onLeadClick, dateRange }: DCFLeadsListPageProps) {
+export function DCFLeadsListPage({ onBack, onLeadClick, dateRange, customFrom, customTo }: DCFLeadsListPageProps) {
+  const kamScopeId = useKamScope();
+  const { effectiveKamIds, role: actorRole } = useActorScope();
   const leads = useMemo(() => {
     const period = (Object.values(TimePeriod).includes(dateRange as TimePeriod)
       ? dateRange as TimePeriod
       : TimePeriod.MTD);
-    const raw = getFilteredDCFLeads({ period });
+    const raw = getFilteredDCFLeads({ period, kamId: kamScopeId, kamIds: effectiveKamIds, customFrom, customTo });
     return toDCFLeadListVM(raw);
-  }, [dateRange]);
+  }, [dateRange, kamScopeId, effectiveKamIds, customFrom, customTo]);
 
   const STAGE_COLORS: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-700',
@@ -47,7 +54,8 @@ export function DCFLeadsListPage({ onBack, onLeadClick, dateRange }: DCFLeadsLis
           <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-gray-900">DCF Leads</h1>
+          <h1 className="text-gray-900 flex-1">DCF Leads</h1>
+          {(actorRole === 'TL' || actorRole === 'Admin') && <KAMFilter />}
         </div>
         
         {/* Filter Chips */}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { UserRole } from '../../lib/shared/appTypes';
 import { IndianRupee, Trophy, Calculator } from 'lucide-react';
 import { computeMetrics, computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
+import { computeInputScore } from '../../lib/metrics/inputScore';
 import { TimePeriod } from '../../lib/domain/constants';
 import { getSITarget } from '../../lib/metricsEngine';
 import { calculateActualProjectedIncentive, type IncentiveContext, type DCFIncentiveMetrics } from '../../lib/incentiveEngine';
@@ -9,6 +10,8 @@ import { getMonthProgress } from '../../lib/metrics/metricsFromDB';
 import { getRuntimeDBSync } from '../../data/runtimeDB';
 import { getConfigI2SITarget, getConfigDCFGMVTarget } from '../../lib/configFromDB';
 import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
 
 interface PerformancePageProps {
   userRole: UserRole;
@@ -21,9 +24,43 @@ export function PerformancePage({ userRole, kamId, onNavigate, onOpenTLIncentive
   const [period, setPeriod] = useState<TimePeriod>(TimePeriod.MTD);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+  const { effectiveKamIds, role: actorRole, actorName } = useActorScope();
 
   const { targetCards, funnelData, rankText, topDealers, incentiveBreakdown, totalIncentive } = useMemo(() => {
-    const metrics = computeMetrics(period, kamId);
+    // For TL/Admin, aggregate per-kam metrics across effective team; otherwise use passed kamId.
+    const effectiveSingleKam =
+      actorRole === 'KAM'
+        ? (kamId || (effectiveKamIds && effectiveKamIds[0]))
+        : effectiveKamIds && effectiveKamIds.length === 1
+          ? effectiveKamIds[0]
+          : undefined;
+    const aggregateIds =
+      (actorRole === 'TL' || actorRole === 'Admin') && effectiveKamIds && effectiveKamIds.length > 1
+        ? effectiveKamIds
+        : undefined;
+
+    const metrics = aggregateIds
+      ? (() => {
+          const perKam = aggregateIds.map(kid => computeMetrics(period, kid, customFrom, customTo));
+          const sum = (k: keyof typeof perKam[0]) => perKam.reduce((s, m) => s + ((m as any)[k] || 0), 0);
+          const inspections = sum('inspections');
+          const stockIns = sum('stockIns');
+          return {
+            ...perKam[0],
+            totalLeads: sum('totalLeads'),
+            inspections,
+            tokens: sum('tokens'),
+            stockIns,
+            totalCalls: sum('totalCalls'),
+            completedVisits: sum('completedVisits'),
+            uniqueDealersCalled: sum('uniqueDealersCalled'),
+            dcfDisbursals: sum('dcfDisbursals'),
+            i2si: inspections > 0 ? Math.round((stockIns / inspections) * 100) : 0,
+            conversionRate: inspections > 0 ? Math.round((stockIns / inspections) * 100) : 0,
+          };
+        })()
+      : computeMetrics(period, effectiveSingleKam ?? kamId, customFrom, customTo);
+    const scopeKamId = aggregateIds ? undefined : (effectiveSingleKam ?? kamId);
     const siTarget = getSITarget(userRole === 'TL' ? 'TL' : 'KAM');
     const monthCtx = getMonthProgress();
     const db = getRuntimeDBSync();
@@ -64,7 +101,9 @@ export function PerformancePage({ userRole, kamId, onNavigate, onOpenTLIncentive
 
     // Top dealers by stock-ins
     const dealers = db.dealers || [];
-    const kamDealers = kamId ? dealers.filter(d => d.kamId === kamId) : dealers;
+    const kamDealers = aggregateIds
+      ? dealers.filter(d => aggregateIds.includes(d.kamId || ''))
+      : scopeKamId ? dealers.filter(d => d.kamId === scopeKamId) : dealers;
     const leads = db.leads || [];
     const dealerSIs = kamDealers.map(d => {
       const dealerLeads = leads.filter(l => l.dealerCode === d.dealerCode);
@@ -74,18 +113,14 @@ export function PerformancePage({ userRole, kamId, onNavigate, onOpenTLIncentive
 
     // Incentive calculation
     const dcfLeads = db.dcfLeads || [];
-    const kamDcf = kamId ? dcfLeads.filter(d => d.kamId === kamId) : dcfLeads;
+    const kamDcf = aggregateIds
+      ? dcfLeads.filter(d => aggregateIds.includes(d.kamId || ''))
+      : scopeKamId ? dcfLeads.filter(d => d.kamId === scopeKamId) : dcfLeads;
     const disbursed = kamDcf.filter(d => d.disbursalDate || d.overallStatus === 'disbursed');
     const gmvTotal = disbursed.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
     const onboardingCount = new Set(kamDcf.map(d => d.dealerId)).size;
 
-    const inputScore = (() => {
-      const visitScore = Math.min(metrics.completedVisits / 3, 1) * 30;
-      const callScore = Math.min(metrics.totalCalls / 5, 1) * 30;
-      const dealerScore = Math.min(metrics.uniqueDealersCalled / 3, 1) * 20;
-      const convScore = Math.min(metrics.conversionRate / 50, 1) * 20;
-      return Math.round(visitScore + callScore + dealerScore + convScore);
-    })();
+    const inputScore = computeInputScore(metrics);
 
     const ctx: IncentiveContext = {
       role: userRole === 'TL' ? 'TL' : 'KAM',
@@ -118,10 +153,16 @@ export function PerformancePage({ userRole, kamId, onNavigate, onOpenTLIncentive
       incentiveBreakdown: breakdown,
       totalIncentive: result.totalIncentive,
     };
-  }, [userRole, kamId, period]);
+  }, [userRole, kamId, period, customFrom, customTo, actorRole, effectiveKamIds]);
 
   return (
     <div className="p-4 space-y-6">
+      {(actorRole === 'TL' || actorRole === 'Admin') && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold text-slate-700">{actorName}</div>
+          <KAMFilter />
+        </div>
+      )}
       {/* TL Incentive Dashboard Quick Access (TL only) */}
       {userRole === 'TL' && onOpenTLIncentive && (
         <button

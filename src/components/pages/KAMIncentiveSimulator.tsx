@@ -11,12 +11,21 @@ import { getSITarget } from '../../lib/metricsEngine';
 import { getConfigDCFPayoutRules } from '../../lib/configFromDB';
 import { computeDashboardMetrics, getFilteredDCFLeads } from '../../data/canonicalMetrics';
 import { TimePeriod } from '../../lib/domain/constants';
+import { useKamScope } from '../../lib/auth/useKamScope';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
 
 interface KAMIncentiveSimulatorProps {
   onClose: () => void;
 }
 
 export function KAMIncentiveSimulator({ onClose }: KAMIncentiveSimulatorProps) {
+  const rawKamScopeId = useKamScope();
+  const { effectiveKamIds, role: actorRole, actorName } = useActorScope();
+  // For TL/Admin, narrow simulator to the filter-selected KAM (or first in scope).
+  const kamScopeId =
+    rawKamScopeId ??
+    (effectiveKamIds && effectiveKamIds.length > 0 ? effectiveKamIds[0] : undefined);
   // Mode toggle state: Auto Projection (default, read-only) vs What-If Simulator (editable)
   const [simulatorMode, setSimulatorMode] = useState<'auto' | 'whatif'>('auto');
 
@@ -45,8 +54,8 @@ export function KAMIncentiveSimulator({ onClose }: KAMIncentiveSimulatorProps) {
 
   // Current MTD values (used ONLY for Auto Projection - READ ONLY)
   const mtdValues = useMemo(() => {
-    const metrics = computeDashboardMetrics({ period: TimePeriod.MTD });
-    const dcfLeads = getFilteredDCFLeads({ period: TimePeriod.MTD });
+    const metrics = computeDashboardMetrics({ period: TimePeriod.MTD, kamId: kamScopeId });
+    const dcfLeads = getFilteredDCFLeads({ period: TimePeriod.MTD, kamId: kamScopeId });
     const disbursedDCF = dcfLeads.filter(d => d.overallStatus === 'DISBURSED');
     const gmvTotal = disbursedDCF.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
     const firstDisbursals = disbursedDCF.filter(d => d.firstDisbursalForDealer);
@@ -60,7 +69,7 @@ export function KAMIncentiveSimulator({ onClose }: KAMIncentiveSimulatorProps) {
       onboarding: metrics.dcfOnboardedDealers,
       score: 82, // Input score stays as user-provided default
     };
-  }, []);
+  }, [kamScopeId]);
 
   // What-If mode: Manual month-end expected values (EDITABLE - ONLY SOURCE FOR WHAT-IF)
   const [whatIfInputs, setWhatIfInputs] = useState({
@@ -136,8 +145,17 @@ export function KAMIncentiveSimulator({ onClose }: KAMIncentiveSimulatorProps) {
           </button>
           <div className="flex-1">
             <h2 className="text-lg">KAM Incentives</h2>
-            <div className="text-xs opacity-90">Your earnings potential</div>
+            <div className="text-xs opacity-90">
+              {actorRole === 'TL' || actorRole === 'Admin'
+                ? `Viewing: ${actorName || 'team'}`
+                : 'Your earnings potential'}
+            </div>
           </div>
+          {(actorRole === 'TL' || actorRole === 'Admin') && (
+            <div className="bg-white/10 rounded-lg px-2 py-1">
+              <KAMFilter showLabel={false} />
+            </div>
+          )}
         </div>
 
         {/* Mode Toggle */}

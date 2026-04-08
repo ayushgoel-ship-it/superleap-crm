@@ -7,6 +7,7 @@ import { ActivityProvider } from "./contexts/ActivityContext";
 import { DesignSystemApp } from "./components/design-system/DesignSystemApp";
 import { startAutoRetry } from "./lib/feedbackRetryQueue";
 import { FilterProvider } from "./contexts/FilterContext";
+import { ActorScopeProvider } from "./lib/auth/useActorScope";
 import { AdminPage } from "./navigation";
 import type {
   DealersFilterContext,
@@ -30,6 +31,7 @@ import { CallFeedbackPage } from "./components/pages/CallFeedbackPage";
 import { VisitFeedbackPage } from "./components/pages/VisitFeedbackPage";
 import { IncentiveSimulator } from "./components/pages/IncentiveSimulator";
 import { LeadDetailPageV2 } from "./components/pages/LeadDetailPageV2";
+import { getAnyLeadById } from "./data/selectors";
 import { LeadCreatePage } from "./components/pages/LeadCreatePage";
 import { DCFOnboardingPage } from "./components/pages/DCFOnboardingPage";
 import { DealerLocationUpdatePage } from "./components/pages/DealerLocationUpdatePage";
@@ -43,7 +45,7 @@ import { TLIncentiveMobile } from "./components/pages/TLIncentiveMobile";
 import { HomePage } from "./components/pages/HomePage";
 import { DealersPage } from "./components/pages/DealersPage";
 import { LeadsPageV3 } from "./components/pages/LeadsPageV3";
-import { VisitsPage } from "./components/pages/VisitsPage";
+import { ActivityPage } from "./components/activity/ActivityPage";
 import { NotificationCenterPage } from "./components/pages/NotificationCenterPage";
 import { DCFPage } from "./components/pages/DCFPage";
 import { DCFDealersListPage } from "./components/pages/DCFDealersListPage";
@@ -177,6 +179,8 @@ function AppContent() {
     useState<string>("DCF-LN-982341");
   const [dcfDateRange, setDcfDateRange] =
     useState<string>("MTD");
+  const [dcfCustomFrom, setDcfCustomFrom] = useState<string>("");
+  const [dcfCustomTo, setDcfCustomTo] = useState<string>("");
 
   // Call/Visit Feedback navigation states
   const [selectedCallId, setSelectedCallId] = useState<
@@ -299,8 +303,10 @@ function AppContent() {
     setCurrentPage("dcf");
   };
 
-  const setDCFDateRange = (dateRange: string) => {
+  const setDCFDateRange = (dateRange: string, customFrom?: string, customTo?: string) => {
     setDcfDateRange(dateRange);
+    setDcfCustomFrom(customFrom || "");
+    setDcfCustomTo(customTo || "");
   };
 
   const clearDealersContext = () => {
@@ -334,6 +340,14 @@ function AppContent() {
 
   // Lead Detail navigation handlers
   const navigateToLeadDetail = (leadId: string) => {
+    // Detect DCF source so both Leads-route and DCF-route open the same canonical DCF detail
+    const lookup = getAnyLeadById(leadId);
+    if (lookup?.source === 'dcf') {
+      setDcfSelectedLoanId(leadId);
+      setFeedbackOriginPage(currentPage);
+      setCurrentPage("dcf-lead-detail");
+      return;
+    }
     setSelectedLeadId(leadId);
     setFeedbackOriginPage(currentPage); // Store origin for back navigation
     setCurrentPage("lead-detail");
@@ -705,9 +719,9 @@ function AppContent() {
                         />
                       );
                     case "visits":
+                      // Activity rebuild: dispatch to canonical role-aware shells.
                       return (
-                        <VisitsPage
-                          userRole={userRole}
+                        <ActivityPage
                           onNavigateToLocationUpdate={
                             navigateToDealerLocationUpdate
                           }
@@ -758,6 +772,8 @@ function AppContent() {
                           onBack={navigateBackToDCF}
                           filterType={dcfDealersFilterType}
                           dateRange={dcfDateRange}
+                          customFrom={dcfCustomFrom}
+                          customTo={dcfCustomTo}
                           onDealerClick={
                             navigateToDCFDealerDetail
                           }
@@ -772,6 +788,8 @@ function AppContent() {
                             setCurrentPage("dcf-lead-detail");
                           }}
                           dateRange={dcfDateRange}
+                          customFrom={dcfCustomFrom}
+                          customTo={dcfCustomTo}
                         />
                       );
                     case "dcf-disbursals":
@@ -779,6 +797,8 @@ function AppContent() {
                         <DCFDisbursalsListPage
                           onBack={navigateBackToDCF}
                           dateRange={dcfDateRange}
+                          customFrom={dcfCustomFrom}
+                          customTo={dcfCustomTo}
                         />
                       );
                     case "dcf-dealer-detail":
@@ -787,6 +807,8 @@ function AppContent() {
                           onBack={navigateBackToDCF}
                           dealerId={dcfSelectedDealerId}
                           dateRange={dcfDateRange}
+                          customFrom={dcfCustomFrom}
+                          customTo={dcfCustomTo}
                         />
                       );
                     case "dcf-lead-detail":
@@ -794,8 +816,13 @@ function AppContent() {
                         <DCFLeadDetailPage
                           loanId={dcfSelectedLoanId}
                           onBack={() =>
-                            setCurrentPage("dcf-leads")
+                            setCurrentPage(
+                              feedbackOriginPage === "leads"
+                                ? "leads"
+                                : "dcf-leads"
+                            )
                           }
+                          userRole={activeRole as 'KAM' | 'TL' | 'Admin'}
                         />
                       );
                     case "dcf-onboarding-detail":
@@ -1057,11 +1084,13 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <ActivityProvider>
-        <FilterProvider>
-          <AppContent />
-        </FilterProvider>
-      </ActivityProvider>
+      <ActorScopeProvider>
+        <ActivityProvider>
+          <FilterProvider>
+            <AppContent />
+          </FilterProvider>
+        </ActivityProvider>
+      </ActorScopeProvider>
     </AuthProvider>
   );
 }

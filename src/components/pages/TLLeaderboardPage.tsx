@@ -24,7 +24,7 @@ export function TLLeaderboardPage({ onViewTLDetail, onBack }: TLLeaderboardPageP
 
   // Build TL data from canonical metrics
   const tlData: TLData[] = useMemo(() => {
-    const filters = { period };
+    const filters = { period, customFrom, customTo };
     const leads = getFilteredLeads(filters);
     const dcfLeads = getFilteredDCFLeads(filters);
     const calls = getFilteredCalls(filters);
@@ -86,7 +86,7 @@ export function TLLeaderboardPage({ onViewTLDetail, onBack }: TLLeaderboardPageP
         callsTrend: Array.from({ length: 7 }, () => callsPerBucket),
       };
     });
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
   // Filter and sort TL data
   const filteredAndSortedTLs = tlData

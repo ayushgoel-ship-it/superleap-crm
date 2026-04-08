@@ -109,7 +109,8 @@ export type MeetingPersonRole =
   | 'Manager'
   | 'Sales Executive'
   | 'Accountant'
-  | 'Other';
+  | 'Other'
+  | 'Shop closed';
 
 export const MEETING_PERSON_ROLES: MeetingPersonRole[] = [
   'Owner',
@@ -117,6 +118,27 @@ export const MEETING_PERSON_ROLES: MeetingPersonRole[] = [
   'Sales Executive',
   'Accountant',
   'Other',
+  'Shop closed',
+];
+
+// ── Dealer Persona (classification captured during interaction) ──
+export type DealerPersona =
+  | 'UCD w/o counter'
+  | 'UCD counter'
+  | 'NCD'
+  | 'Mechanic'
+  | 'Freelancer'
+  | 'Ex employee'
+  | 'Agent';
+
+export const DEALER_PERSONAS: DealerPersona[] = [
+  'UCD w/o counter',
+  'UCD counter',
+  'NCD',
+  'Mechanic',
+  'Freelancer',
+  'Ex employee',
+  'Agent',
 ];
 
 export type LeadSharingStatus =
@@ -173,12 +195,16 @@ export interface UnifiedFeedbackData {
   meetingPersonRole: MeetingPersonRole;
   meetingPersonOtherText: string | null;
 
-  // Section 3: Lead Sharing
+  // Section 3: Lead Sharing (seller-only; buyer leads removed per product spec)
   leadShared: boolean;
   leadStatus: LeadSharingStatus | null;
   sellerLeadCount: number;
+  /** @deprecated retained for backwards-compat with historical feedback rows; new writes leave as 0 */
   buyerLeadCount: number;
   inspectionExpected: boolean | null;
+
+  // Section 7: Dealer persona (classification)
+  dealerPersona?: DealerPersona | null;
 
   // Section 4: DCF Discussion
   dcfDiscussed: boolean;

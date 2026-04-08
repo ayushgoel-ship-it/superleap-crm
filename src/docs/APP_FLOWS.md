@@ -474,7 +474,7 @@ See `docs/DECISIONS/ROUTE_PARITY_PHASE4_5.md` for the full reconciliation audit.
   - CEP missing → red block: "CEP not captured — cannot evaluate negotiation strength"
   - DCF channel uses "LTV Expected" / "LTV Approved" labels
 - **Journey stages (Token Removed):**
-  Lead Created → 3CA → Inspection Scheduled → Inspection Done → HB Discovered → OCB Raised → PR Punched → Stock-in → Payout
+  Lead Created → 3CA → Inspection Scheduled → Inspection Done → HB Discovered → OCB Raised → BBNP → Stock-in → Payout
   - No "Token Collected" stage — token flow does not exist in the current system
 - **Smart CTA logic** (Next Best Action banner in overview):
   - Inspection Scheduled → "Confirm Inspection"

@@ -6,35 +6,35 @@ import { exportToCsv, downloadCsv, type ExportRequest } from '@/data/mgmtRepo';
 // Field catalog per entity (canonical Supabase columns).
 const ENTITY_FIELDS: Record<string, { fields: string[]; date_field?: string; defaults: string[] }> = {
   users: {
-    fields: ['user_id', 'name', 'email', 'phone', 'role', 'team_id', 'region', 'city', 'active', 'must_reset_password', 'created_at', 'deactivated_at'],
-    defaults: ['user_id', 'name', 'email', 'role', 'team_id', 'region', 'active'],
+    fields: ['user_id', 'name', 'email', 'phone', 'role', 'team_id', 'city', 'active', 'must_reset_password', 'created_at', 'deactivated_at'],
+    defaults: ['user_id', 'name', 'email', 'role', 'team_id', 'active'],
   },
   dealers: {
-    fields: ['dealer_id', 'dealer_code', 'dealer_name', 'kam_id', 'tl_id', 'city', 'region', 'phone', 'status', 'created_at'],
-    defaults: ['dealer_code', 'dealer_name', 'kam_id', 'city', 'region', 'status'],
+    fields: ['id', 'dealer_code', 'dealer_name', 'kam_id', 'tl_id', 'dealer_city', 'dealer_region', 'segment', 'status', 'phone', 'email', 'sell_onboarded', 'dcf_onboarded'],
+    defaults: ['dealer_code', 'dealer_name', 'kam_id', 'dealer_city', 'dealer_region', 'status'],
   },
-  leads: {
-    fields: ['lead_id', 'dealer_code', 'kam_id', 'channel', 'stage', 'created_at', 'updated_at', 'lead_type', 'region'],
-    date_field: 'created_at',
-    defaults: ['lead_id', 'dealer_code', 'kam_id', 'channel', 'stage', 'created_at'],
+  sell_leads: {
+    fields: ['lead_id', 'dealer_code', 'dealer_region', 'inspection_city', 'inspection_region', 'make', 'model', 'variant', 'year', 'cx_reg_no', 'lead_date', 'inspection_date', 'token_date', 'stockin_date', 'final_si_date', 'appointment_status', 'verified', 'inspection_done', 'lead_purchased', 'payment_done', 'stockins', 'leadprice', 'selleragreedprice', 'bid_amount', 'cancellation_losses', 'vertical', 'gs_flag', 'b2b_flag', 'elite_flag'],
+    date_field: 'lead_date',
+    defaults: ['lead_id', 'dealer_code', 'inspection_city', 'make', 'model', 'lead_date', 'appointment_status', 'stockins'],
   },
   calls: {
-    fields: ['call_id', 'dealer_code', 'kam_id', 'tl_id', 'outcome', 'duration_seconds', 'is_productive', 'created_at'],
+    fields: ['call_id', 'dealer_code', 'kam_id', 'lead_id', 'direction', 'outcome', 'disposition_code', 'duration', 'is_productive', 'start_time', 'end_time', 'created_at'],
     date_field: 'created_at',
-    defaults: ['call_id', 'dealer_code', 'kam_id', 'outcome', 'is_productive', 'created_at'],
+    defaults: ['call_id', 'dealer_code', 'kam_id', 'outcome', 'is_productive', 'duration', 'created_at'],
   },
   visits: {
-    fields: ['visit_id', 'dealer_code', 'kam_id', 'tl_id', 'is_productive', 'created_at', 'duration_minutes'],
-    date_field: 'created_at',
-    defaults: ['visit_id', 'dealer_code', 'kam_id', 'is_productive', 'created_at'],
+    fields: ['id', 'dealer_code', 'kam_id', 'tl_id', 'visit_date', 'check_in_at', 'check_out_at', 'is_productive', 'created_at'],
+    date_field: 'visit_date',
+    defaults: ['id', 'dealer_code', 'kam_id', 'visit_date', 'is_productive'],
   },
   dcf_leads: {
-    fields: ['id', 'customer_name', 'dealer_code', 'kam_name', 'overall_status', 'current_funnel', 'loan_amount', 'created_at', 'last_updated_at'],
-    date_field: 'created_at',
-    defaults: ['id', 'customer_name', 'dealer_code', 'kam_name', 'overall_status', 'current_funnel', 'loan_amount'],
+    fields: ['id', 'lead_id', 'customer_name', 'dealer_code', 'dealer_name', 'dealer_city', 'channel', 'make', 'model', 'year', 'cibil_score', 'risk_bucket', 'lead_creation_date', 'login_date', 'approval_date', 'disbursal_datetime', 'gross_disbursal', 'gross_disbursal_amount', 'total_loan_sanction', 'current_status', 'case_status', 'rejection_reason'],
+    date_field: 'lead_creation_date',
+    defaults: ['id', 'customer_name', 'dealer_code', 'channel', 'lead_creation_date', 'current_status', 'gross_disbursal_amount'],
   },
   targets: {
-    fields: ['target_id', 'user_id', 'role', 'month', 'si_target', 'call_target', 'visit_target', 'i2si_target', 'dcf_leads_target', 'dcf_onboarding_target', 'dcf_disbursals_target', 'dcf_gmv_target_lakhs'],
+    fields: ['id', 'user_id', 'role', 'month', 'si_target', 'call_target', 'visit_target', 'i2si_target', 'dcf_leads_target', 'dcf_onboarding_target', 'dcf_disbursals_target', 'dcf_gmv_target_lakhs'],
     defaults: ['user_id', 'role', 'month', 'si_target', 'dcf_leads_target', 'dcf_disbursals_target'],
   },
   audit_log: {
@@ -42,13 +42,30 @@ const ENTITY_FIELDS: Record<string, { fields: string[]; date_field?: string; def
     date_field: 'created_at',
     defaults: ['actor_id', 'action', 'entity_type', 'change_summary', 'created_at'],
   },
+  export_log: {
+    fields: ['log_id', 'actor_id', 'actor_name', 'entity', 'selected_fields', 'filters', 'row_count', 'created_at'],
+    date_field: 'created_at',
+    defaults: ['actor_name', 'entity', 'row_count', 'created_at'],
+  },
 };
 
+const monthStart = () => new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+const today = () => new Date().toISOString().slice(0, 10);
+
 const PRESETS: { id: string; name: string; description: string; req: ExportRequest }[] = [
-  { id: 'p1', name: 'Active Users', description: 'All active KAMs and TLs', req: { entity: 'users', fields: ['user_id','name','email','role','team_id','region','active'], filters: { active: true } } },
+  { id: 'p1', name: 'Active Users', description: 'All active KAMs and TLs', req: { entity: 'users', fields: ['user_id','name','email','role','team_id','active'], filters: { active: true } } },
   { id: 'p2', name: 'Current-Month Targets', description: 'All targets for current month', req: { entity: 'targets', fields: ['user_id','role','month','si_target','dcf_leads_target','dcf_disbursals_target','dcf_gmv_target_lakhs'], filters: { month: new Date().toISOString().slice(0, 7) } } },
-  { id: 'p3', name: 'Unassigned Dealers', description: 'Dealers with no KAM', req: { entity: 'dealers', fields: ['dealer_code','dealer_name','city','region'], filters: { kam_id: null } } },
-  { id: 'p4', name: 'DCF Disbursed Leads', description: 'All DCF leads with status DISBURSED', req: { entity: 'dcf_leads', fields: ['id','customer_name','dealer_code','kam_name','loan_amount','last_updated_at'], filters: { overall_status: 'DISBURSED' } } },
+  { id: 'p3', name: 'Unassigned Dealers', description: 'Dealers with no KAM', req: { entity: 'dealers', fields: ['dealer_code','dealer_name','dealer_city','dealer_region'], filters: { kam_id: null } } },
+  { id: 'p4', name: 'DCF Disbursed Leads', description: 'All DCF leads with status DISBURSED', req: { entity: 'dcf_leads', fields: ['id','customer_name','dealer_code','dealer_name','channel','gross_disbursal_amount','disbursal_datetime'], filters: { current_status: 'DISBURSED' } } },
+  // ─── Sell Leads presets ───
+  { id: 's1', name: 'Sell Leads — Current Month', description: 'All sell leads created this month', req: { entity: 'sell_leads', fields: ['lead_id','dealer_code','inspection_city','make','model','year','lead_date','appointment_status'], date_field: 'lead_date', from: monthStart(), to: today() } },
+  { id: 's2', name: 'Sell Leads — Stockins (MTD)', description: 'Leads that resulted in stock-in this month', req: { entity: 'sell_leads', fields: ['lead_id','dealer_code','inspection_city','make','model','final_si_date','selleragreedprice','bid_amount'], date_field: 'final_si_date', from: monthStart(), to: today(), filters: { stockins: 1 } } },
+  { id: 's3', name: 'Sell Leads — Cancellations', description: 'Cancelled sell leads with losses', req: { entity: 'sell_leads', fields: ['lead_id','dealer_code','make','model','first_cancellation_date','cancellation_losses','appointment_status'], filters: { first_cancellation_flag: 1 } } },
+  { id: 's4', name: 'Sell Leads — Inspection Done', description: 'Leads with inspection completed', req: { entity: 'sell_leads', fields: ['lead_id','dealer_code','inspection_city','make','model','inspection_date','latest_c24q','target_price'], filters: { inspection_done: 1 } } },
+  { id: 's5', name: 'Sell Leads — High-Value (Bid > 5L)', description: 'Sell leads with bid amount above ₹5L', req: { entity: 'sell_leads', fields: ['lead_id','dealer_code','make','model','year','bid_amount','selleragreedprice','final_si_date'] } },
+  { id: 's6', name: 'Sell Leads — Elite Vertical', description: 'All elite-tagged sell leads', req: { entity: 'sell_leads', fields: ['lead_id','dealer_code','make','model','year','vertical','lead_date','appointment_status'], filters: { elite_flag: 1 } } },
+  { id: 's7', name: 'Sell Leads — B2B', description: 'B2B vertical sell leads', req: { entity: 'sell_leads', fields: ['lead_id','dealer_code','make','model','lead_date','appointment_status','stockins'], filters: { b2b_flag: 1 } } },
+  { id: 's8', name: 'Sell Leads — OCB Active', description: 'Leads with active OCB runs', req: { entity: 'sell_leads', fields: ['lead_id','dealer_code','make','model','ocb_run_count','latest_ocb_raisedat','max_c24_quote'] } },
 ];
 
 export function AdminReportsPage() {
@@ -105,8 +122,8 @@ function PresetsTab() {
 }
 
 function CustomTab() {
-  const [entity, setEntity] = useState<string>('leads');
-  const [fields, setFields] = useState<string[]>(ENTITY_FIELDS.leads.defaults);
+  const [entity, setEntity] = useState<string>('sell_leads');
+  const [fields, setFields] = useState<string[]>(ENTITY_FIELDS.sell_leads.defaults);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [filterKey, setFilterKey] = useState('');

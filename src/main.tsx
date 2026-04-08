@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-import { loadRuntimeDB, clearRuntimeDBCache } from "@/data/runtimeDB";
+import { loadRuntimeDB } from "@/data/runtimeDB";
 
 console.log('[MAIN] main.tsx loaded');
 
@@ -12,16 +12,17 @@ function Boot() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         console.log('[BOOT] Starting loadRuntimeDB...');
-        clearRuntimeDBCache(); // Force fresh load
         await loadRuntimeDB();
-        setReady(true);
+        if (!cancelled) setReady(true);
       } catch (e: any) {
-        setError(e?.message ?? String(e));
+        if (!cancelled) setError(e?.message ?? String(e));
       }
     })();
+    return () => { cancelled = true; };
   }, []);
 
   if (error) {

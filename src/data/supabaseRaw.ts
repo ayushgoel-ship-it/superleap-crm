@@ -53,9 +53,11 @@ async function fetchAll<T = any>(table: string, select: string, pageSize = 1000)
 }
 
 // ── Stage derivation from dates ──
+// Canonical BBNP = final_token_date != null AND final_si_date == null
+// (Stock-in branch above guarantees final_si_date is null when we reach the BBNP check.)
 function deriveStage(row: any): string {
   if (row.stockin_date || row.final_si_date) return 'Stock-in';
-  if (row.token_date || row.final_token_date) return 'PR Punched';
+  if (row.final_token_date || row.token_date) return 'BBNP';
   if (row.inspection_date) return 'Inspection Done';
   if (row.current_appt_date) return 'Inspection Scheduled';
   if (row.deal_creation_date) return 'Deal Created';
@@ -74,21 +76,26 @@ function deriveStatus(row: any): string {
 
 let _userMap: Map<string, { name: string; teamId: string; role: string }> | null = null;
 let _teamTlMap: Map<string, string> | null = null; // teamId → tl_user_id
+let _userMapInflight: Promise<void> | null = null;
 
 async function ensureUserMap() {
   if (_userMap) return;
-  const [users, teams] = await Promise.all([
-    fetchAll('users', 'user_id,name,team_id,role'),
-    fetchAll('teams', 'team_id,tl_user_id'),
-  ]);
-  _userMap = new Map();
-  _teamTlMap = new Map();
-  for (const u of users) {
-    _userMap.set(u.user_id, { name: u.name || '', teamId: u.team_id || '', role: u.role || '' });
-  }
-  for (const t of teams) {
-    _teamTlMap.set(t.team_id, t.tl_user_id || '');
-  }
+  if (_userMapInflight) return _userMapInflight;
+  _userMapInflight = (async () => {
+    const [users, teams] = await Promise.all([
+      fetchAll('users', 'user_id,name,team_id,role'),
+      fetchAll('teams', 'team_id,tl_user_id'),
+    ]);
+    _userMap = new Map();
+    _teamTlMap = new Map();
+    for (const u of users) {
+      _userMap.set(u.user_id, { name: u.name || '', teamId: u.team_id || '', role: u.role || '' });
+    }
+    for (const t of teams) {
+      _teamTlMap.set(t.team_id, t.tl_user_id || '');
+    }
+  })();
+  try { await _userMapInflight; } finally { _userMapInflight = null; }
 }
 
 function getUserName(userId: string | null): string {
@@ -121,6 +128,7 @@ export async function fetchDealersRaw(): Promise<Dealer[]> {
     const kamId = d.kam_id || '';
     const tlId = d.tl_id || '';
     const kamName = getUserName(kamId) || 'Unassigned KAM';
+    const tlName = getUserName(tlId) || '';
 
     // Derive tags from onboarding flags
     const tags: string[] = [];
@@ -136,6 +144,7 @@ export async function fetchDealersRaw(): Promise<Dealer[]> {
       kamId,
       kamName,
       tlId,
+      tlName,
       lastVisit: new Date().toISOString(),
       lastContact: new Date().toISOString(),
       lastVisitDaysAgo: 0,
@@ -156,6 +165,8 @@ export async function fetchDealersRaw(): Promise<Dealer[]> {
       dcfOnboardingDate: d.dcf_onboarding_date || undefined,
       onboardingStatus: d.onboarding_status || 'Soft onboarded',
       bankAccountStatus: d.bank_account_status || 'Not verified',
+      // F1/Top filter: canonical from dealers_master.is_top boolean
+      isTopDealer: d.is_top === true,
     };
   });
 }
@@ -169,7 +180,7 @@ export async function fetchLeadsRaw(): Promise<Lead[]> {
   const data = await fetchAll('sell_leads_master', '*');
   if (data.length === 0) return [];
 
-  return data.map((l: any) => {
+  const mapped = data.map((l: any) => {
     const stage = deriveStage(l);
     const status = deriveStatus(l);
     const channel = l.gs_flag === 1 ? 'GS' : 'NGS';
@@ -185,6 +196,7 @@ export async function fetchLeadsRaw(): Promise<Lead[]> {
       kamPhone: '',
       tlId: '',
 
+      appId: l.appointment_id != null ? String(l.appointment_id) : (l.product_appt_id != null ? String(l.product_appt_id) : (l.app_id != null ? String(l.app_id) : undefined)),
       customerName: [l.year, l.make, l.model].filter(Boolean).join(' ') || `Lead #${l.lead_id}`,
       customerPhone: '',
 
@@ -204,8 +216,8 @@ export async function fetchLeadsRaw(): Promise<Lead[]> {
       expectedRevenue: Number(l.target_price) || 0,
       actualRevenue: Number(l.selleragreedprice) || 0,
       cep: null,
-      c24Quote: Number(l.latest_c24q) || null,
-      maxC24Quote: Number(l.max_c24_quote) || null,
+      c24Quote: l.latest_c24q != null ? Number(l.latest_c24q) : null,
+      maxC24Quote: l.max_c24_quote != null ? Number(l.max_c24_quote) : null,
       targetPrice: Number(l.target_price) || null,
       sellerAgreedPrice: Number(l.selleragreedprice) || null,
       bidAmount: Number(l.bid_amount) || null,
@@ -246,6 +258,8 @@ export async function fetchLeadsRaw(): Promise<Lead[]> {
       growthZone: l.growth_zone || undefined,
     };
   });
+
+  return mapped;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -357,15 +371,52 @@ export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
     // RAG from red_flag
     const ragStatus = dcf.red_flag === 1 ? 'red' : (dcf.risk_bucket === 'B' || dcf.risk_bucket === 'C') ? 'amber' : 'green';
 
+    // Customer name + phone derivation. Some upstream rows pack the mobile
+    // into customer_name as a numeric/scientific-notation string. We:
+    //   1. try real name fields in priority order
+    //   2. recover any numeric content as the phone
+    //   3. derive a stable display name from loan id last digits as final fallback
+    const nameCandidates = [dcf.applicant_name, dcf.borrower_name, dcf.cust_name, dcf.customer_name];
+    let resolvedName = '';
+    let recoveredPhone = '';
+    for (const raw of nameCandidates) {
+      if (!raw) continue;
+      const s = String(raw).trim();
+      if (!s) continue;
+      const isNumeric = /^[\d.eE+\-\s]+$/.test(s) && !isNaN(Number(s));
+      if (isNumeric) {
+        // Only recover as phone if it's a plain 10–13 digit string. Scientific
+        // notation has already lost precision and can't be reconstructed safely.
+        const digits = s.replace(/\D/g, '');
+        if (!recoveredPhone && !/[eE]/.test(s) && digits.length >= 10 && digits.length <= 13) {
+          recoveredPhone = digits;
+        }
+        continue;
+      }
+      resolvedName = s;
+      break;
+    }
+    if (!resolvedName) {
+      const idStr = String(dcf.lead_id || dcf.id || '');
+      const last4 = idStr.slice(-4);
+      resolvedName = last4 ? `Customer #${last4}` : 'Customer';
+    }
+
+    // Vehicle derivation. Fall back through model-only, variant, registration, then 'Vehicle TBD'.
+    const carParts = [dcf.year, dcf.make, dcf.model].filter(Boolean).join(' ');
+    const carFallback = dcf.vehicle_model || dcf.variant || dcf.model || dcf.registration_no || 'Vehicle TBD';
+    const carDisplay = carParts || carFallback;
+
     return {
       id: dcf.lead_id || `dcf-${dcf.id}`,
-      customerName: dcf.customer_name || 'Customer',
-      customerPhone: '',
+      customerName: resolvedName,
+      customerPhone: recoveredPhone || dcf.customer_mobile || dcf.mobile_no || '',
       city: dcf.dealer_city || 'Unknown',
       regNo: dcf.registration_no || '',
-      car: [dcf.make, dcf.model, dcf.year].filter(Boolean).join(' ') || 'Unknown Vehicle',
+      car: carDisplay,
       carValue: valuation,
       ltv: Number(dcf.final_offer_ltv) || Number(dcf.system_ltv) || Math.round((loanAmt / valuation) * 100),
+      finalOfferLtv: dcf.final_offer_ltv != null ? Number(dcf.final_offer_ltv) : null,
       loanAmount: loanAmt,
       roi,
       tenure,
@@ -577,3 +628,29 @@ export async function fetchIncentiveRulesRaw(): Promise<IncentiveRuleRow[]> {
     return [];
   }
 }
+
+
+// ════════════════════════════════════════════════════════════════════
+// DEALER WRITE — set/unset is_top flag (canonical 'Top dealer' marker)
+// Used by Activity 'Top' filter and DealerDetailPageV2 star toggle.
+// ════════════════════════════════════════════════════════════════════
+
+export async function setDealerIsTop(dealerCode: string | number, isTop: boolean): Promise<boolean> {
+  try {
+    const code = typeof dealerCode === 'string' ? parseInt(dealerCode, 10) : dealerCode;
+    if (!Number.isFinite(code)) return false;
+    const { error } = await supabase
+      .from('dealers_master')
+      .update({ is_top: isTop })
+      .eq('dealer_code', code);
+    if (error) {
+      console.warn('[SupabaseRaw] setDealerIsTop failed:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('[SupabaseRaw] setDealerIsTop exception:', e);
+    return false;
+  }
+}
+

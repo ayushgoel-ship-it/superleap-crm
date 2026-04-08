@@ -1,25 +1,14 @@
 /**
- * ACTIVITY CARD — Unified premium card for Calls and Visits
+ * ACTIVITY CARD — Compact unified card for Calls and Visits.
  *
- * ┌─────────────────────────────────────────────────────┐
- * │  DESIGN NOTE                                        │
- * │                                                     │
- * │  Why a unified card system?                         │
- * │  Calls and Visits are both dealer interactions.     │
- * │  Showing them in one chronological feed helps KAMs  │
- * │  see the full picture of their day / week, instead  │
- * │  of context-switching between two separate lists.   │
- * │                                                     │
- * │  Feedback closure drives productivity:              │
- * │  Pending feedback cards get a subtle indigo left    │
- * │  border and the "Add Feedback" CTA is prominent.   │
- * │  This nudges KAMs toward completing the loop.       │
- * └─────────────────────────────────────────────────────┘
+ * Designed to be dense: dealer code + name on one line, status chip + duration
+ * inline on the next, pending feedback strongly highlighted with an inline CTA
+ * (no need to click "View Details" to add feedback).
  */
 
 import {
-  Phone, PhoneOff, PhoneMissed, MapPin, Clock, Mic, MessageSquare,
-  ChevronRight, CheckCircle2, AlertCircle, Navigation,
+  Phone, PhoneOff, PhoneMissed, MapPin, Clock, Mic,
+  CheckCircle2, AlertCircle, Navigation,
 } from 'lucide-react';
 import { StatusChip } from '../premium/Chip';
 import type { CallAttempt, Visit } from '../../contexts/ActivityContext';
@@ -30,12 +19,12 @@ function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return `${hrs}h`;
   const days = Math.floor(hrs / 24);
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days}d ago`;
+  if (days === 1) return '1d';
+  if (days < 7) return `${days}d`;
   return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
@@ -45,6 +34,15 @@ function formatDuration(secs: number | undefined): string {
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
+function dealerLabel(code: string | undefined, name: string | undefined, id: string | undefined): string {
+  const cleanName = name && name.trim() && name.trim() !== 'Dealer' ? name.trim() : '';
+  const cleanCode = code && String(code).trim() ? String(code).trim() : '';
+  if (cleanCode && cleanName) return `${cleanCode} · ${cleanName}`;
+  if (cleanName) return cleanName;
+  if (cleanCode) return `Dealer ${cleanCode}`;
+  return `Dealer ${(id || '').slice(0, 8)}`;
 }
 
 function callStatusVariant(status: string, connected: boolean): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
@@ -82,6 +80,14 @@ function visitStatusLabel(status: string): string {
   }
 }
 
+export function isCallPendingFeedback(call: CallAttempt): boolean {
+  return call.productiveStatus === 'pending' || call.status === 'pending-feedback';
+}
+
+export function isVisitPendingFeedback(visit: Visit): boolean {
+  return visit.status === 'completed' && !visit.feedbackSubmitted && !visit.outcome;
+}
+
 // ── Call Card ──
 
 interface CallCardProps {
@@ -91,38 +97,34 @@ interface CallCardProps {
 }
 
 export function CallActivityCard({ call, onAddFeedback, onViewDetails }: CallCardProps) {
-  const isPendingFeedback = call.productiveStatus === 'pending' || call.status === 'pending-feedback';
-  const hasRecording = call.duration && call.duration > 0;
+  const pending = isCallPendingFeedback(call);
+  const hasRecording = !!call.duration && call.duration > 0;
   const CallIcon = call.connected ? Phone : call.status === 'busy' ? PhoneOff : PhoneMissed;
+  const label = dealerLabel(call.dealerCode, call.dealerName, call.dealerId);
 
   return (
-    <div className={`card-premium overflow-hidden active:scale-[0.995] transition-all duration-200
-      ${isPendingFeedback ? 'border-l-[3px] border-l-indigo-400' : ''}
-    `}>
-      <div className="p-4">
-        {/* Row 1: Icon + Dealer + Time */}
-        <div className="flex items-start gap-3">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
+    <div
+      onClick={onViewDetails}
+      className={`card-premium overflow-hidden active:scale-[0.995] transition-all duration-200 cursor-pointer
+        ${pending ? 'border-l-[3px] border-l-amber-400 bg-amber-50/20' : ''}
+      `}
+    >
+      <div className="p-3">
+        {/* Row 1: icon + dealer label + time */}
+        <div className="flex items-center gap-2.5">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0
             ${call.connected ? 'bg-emerald-50' : 'bg-slate-100'}
           `}>
-            <CallIcon className={`w-4 h-4 ${call.connected ? 'text-emerald-600' : 'text-slate-400'}`} />
+            <CallIcon className={`w-3.5 h-3.5 ${call.connected ? 'text-emerald-600' : 'text-slate-400'}`} />
           </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-[13px] font-semibold text-slate-800 truncate">{call.dealerName}</h3>
-              <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
-            </div>
-            <span className="text-[11px] text-slate-400">{call.dealerCode}</span>
-          </div>
-
+          <h3 className="text-[13px] font-semibold text-slate-800 truncate flex-1 min-w-0">{label}</h3>
           <span className="text-[11px] text-slate-400 font-medium flex-shrink-0 tabular-nums">
             {timeAgo(call.timestamp)}
           </span>
         </div>
 
-        {/* Row 2: Chips */}
-        <div className="flex items-center gap-2 mt-2.5 ml-12 flex-wrap">
+        {/* Row 2: status chip + duration + rec + outcome */}
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           <StatusChip
             label={callStatusLabel(call.status, call.connected)}
             variant={callStatusVariant(call.status, call.connected)}
@@ -141,51 +143,35 @@ export function CallActivityCard({ call, onAddFeedback, onViewDetails }: CallCar
               Rec
             </span>
           )}
-        </div>
+          {!pending && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+              {call.productiveStatus === 'productive' ? 'Productive' : 'Non-productive'}
+            </span>
+          )}
+          {pending && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700">
+              <AlertCircle className="w-3 h-3" />
+              Feedback pending
+            </span>
+          )}
 
-        {/* Row 3: Outcome */}
-        {call.outcome && (
-          <div className="mt-2 ml-12 text-[12px] text-slate-500 leading-relaxed line-clamp-2">
-            {call.outcome}
-          </div>
-        )}
-      </div>
-
-      {/* Footer: Feedback CTA */}
-      <div className="px-4 py-2.5 bg-slate-50/50 border-t border-slate-100/80 flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          {isPendingFeedback ? (
-            <>
-              <AlertCircle className="w-3.5 h-3.5 text-indigo-500" />
-              <span className="text-[11px] font-semibold text-indigo-600">Feedback pending</span>
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="text-[11px] font-medium text-slate-400">
-                {call.productiveStatus === 'productive' ? 'Productive' : 'Non-productive'}
-              </span>
-            </>
+          {pending && onAddFeedback && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onAddFeedback(); }}
+              className="ml-auto px-2.5 py-1 bg-amber-500 text-white text-[11px] font-semibold rounded-md
+                         hover:bg-amber-600 active:scale-95 transition-all"
+            >
+              Add Feedback
+            </button>
           )}
         </div>
 
-        {isPendingFeedback && onAddFeedback ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onAddFeedback(); }}
-            className="px-3 py-1.5 bg-indigo-600 text-white text-[11px] font-semibold rounded-lg
-                       hover:bg-indigo-700 active:scale-95 transition-all min-h-[32px]"
-          >
-            Add Feedback
-          </button>
-        ) : onViewDetails ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onViewDetails(); }}
-            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[11px] font-medium rounded-lg
-                       hover:bg-slate-50 active:scale-95 transition-all min-h-[32px]"
-          >
-            View Details
-          </button>
-        ) : null}
+        {call.outcome && (
+          <div className="mt-1.5 text-[12px] text-slate-500 leading-snug line-clamp-1">
+            {call.outcome}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -195,115 +181,97 @@ export function CallActivityCard({ call, onAddFeedback, onViewDetails }: CallCar
 
 interface VisitCardProps {
   visit: Visit;
+  onAddFeedback?: () => void;
   onCheckIn?: () => void;
   onViewSummary?: () => void;
 }
 
-export function VisitActivityCard({ visit, onCheckIn, onViewSummary }: VisitCardProps) {
+export function VisitActivityCard({ visit, onAddFeedback, onCheckIn, onViewSummary }: VisitCardProps) {
   const isPlanned = visit.status === 'not-started';
   const isInProgress = visit.status === 'in-progress';
   const isCompleted = visit.status === 'completed';
-
+  const pending = isVisitPendingFeedback(visit);
   const visitTime = visit.checkInTime || visit.scheduledTime || visit.createdAt;
+  const label = dealerLabel(visit.dealerCode, visit.dealerName, visit.dealerId);
 
   return (
-    <div className={`card-premium overflow-hidden active:scale-[0.995] transition-all duration-200
-      ${isInProgress ? 'border-l-[3px] border-l-emerald-400' : ''}
-      ${isPlanned ? 'border-l-[3px] border-l-sky-300' : ''}
-    `}>
-      <div className="p-4">
-        {/* Row 1: Icon + Dealer + Time */}
-        <div className="flex items-start gap-3">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
+    <div
+      onClick={onViewSummary}
+      className={`card-premium overflow-hidden active:scale-[0.995] transition-all duration-200 cursor-pointer
+        ${pending ? 'border-l-[3px] border-l-amber-400 bg-amber-50/20' : ''}
+        ${!pending && isInProgress ? 'border-l-[3px] border-l-emerald-400' : ''}
+        ${!pending && isPlanned ? 'border-l-[3px] border-l-sky-300' : ''}
+      `}
+    >
+      <div className="p-3">
+        {/* Row 1: icon + dealer + time */}
+        <div className="flex items-center gap-2.5">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0
             ${isCompleted ? 'bg-emerald-50' : isInProgress ? 'bg-sky-50' : 'bg-slate-100'}
           `}>
             {isInProgress ? (
-              <Navigation className={`w-4 h-4 text-sky-600`} />
+              <Navigation className="w-3.5 h-3.5 text-sky-600" />
             ) : (
-              <MapPin className={`w-4 h-4 ${isCompleted ? 'text-emerald-600' : 'text-slate-400'}`} />
+              <MapPin className={`w-3.5 h-3.5 ${isCompleted ? 'text-emerald-600' : 'text-slate-400'}`} />
             )}
           </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-[13px] font-semibold text-slate-800 truncate">{visit.dealerName}</h3>
-              <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
-            </div>
-            <span className="text-[11px] text-slate-400">{visit.dealerCode}</span>
-          </div>
-
+          <h3 className="text-[13px] font-semibold text-slate-800 truncate flex-1 min-w-0">{label}</h3>
           <span className="text-[11px] text-slate-400 font-medium flex-shrink-0 tabular-nums">
             {visitTime ? timeAgo(visitTime) : '--'}
           </span>
         </div>
 
-        {/* Row 2: Chips */}
-        <div className="flex items-center gap-2 mt-2.5 ml-12 flex-wrap">
+        {/* Row 2: chips + duration + CTA */}
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           <StatusChip
             label={visitStatusLabel(visit.status)}
             variant={visitStatusVariant(visit.status)}
             dot
             size="sm"
           />
-          {visit.purpose && visit.purpose.length > 0 && (
-            <span className="text-[11px] text-slate-500 font-medium truncate">
-              {visit.purpose[0]}
+          {visit.checkInTime && visit.checkOutTime && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+              <Clock className="w-3 h-3" />
+              {formatDuration(Math.floor((new Date(visit.checkOutTime).getTime() - new Date(visit.checkInTime).getTime()) / 1000))}
             </span>
           )}
-        </div>
-
-        {/* Row 3: Outcome / meeting person */}
-        {(visit.outcome || visit.meetingPerson) && (
-          <div className="mt-2 ml-12 space-y-0.5">
-            {visit.meetingPerson && (
-              <div className="text-[11px] text-slate-400">
-                Met: <span className="text-slate-500 font-medium">{visit.meetingPerson}</span>
-              </div>
-            )}
-            {visit.outcome && (
-              <div className="text-[12px] text-slate-500 leading-relaxed line-clamp-2">
-                {visit.outcome}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Footer CTA */}
-      <div className="px-4 py-2.5 bg-slate-50/50 border-t border-slate-100/80 flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          {visit.checkInTime && visit.checkOutTime ? (
-            <span className="text-[11px] text-slate-400 flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {formatDuration(Math.floor((new Date(visit.checkOutTime).getTime() - new Date(visit.checkInTime).getTime()) / 1000))} visit
+          {visit.purpose && visit.purpose.length > 0 && (
+            <span className="text-[11px] text-slate-500 truncate">{visit.purpose[0]}</span>
+          )}
+          {pending && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700">
+              <AlertCircle className="w-3 h-3" />
+              Feedback pending
             </span>
-          ) : isInProgress ? (
-            <span className="text-[11px] text-sky-600 font-medium flex items-center gap-1">
-              <Navigation className="w-3 h-3" />
-              In progress
-            </span>
-          ) : isPlanned ? (
-            <span className="text-[11px] text-slate-400">Planned</span>
+          )}
+
+          {pending && onAddFeedback ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onAddFeedback(); }}
+              className="ml-auto px-2.5 py-1 bg-amber-500 text-white text-[11px] font-semibold rounded-md
+                         hover:bg-amber-600 active:scale-95 transition-all"
+            >
+              Add Feedback
+            </button>
+          ) : isPlanned && onCheckIn ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCheckIn(); }}
+              className="ml-auto px-2.5 py-1 bg-indigo-600 text-white text-[11px] font-semibold rounded-md
+                         hover:bg-indigo-700 active:scale-95 transition-all"
+            >
+              Check In
+            </button>
           ) : null}
         </div>
 
-        {isPlanned && onCheckIn ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onCheckIn(); }}
-            className="px-3 py-1.5 bg-indigo-600 text-white text-[11px] font-semibold rounded-lg
-                       hover:bg-indigo-700 active:scale-95 transition-all min-h-[32px]"
-          >
-            Check In
-          </button>
-        ) : isCompleted && onViewSummary ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onViewSummary(); }}
-            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-[11px] font-medium rounded-lg
-                       hover:bg-slate-50 active:scale-95 transition-all min-h-[32px]"
-          >
-            View Summary
-          </button>
-        ) : null}
+        {(visit.outcome || visit.meetingPerson) && (
+          <div className="mt-1.5 text-[12px] text-slate-500 leading-snug line-clamp-1">
+            {visit.meetingPerson && <span className="text-slate-400">Met: </span>}
+            {visit.meetingPerson}
+            {visit.meetingPerson && visit.outcome && ' · '}
+            {visit.outcome}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -17,7 +17,7 @@ import { useState, useRef, useCallback } from 'react';
 import {
   Camera, Upload, User, Handshake, CreditCard,
   StickyNote, Star, ChevronDown, ChevronUp,
-  AlertCircle, CheckCircle2, ImageIcon, X,
+  AlertCircle, CheckCircle2, ImageIcon, X, Tag,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 
@@ -29,6 +29,7 @@ import type {
   DCFCreditRange,
   DCFDocType,
   ProofPhotoType,
+  DealerPersona,
   UnifiedFeedbackData,
 } from './visitHelpers';
 
@@ -38,6 +39,7 @@ import {
   DCF_INTEREST_STATUSES,
   DCF_CREDIT_RANGES,
   DCF_DOC_TYPES,
+  DEALER_PERSONAS,
 } from './visitHelpers';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -127,7 +129,9 @@ function Section({
   };
 
   return (
-    <div className={`bg-white rounded-2xl border transition-all ${
+    <div
+      data-feedback-section={number}
+      className={`bg-white rounded-2xl border transition-all ${
       error ? 'border-rose-200 shadow-[0_0_0_1px_rgba(244,63,94,0.1)]' : 'border-slate-100 shadow-sm'
     }`}>
       <button
@@ -201,7 +205,6 @@ export function UnifiedFeedbackForm({
   const [leadShared, setLeadShared] = useState(false);
   const [leadStatus, setLeadStatus] = useState<LeadSharingStatus | null>(null);
   const [sellerLeads, setSellerLeads] = useState(0);
-  const [buyerLeads, setBuyerLeads] = useState(0);
   const [inspectionExpected, setInspectionExpected] = useState<boolean | null>(null);
 
   // ── Section 4: DCF ──
@@ -215,6 +218,11 @@ export function UnifiedFeedbackForm({
 
   // ── Section 6: Rating ──
   const [rating, setRating] = useState(0);
+
+  // ── Section 7: Dealer Persona ──
+  const [dealerPersona, setDealerPersona] = useState<DealerPersona | ''>('');
+
+  const shopClosed = meetingRole === 'Shop closed';
 
   // ── Validation state ──
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -272,30 +280,45 @@ export function UnifiedFeedbackForm({
     if (!meetingRole) errs.meetingRole = true;
     if (meetingRole === 'Other' && !meetingOther.trim()) errs.meetingOther = true;
 
-    // If lead shared ON → lead status mandatory
-    if (leadShared && !leadStatus) errs.leadStatus = true;
-
-    // If DCF ON → DCF status mandatory
-    if (dcfDiscussed && !dcfStatus) errs.dcfStatus = true;
+    // Lead/DCF validation only when shop is open
+    if (!shopClosed) {
+      if (leadShared && !leadStatus) errs.leadStatus = true;
+      if (dcfDiscussed && !dcfStatus) errs.dcfStatus = true;
+    }
 
     // Rating mandatory
     if (rating === 0) errs.rating = true;
 
+    // Dealer persona mandatory
+    if (!dealerPersona) errs.dealerPersona = true;
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
-  }, [isVisit, photoPreview, photoType, meetingRole, meetingOther, leadShared, leadStatus, dcfDiscussed, dcfStatus, rating]);
+  }, [isVisit, photoPreview, photoType, meetingRole, meetingOther, leadShared, leadStatus, dcfDiscussed, dcfStatus, rating, dealerPersona, shopClosed]);
 
   // ── Submit ──
   const handleSubmit = useCallback(() => {
     setSubmitted(true);
     if (!validate()) {
       toast.error('Please fill all required fields');
-      // Auto-expand first error section
-      if (errors.photo || errors.photoType) setExpandedSection(1);
-      else if (errors.meetingRole || errors.meetingOther) setExpandedSection(2);
-      else if (errors.leadStatus) setExpandedSection(3);
-      else if (errors.dcfStatus) setExpandedSection(4);
-      else if (errors.rating) setExpandedSection(6);
+      // Auto-expand first error section + scroll to it
+      let firstErrorSection = 0;
+      if (errors.photo || errors.photoType) firstErrorSection = 1;
+      else if (errors.meetingRole || errors.meetingOther) firstErrorSection = 2;
+      else if (errors.leadStatus) firstErrorSection = 3;
+      else if (errors.dcfStatus) firstErrorSection = 4;
+      else if (errors.rating) firstErrorSection = 6;
+      else if (errors.dealerPersona) firstErrorSection = 7;
+      if (firstErrorSection > 0) {
+        setExpandedSection(firstErrorSection);
+        // Defer scroll until the section expand animation has started
+        setTimeout(() => {
+          const el = document.querySelector(`[data-feedback-section="${firstErrorSection}"]`);
+          if (el && typeof (el as HTMLElement).scrollIntoView === 'function') {
+            (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 80);
+      }
       return;
     }
 
@@ -307,24 +330,26 @@ export function UnifiedFeedbackForm({
       geoVerified: isVisit,
       meetingPersonRole: meetingRole as MeetingPersonRole,
       meetingPersonOtherText: meetingRole === 'Other' ? meetingOther.trim() : null,
-      leadShared,
-      leadStatus: leadShared ? leadStatus : null,
-      sellerLeadCount: leadShared && leadStatus === 'Yes – Confirmed' ? sellerLeads : 0,
-      buyerLeadCount: leadShared && leadStatus === 'Yes – Confirmed' ? buyerLeads : 0,
-      inspectionExpected: leadShared && leadStatus === 'Yes – Confirmed' ? inspectionExpected : null,
-      dcfDiscussed,
-      dcfStatus: dcfDiscussed ? dcfStatus : null,
-      dcfCreditRange: dcfDiscussed && (dcfStatus === 'Interested' || dcfStatus === 'Follow-up Required' || dcfStatus === 'Very Interested') ? dcfCreditRange : null,
-      dcfDocsCollected: dcfDiscussed && (dcfStatus === 'Interested' || dcfStatus === 'Follow-up Required' || dcfStatus === 'Very Interested') ? Array.from(dcfDocs) : [],
+      leadShared: shopClosed ? false : leadShared,
+      leadStatus: shopClosed ? null : (leadShared ? leadStatus : null),
+      sellerLeadCount: !shopClosed && leadShared && leadStatus === 'Yes – Confirmed' ? sellerLeads : 0,
+      buyerLeadCount: 0,
+      inspectionExpected: !shopClosed && leadShared && leadStatus === 'Yes – Confirmed' ? inspectionExpected : null,
+      dcfDiscussed: shopClosed ? false : dcfDiscussed,
+      dcfStatus: shopClosed ? null : (dcfDiscussed ? dcfStatus : null),
+      dcfCreditRange: !shopClosed && dcfDiscussed && (dcfStatus === 'Interested' || dcfStatus === 'Follow-up Required' || dcfStatus === 'Very Interested') ? dcfCreditRange : null,
+      dcfDocsCollected: !shopClosed && dcfDiscussed && (dcfStatus === 'Interested' || dcfStatus === 'Follow-up Required' || dcfStatus === 'Very Interested') ? Array.from(dcfDocs) : [],
       note: note.trim(),
       rating,
+      dealerPersona: dealerPersona || null,
     };
 
     onSubmit(data);
   }, [
     validate, errors, interactionType, photoPreview, photoType, isVisit,
-    meetingRole, meetingOther, leadShared, leadStatus, sellerLeads, buyerLeads,
-    inspectionExpected, dcfDiscussed, dcfStatus, dcfCreditRange, dcfDocs, note, rating, onSubmit,
+    meetingRole, meetingOther, leadShared, leadStatus, sellerLeads,
+    inspectionExpected, dcfDiscussed, dcfStatus, dcfCreditRange, dcfDocs, note, rating,
+    dealerPersona, shopClosed, onSubmit,
   ]);
 
   // ── Section completion checks ──
@@ -512,8 +537,8 @@ export function UnifiedFeedbackForm({
         </div>
       </Section>
 
-      {/* ═══ SECTION 3: Lead Sharing ═══ */}
-      <Section
+      {/* ═══ SECTION 3: Lead Sharing (hidden when Shop closed) ═══ */}
+      {!shopClosed && <Section
         number={3}
         icon={Handshake}
         title="Lead Sharing"
@@ -565,29 +590,16 @@ export function UnifiedFeedbackForm({
               {/* Lead details only if Confirmed */}
               {showLeadDetails && (
                 <div className="bg-slate-50 rounded-xl p-3 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Seller Leads</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={sellerLeads}
-                        onChange={(e) => setSellerLeads(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full px-3 py-2 rounded-lg text-[13px] border border-slate-200 bg-white
-                                   focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Buyer Leads</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={buyerLeads}
-                        onChange={(e) => setBuyerLeads(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full px-3 py-2 rounded-lg text-[13px] border border-slate-200 bg-white
-                                   focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Seller Leads</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={sellerLeads}
+                      onChange={(e) => setSellerLeads(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full px-3 py-2 rounded-lg text-[13px] border border-slate-200 bg-white
+                                 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    />
                   </div>
 
                   <div>
@@ -615,10 +627,10 @@ export function UnifiedFeedbackForm({
             </>
           )}
         </div>
-      </Section>
+      </Section>}
 
-      {/* ═══ SECTION 4: DCF Discussion ═══ */}
-      <Section
+      {/* ═══ SECTION 4: DCF Discussion (hidden when Shop closed) ═══ */}
+      {!shopClosed && <Section
         number={4}
         icon={CreditCard}
         title="DCF Discussion"
@@ -722,7 +734,7 @@ export function UnifiedFeedbackForm({
             </>
           )}
         </div>
-      </Section>
+      </Section>}
 
       {/* ═══ SECTION 5: Short Note ═══ */}
       <Section
@@ -791,6 +803,41 @@ export function UnifiedFeedbackForm({
               <AlertCircle className="w-3 h-3" /> Rating is required
             </p>
           )}
+        </div>
+      </Section>
+
+      {/* ═══ SECTION 7: Dealer Persona ═══ */}
+      <Section
+        number={7}
+        icon={Tag}
+        title="Dealer Persona"
+        subtitle={dealerPersona || undefined}
+        color="sky"
+        required
+        complete={!!dealerPersona}
+        error={submitted && !!errors.dealerPersona}
+        expanded={expandedSection === 7}
+        onToggle={() => toggleSection(7)}
+      >
+        <div className="pt-2">
+          <div className="grid grid-cols-2 gap-1.5">
+            {DEALER_PERSONAS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => { setDealerPersona(p); if (errors.dealerPersona) setErrors(prev => ({ ...prev, dealerPersona: false })); }}
+                className={`py-2.5 px-3 rounded-xl text-[12px] font-medium border transition-all active:scale-[0.97]
+                  ${dealerPersona === p
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  }
+                  ${submitted && errors.dealerPersona && !dealerPersona ? 'border-rose-300' : ''}
+                `}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </Section>
 

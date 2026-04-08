@@ -1,14 +1,18 @@
 import { useMemo } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { getAllDealers } from '../../data/selectors';
+import { getAllDealers, getDealersByKAM } from '../../data/selectors';
 import { getFilteredDCFLeads, getDealerLeadMetrics, deriveDealerActivityStage } from '../../data/canonicalMetrics';
 import { TimePeriod } from '../../lib/domain/constants';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
 
 interface DCFDealersListPageProps {
   onBack: () => void;
   filterType: 'onboarded' | 'leadGiving';
   dateRange: string;
+  customFrom?: string;
+  customTo?: string;
   onDealerClick: (dealerId: string) => void;
 }
 
@@ -23,19 +27,31 @@ interface DealerRow {
   mtdDisbursals?: number;
 }
 
-export function DCFDealersListPage({ onBack, filterType, dateRange, onDealerClick }: DCFDealersListPageProps) {
+export function DCFDealersListPage({ onBack, filterType, dateRange, customFrom, customTo, onDealerClick }: DCFDealersListPageProps) {
+  const { effectiveKamIds, role: actorRole } = useActorScope();
   // Derive dealer list from canonical time-filtered data
   const dealers: DealerRow[] = useMemo(() => {
     const period = (Object.values(TimePeriod).includes(dateRange as TimePeriod)
       ? dateRange as TimePeriod
       : TimePeriod.MTD);
-    const allDealers = getAllDealers();
-    const allDCFLeads = getFilteredDCFLeads({ period });
+    const allDealers = effectiveKamIds && effectiveKamIds.length > 0
+      ? (() => {
+          const seen = new Set<string>();
+          const union: any[] = [];
+          for (const kid of effectiveKamIds) {
+            for (const d of getDealersByKAM(kid)) {
+              if (!seen.has(d.id)) { seen.add(d.id); union.push(d); }
+            }
+          }
+          return union;
+        })()
+      : getAllDealers();
+    const allDCFLeads = getFilteredDCFLeads({ period, customFrom, customTo, kamIds: effectiveKamIds });
 
     const rows: DealerRow[] = allDealers.map(d => {
       const dcfLeads = allDCFLeads.filter(l => l.dealerId === d.id);
       const disbursed = dcfLeads.filter(l => l.overallStatus === 'DISBURSED');
-      const metrics = getDealerLeadMetrics(d.id, { period });
+      const metrics = getDealerLeadMetrics(d.id, { period, customFrom, customTo, kamIds: effectiveKamIds });
       const stage = deriveDealerActivityStage(metrics, d.status);
       return {
         id: d.id,
@@ -53,7 +69,7 @@ export function DCFDealersListPage({ onBack, filterType, dateRange, onDealerClic
       return rows.filter(d => (d.dcfLeads ?? 0) > 0);
     }
     return rows;
-  }, [filterType, dateRange]);
+  }, [filterType, dateRange, customFrom, customTo, effectiveKamIds]);
 
   const title = filterType === 'onboarded' ? 'DCF Onboarded Dealers' : 'DCF Lead Giving Dealers';
   const filterChips = filterType === 'onboarded'
@@ -79,7 +95,8 @@ export function DCFDealersListPage({ onBack, filterType, dateRange, onDealerClic
           <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-gray-900">{title}</h1>
+          <h1 className="text-gray-900 flex-1">{title}</h1>
+          {(actorRole === 'TL' || actorRole === 'Admin') && <KAMFilter />}
         </div>
         
         {/* Filter Chips */}

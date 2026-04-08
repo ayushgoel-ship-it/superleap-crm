@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { TimePeriod } from '../../lib/domain/constants';
 import { computeMetrics } from '../../lib/metrics/metricsFromDB';
+import { computeInputScore } from '../../lib/metrics/inputScore';
 import { getConfigI2SITarget, getConfigTargetsForUser } from '../../lib/configFromDB';
 import { getSITarget, getDCFTargets } from '../../lib/metricsEngine';
 import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
@@ -28,6 +29,7 @@ import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from
 // ── Types ──
 
 interface KAMDetailPageProps {
+  kamId: string;
   kamName: string;
   kamCity: string;
   onBack: () => void;
@@ -74,8 +76,8 @@ interface KAMLmtd {
   dcfGMV: number;
 }
 
-function getKAMData(period: TimePeriod) {
-  const m = computeMetrics(period);
+function getKAMData(period: TimePeriod, kamId?: string, customFrom?: string, customTo?: string) {
+  const m = computeMetrics(period, kamId, customFrom, customTo);
 
   const isDaily = period === TimePeriod.TODAY || period === TimePeriod.D_MINUS_1;
   const kamRoleTargets = getConfigTargetsForUser('');
@@ -89,12 +91,7 @@ function getKAMData(period: TimePeriod) {
   const inputScoreTarget = kamRoleTargets.inputScoreGate;
 
   // Compute input score
-  const inputScore = Math.round(
-    (Math.min(m.completedVisits / 3, 1) * 30) +
-    (Math.min(m.totalCalls / 5, 1) * 30) +
-    (Math.min(m.uniqueDealersCalled / 3, 1) * 20) +
-    (Math.min(m.conversionRate / 50, 1) * 20)
-  );
+  const inputScore = computeInputScore(m);
 
   const dcfConversion = m.dcfTotal > 0 ? Math.round((m.dcfDisbursals / m.dcfTotal) * 100) : 0;
   const dcfOnboardingRatio = m.dcfTotal > 0 ? Math.round((m.dcfDisbursals / m.dcfTotal) * 100) : 0;
@@ -117,17 +114,12 @@ function getKAMData(period: TimePeriod) {
   };
 }
 
-function getKAMLmtd(_period: TimePeriod): KAMLmtd {
+function getKAMLmtd(_period: TimePeriod, kamId?: string): KAMLmtd {
   // Use last month data as LMTD comparison baseline
-  const lastMonth = computeMetrics(TimePeriod.LAST_MONTH);
+  const lastMonth = computeMetrics(TimePeriod.LAST_MONTH, kamId);
   const lastMonthSIPct = lastMonth.totalLeads > 0 ? Math.round((lastMonth.wonLeads / lastMonth.totalLeads) * 100) : 0;
   const lastMonthDCFPct = lastMonth.dcfTotal > 0 ? Math.round((lastMonth.dcfDisbursals / lastMonth.dcfTotal) * 100) : 0;
-  const lastMonthScore = Math.round(
-    (Math.min(lastMonth.completedVisits / 3, 1) * 30) +
-    (Math.min(lastMonth.totalCalls / 5, 1) * 30) +
-    (Math.min(lastMonth.uniqueDealersCalled / 3, 1) * 20) +
-    (Math.min(lastMonth.conversionRate / 50, 1) * 20)
-  );
+  const lastMonthScore = computeInputScore(lastMonth);
 
   return {
     stockInsPct: lastMonthSIPct,
@@ -176,12 +168,12 @@ function formatLakhs(n: number): string {
 
 // ── Component ──
 
-export function KAMDetailPage({ kamName, kamCity, onBack, onNavigateToSection }: KAMDetailPageProps) {
+export function KAMDetailPage({ kamId, kamName, kamCity, onBack, onNavigateToSection }: KAMDetailPageProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>(TimePeriod.MTD);
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
-  const d = getKAMData(selectedPeriod);
-  const lmtd = getKAMLmtd(selectedPeriod);
+  const d = getKAMData(selectedPeriod, kamId, customFrom, customTo);
+  const lmtd = getKAMLmtd(selectedPeriod, kamId);
 
   // Computed
   const siAchievePct = Math.round((d.stockIns / d.stockInsTarget) * 100);

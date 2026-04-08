@@ -39,7 +39,8 @@ import { EmptyState } from '../premium/EmptyState';
 import { CardSkeleton } from '../premium/SkeletonLoader';
 import { toast } from 'sonner';
 import { computeDashboardMetrics, getFilteredDCFLeads } from '../../data/canonicalMetrics';
-import { getAllDealers } from '../../data/selectors';
+import { getAllDealers, getDealersByKAM } from '../../data/selectors';
+import { useKamScope } from '../../lib/auth/useKamScope';
 
 // ── Types ──
 
@@ -52,7 +53,7 @@ interface DCFPageProps {
   onNavigateToDCFDisbursals?: () => void;
   onNavigateToDCFDealerDetail?: (dealerId: string) => void;
   onNavigateToDCFOnboardingDetail?: (dealerId: string) => void;
-  onDateRangeChange?: (dateRange: string) => void;
+  onDateRangeChange?: (dateRange: string, customFrom?: string, customTo?: string) => void;
   userRole?: 'KAM' | 'TL';
 }
 
@@ -66,9 +67,9 @@ type StatusFilter = 'All' | 'Onboarded' | 'Not Onboarded';
 // customFrom/customTo state. Custom date ranges from TimeFilterControl are
 // silently ignored — dealer data always uses enum-based period boundaries.
 // TODO: Accept customFrom/customTo params once behavior change is approved.
-function buildDCFDealerData(timeScope: TimePeriod): DCFDealerData[] {
-  const allDealers = getAllDealers();
-  const dcfLeads = getFilteredDCFLeads({ period: timeScope });
+function buildDCFDealerData(timeScope: TimePeriod, kamId?: string, customFrom?: string, customTo?: string): DCFDealerData[] {
+  const allDealers = kamId ? getDealersByKAM(kamId) : getAllDealers();
+  const dcfLeads = getFilteredDCFLeads({ period: timeScope, kamId, customFrom, customTo });
 
   return allDealers.map(d => {
     const dealerDCFLeads = dcfLeads.filter(l => l.dealerId === d.id);
@@ -131,6 +132,7 @@ export function DCFPage({
   }
 
   // ── State ──
+  const kamScopeId = useKamScope();
   const [timeScope, setTimeScope] = useState<TimePeriod>(TimePeriod.MTD);
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
@@ -145,7 +147,7 @@ export function DCFPage({
 
   const handleTimeScopeChange = (scope: TimePeriod) => {
     setTimeScope(scope);
-    onDateRangeChange?.(scope);
+    onDateRangeChange?.(scope, customFrom, customTo);
     // Brief loading flash for smooth data transition
     setIsLoading(true);
     setTimeout(() => setIsLoading(false), 200);
@@ -153,7 +155,7 @@ export function DCFPage({
 
   // ── Computed metrics (canonical) ──
 
-  const dealers = useMemo(() => buildDCFDealerData(timeScope), [timeScope]);
+  const dealers = useMemo(() => buildDCFDealerData(timeScope, kamScopeId, customFrom, customTo), [timeScope, kamScopeId, customFrom, customTo]);
   const onboarded = useMemo(() => dealers.filter(d => d.isOnboarded), [dealers]);
   const notOnboarded = useMemo(() => dealers.filter(d => !d.isOnboarded), [dealers]);
   const leadGiving = useMemo(() => onboarded.filter(d => d.dcfLeads > 0), [onboarded]);
@@ -165,8 +167,8 @@ export function DCFPage({
 
   // Canonical metrics for KPI cards
   const canonicalMetrics = useMemo(
-    () => computeDashboardMetrics({ period: timeScope }),
-    [timeScope]
+    () => computeDashboardMetrics({ period: timeScope, kamId: kamScopeId, customFrom, customTo }),
+    [timeScope, kamScopeId, customFrom, customTo]
   );
 
   // ── KPI values (driven by canonical data) ──
@@ -302,7 +304,7 @@ export function DCFPage({
           allowCustom
           customFrom={customFrom}
           customTo={customTo}
-          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); }}
+          onCustomRangeChange={({ fromISO, toISO }) => { setCustomFrom(fromISO); setCustomTo(toISO); onDateRangeChange?.(timeScope, fromISO, toISO); }}
         />
       </div>
 

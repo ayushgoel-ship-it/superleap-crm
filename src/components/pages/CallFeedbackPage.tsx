@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Phone, Clock } from 'lucide-react';
 import { useActivity } from '../../contexts/ActivityContext';
+import { useAuth } from '../auth/AuthProvider';
 import { UnifiedFeedbackForm } from '../activity/UnifiedFeedbackForm';
 import type { UnifiedFeedbackData } from '../activity/visitHelpers';
 import * as visitApi from '../../api/visit.api';
@@ -21,7 +22,8 @@ interface CallFeedbackPageProps {
 }
 
 export function CallFeedbackPage({ callId, onBack }: CallFeedbackPageProps) {
-  const { calls, updateCall } = useActivity();
+  const { calls, updateCall, refresh: refreshActivity } = useActivity();
+  const { activeActor } = useAuth();
   const [submitting, setSubmitting] = useState(false);
 
   const callAttempt = calls.find(c => c.id === callId);
@@ -73,7 +75,7 @@ export function CallFeedbackPage({ callId, onBack }: CallFeedbackPageProps) {
           dealerName: callAttempt.dealerName,
           dealerCode: callAttempt.dealerCode,
           dealerCity: callAttempt.dealerCity,
-          userId: 'current-user',
+          userId: activeActor?.userId || '',
           kamName: callAttempt.kamName || 'Current User',
           durationSeconds: callAttempt.duration,
         });
@@ -105,6 +107,7 @@ export function CallFeedbackPage({ callId, onBack }: CallFeedbackPageProps) {
       toast.success('Call feedback submitted', {
         description: `${callAttempt.dealerName} — Rating: ${data.rating}/5`,
       });
+      refreshActivity();
     } catch (err: any) {
       console.error('[CallFeedback] DB persist failed:', err);
       // Local state already updated — toast warning

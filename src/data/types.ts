@@ -29,7 +29,7 @@ export type LeadStage =
   | 'Inspection Done'
   | 'HB Discovered'
   | 'OCB Stage'
-  | 'PR Punched'
+  | 'BBNP'
   | 'Stock-in'
   | 'Payout Done'
   | 'Lost'
@@ -87,6 +87,9 @@ export interface Dealer {
   dcfOnboardingDate?: string;
   onboardingStatus: 'Fully onboarded' | 'Dlite only' | 'Soft onboarded';
   bankAccountStatus: 'Verified' | 'Not verified';
+
+  // Whether KAM/Admin marked this dealer as a "Top" dealer (canonical: dealers_master.is_top)
+  isTopDealer?: boolean;
 }
 
 // ============================================================================
@@ -270,6 +273,9 @@ export interface Lead {
   kamPhone?: string;
   tlId: string;
 
+  // Identifiers
+  appId?: string; // APP_ID from sell_leads_master (fallback: application_id)
+
   // Customer info
   customerName: string;
   customerPhone: string;
@@ -353,6 +359,7 @@ export interface DCFLead {
   car: string;
   carValue: number;
   ltv: number; // Loan-to-value percentage
+  finalOfferLtv?: number | null; // FINAL_OFFER_LTV from dcf_leads_master
   loanAmount: number;
   roi: number; // Rate of interest
   tenure: number; // Months

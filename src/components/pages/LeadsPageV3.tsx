@@ -18,6 +18,7 @@
  */
 
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { getSession } from '../../lib/auth/authService';
 import {
   Search, Plus, X, ChevronDown, ChevronRight,
   LayoutGrid, TableProperties, AlertCircle,
@@ -31,6 +32,9 @@ import { LeadCreatePage } from './LeadCreatePage';
 import { getAllLeads, searchLeads, getAnyLeadById } from '../../data/selectors';
 import { toLeadListVM, dcfToLeadCardVM, validateLeadIdForNavigation } from '../../data/adapters/leadAdapter';
 import { getFilteredLeads, getFilteredDCFLeads, classifyLeadStage } from '../../data/canonicalMetrics';
+import { useKamScope } from '../../lib/auth/useKamScope';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { KAMFilter } from '../common/KAMFilter';
 import type { Lead } from '../../data/types';
 import type { LeadCardVM } from '../../data/adapters/leadAdapter';
 import { LeadPipelineCard } from '../leads/LeadPipelineCard';
@@ -46,6 +50,7 @@ import { toast } from 'sonner@2.0.3';
 
 import { TimePeriod, STOCK_CHANNEL_STAGE_FILTERS, DCF_STAGE_FILTERS } from '../../lib/domain/constants';
 import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
+import { useUrlState } from '../../lib/url/useUrlState';
 import { toDCFLeadListVM } from '../../data/adapters/dcfAdapter';
 
 type ViewMode = 'cards' | 'table';
@@ -110,7 +115,7 @@ function classifyStage(stage: string, createdAt?: string): string {
     'Lead Dropped': 'Lost',
     'Insp Pending': 'In Progress',
     'In Nego': 'Inspection',
-    'BBNP': 'Stock-In',
+    'BBNP': 'BBNP',
     'Stockin': 'Stock-In',
     'Payout Done': 'Payout Done',
     'Lost': 'Lost',
@@ -147,16 +152,20 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [showCreateLead, setShowCreateLead] = useState(false);
 
-  // Filter / view state
-  const [viewMode, setViewMode] = useState<ViewMode>('cards');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [pendingMode, setPendingMode] = useState(false); // CEP Pending mode
-  const [selectedChannel, setSelectedChannel] = useState<ChannelKey>('all');
-  const [selectedStage, setSelectedStage] = useState<string | null>(null);
-  const [timeFilter, setTimeFilter] = useState<TimePeriod>(TimePeriod.MTD);
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('newest');
+  // Filter / view state (URL-backed so back-nav from detail restores filters)
+  const [viewMode, setViewMode] = useUrlState<ViewMode>('view', 'cards');
+  const [searchQuery, setSearchQuery] = useUrlState<string>('q', '');
+  const [pendingModeRaw, setPendingModeRaw] = useUrlState<'0' | '1'>('pending', '0');
+  const pendingMode = pendingModeRaw === '1';
+  const setPendingMode = (b: boolean) => setPendingModeRaw(b ? '1' : '0');
+  const [selectedChannel, setSelectedChannel] = useUrlState<ChannelKey>('ch', 'all');
+  const [selectedStageRaw, setSelectedStageRaw] = useUrlState<string>('stage', '');
+  const selectedStage = selectedStageRaw === '' ? null : selectedStageRaw;
+  const setSelectedStage = (v: string | null) => setSelectedStageRaw(v ?? '');
+  const [timeFilter, setTimeFilter] = useUrlState<TimePeriod>('t', TimePeriod.MTD);
+  const [customFrom, setCustomFrom] = useUrlState<string>('from', '');
+  const [customTo, setCustomTo] = useUrlState<string>('to', '');
+  const [sortKey, setSortKey] = useUrlState<SortKey>('sort', 'newest');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
@@ -189,17 +198,31 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
 
   // ── Data (canonical time-filtered) ──
 
-  const allLeads = useMemo(() => getAllLeads(), []);
+  const kamScopeId = useKamScope();
+  const { effectiveKamIds, role: actorRole } = useActorScope();
+  // Scope set used for list filtering — KAM self-id wins (back-compat), else team.
+  const scopeKamIds = useMemo(
+    () => (kamScopeId ? [kamScopeId] : effectiveKamIds),
+    [kamScopeId, effectiveKamIds],
+  );
+  const scopeKamIdSet = useMemo(
+    () => (scopeKamIds ? new Set(scopeKamIds) : null),
+    [scopeKamIds],
+  );
+  const allLeads = useMemo(
+    () => (scopeKamIdSet ? getAllLeads().filter(l => scopeKamIdSet.has(l.kamId)) : getAllLeads()),
+    [scopeKamIdSet]
+  );
   const timeFilteredLeads = useMemo(
-    () => getFilteredLeads({ period: timeFilter }),
-    [timeFilter]
+    () => getFilteredLeads({ period: timeFilter, kamIds: scopeKamIds, customFrom, customTo }),
+    [timeFilter, scopeKamIds, customFrom, customTo]
   );
   const leadVMs = useMemo(() => toLeadListVM(timeFilteredLeads), [timeFilteredLeads]);
 
   // Merge DCF leads into unified pipeline
   const timeFilteredDCF = useMemo(
-    () => getFilteredDCFLeads({ period: timeFilter }),
-    [timeFilter]
+    () => getFilteredDCFLeads({ period: timeFilter, kamIds: scopeKamIds, customFrom, customTo }),
+    [timeFilter, scopeKamIds, customFrom, customTo]
   );
   const dcfVMs = useMemo(
     () => toDCFLeadListVM(timeFilteredDCF).map(dcfToLeadCardVM),
@@ -357,7 +380,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
         dealerName: lead?.dealerName || '',
         dealerCode: lead?.dealerCode || '',
         dealerCity: lead?.city || '',
-        userId: 'current-user',
+        userId: getSession()?.activeActorId || getSession()?.userId || '',
         kamName: 'Current User',
         durationSeconds: Math.max(1, Math.floor((Date.now() - callStartTime) / 1000)),
       });
@@ -411,6 +434,7 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
         <DCFLeadDetailPage
           loanId={selectedLeadId}
           onBack={() => setSelectedLeadId(null)}
+          userRole={userRole as 'KAM' | 'TL' | 'Admin'}
         />
       );
     }
@@ -451,6 +475,9 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
             <p className="text-[11px] text-slate-400 mt-0.5">
               {stats.total} lead{stats.total !== 1 ? 's' : ''} &middot; {stats.active} active
             </p>
+            {(actorRole === 'TL' || actorRole === 'Admin') && (
+              <div className="mt-2"><KAMFilter sticky /></div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
