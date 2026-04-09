@@ -8,3 +8,5 @@ dist
 .claude/worktrees/
 build/
 Extras/
+backend/.idea/
+backend/*/target/

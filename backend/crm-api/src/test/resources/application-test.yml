@@ -1,0 +1,46 @@
+server:
+  port: 0
+
+crm:
+  db:
+    host: localhost
+    port: 5432
+    database: crm_test
+    username: crm_test
+    password: crm_test
+    schema: crm
+    ssl-enabled: false
+  cache:
+    enabled: false
+    provider: none
+    default-ttl-seconds: 300
+    key-prefix: crm:test
+  storage:
+    enabled: false
+    provider: s3
+    bucket: crm-test-bucket
+    region: ap-south-1
+    presigned-url-expiration-seconds: 300
+  jwt:
+    enabled: true
+    issuer: test-issuer
+    audience: crm-api
+    secret: test-secret-key-with-at-least-32-bytes
+    dev-header-fallback-enabled: true
+  services:
+    endpoints:
+      admin:
+        base-url: http://localhost:8081
+        connect-timeout-ms: 1000
+        read-timeout-ms: 2000
+        enabled: true
+      notification:
+        base-url: http://localhost:8082
+        connect-timeout-ms: 1500
+        read-timeout-ms: 2500
+        enabled: false
+
+logging:
+  level:
+    com.cars24: DEBUG
+    org.springframework.web: INFO

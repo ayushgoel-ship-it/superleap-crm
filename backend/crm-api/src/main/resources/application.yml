@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: superleap-crm-api
+
+server:
+  port: ${CRM_API_PORT:8080}
+
+crm:
+  db:
+    host: ${CRM_DB_HOST:localhost}
+    port: ${CRM_DB_PORT:5432}
+    database: ${CRM_DB_NAME:crm}
+    username: ${CRM_DB_USERNAME:crm}
+    password: ${CRM_DB_PASSWORD:crm}
+    schema: ${CRM_DB_SCHEMA:public}
+    ssl-enabled: ${CRM_DB_SSL_ENABLED:false}
+  cache:
+    enabled: ${CRM_CACHE_ENABLED:false}
+    provider: ${CRM_CACHE_PROVIDER:none}
+    default-ttl-seconds: ${CRM_CACHE_DEFAULT_TTL_SECONDS:300}
+    key-prefix: ${CRM_CACHE_KEY_PREFIX:crm}
+  storage:
+    enabled: ${CRM_STORAGE_ENABLED:false}
+    provider: ${CRM_STORAGE_PROVIDER:s3}
+    bucket: ${CRM_STORAGE_BUCKET:crm-local}
+    region: ${CRM_STORAGE_REGION:ap-south-1}
+    presigned-url-expiration-seconds: ${CRM_STORAGE_PRESIGNED_URL_EXPIRATION_SECONDS:300}
+  jwt:
+    enabled: ${CRM_JWT_ENABLED:true}
+    issuer: ${CRM_JWT_ISSUER:}
+    audience: ${CRM_JWT_AUDIENCE:}
+    secret: ${CRM_JWT_SECRET:}
+    dev-header-fallback-enabled: ${CRM_JWT_DEV_HEADER_FALLBACK_ENABLED:false}
+  services:
+    endpoints: {}
