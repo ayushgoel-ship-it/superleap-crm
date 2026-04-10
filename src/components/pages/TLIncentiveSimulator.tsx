@@ -47,7 +47,7 @@ export function TLIncentiveSimulator({ onClose }: TLIncentiveSimulatorProps) {
   const mtdValues = useMemo(() => {
     const metrics = computeDashboardMetrics({ period: TimePeriod.MTD });
     const dcfLeads = getFilteredDCFLeads({ period: TimePeriod.MTD });
-    const disbursedDCF = dcfLeads.filter(d => d.overallStatus === 'DISBURSED');
+    const disbursedDCF = dcfLeads.filter(d => (d.overallStatus || '').toLowerCase() === 'disbursed');
     const gmvTotal = disbursedDCF.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
     const firstDisbursals = disbursedDCF.filter(d => d.firstDisbursalForDealer);
     const gmvFirst = firstDisbursals.reduce((sum, d) => sum + (d.loanAmount || 0), 0);
