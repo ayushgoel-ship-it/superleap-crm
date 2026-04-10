@@ -100,10 +100,18 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
   const metrics = computeMetrics(selectedPeriod, kamScopeId, customFrom, customTo);
   const { daysElapsed: daysElapsedInMonth, totalDays: totalDaysInMonth } = getMonthProgress();
 
-  // Mapped data shape for the dashboard
+  // Mapped data shape for the dashboard.
+  //
+  // Wave 1A fixes:
+  //   - `inspections` now uses `metrics.inspections` (rank-1 filtered),
+  //     not `metrics.totalLeads` which counted every lead regardless of
+  //     inspection state and inflated home counts.
+  //   - `sis` → removed. It previously mapped to `metrics.wonLeads`, a
+  //     field the rank-based engine never populates (status 'Won' is
+  //     unused in the current data model). Stock-ins are tracked via
+  //     `stockIns` (rank-1 stockin_date) only.
   const data = {
     stockIns: metrics.stockIns,
-    sis: metrics.wonLeads,
     i2si: metrics.i2si,
     dcfDisbursals: metrics.dcfDisbursals,
     dcfValue: metrics.dcfDisbursedValue,
@@ -118,7 +126,7 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
       top: metrics.connectedCalls,
       tagged: metrics.totalCalls - metrics.connectedCalls,
     },
-    inspections: metrics.totalLeads,
+    inspections: metrics.inspections,
     quality: metrics.callConnectRate,
     a2c: metrics.conversionRate,
     inputScore: computeInputScore(metrics),
@@ -189,7 +197,8 @@ export function HomePage({ userRole, onNavigateToDealers, onNavigateToProductivi
       role,
       siActualMTD: metrics.stockIns,
       siTarget: target,
-      inspectionsMTD: metrics.totalLeads,
+      // Wave 1A: use rank-1 inspections, not totalLeads (stale mapping).
+      inspectionsMTD: metrics.inspections,
       daysElapsed: daysElapsedInMonth,
       totalDaysInMonth,
       inputScore: data.inputScore,

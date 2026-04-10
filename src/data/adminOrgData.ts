@@ -136,17 +136,17 @@ function computeRegionMetrics(region: Region): RegionMetrics {
     siTarget: 0,
     siAch: leads.filter(l => l.stage === 'Stock-in').length,
     dcfDisbCountTarget: 0,
-    dcfDisbCountAch: dcfLeads.filter(l => l.overallStatus === 'DISBURSED').length,
+    dcfDisbCountAch: dcfLeads.filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed').length,
     dcfDisbValueTarget: 0,
     dcfDisbValueAch: dcfLeads
-      .filter(l => l.overallStatus === 'DISBURSED')
+      .filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed')
       .reduce((acc, l) => acc + (l.loanAmount || 0), 0) / 100000, // Convert to lakhs
     ngsInventory: leads.filter(l => l.channel === 'NGS' && l.leadType === 'Inventory').length,
     ngsBuyers: leads.filter(l => l.channel === 'NGS' && l.leadType === 'Seller').length,
     ngsI2BPercent: 0,
     dcfLeads: dcfLeads.length,
     dcfOnboardings: dcfLeads.filter(l => l.currentFunnel === 'Onboarded').length,
-    dcfDisbursements: dcfLeads.filter(l => l.overallStatus === 'DISBURSED').length,
+    dcfDisbursements: dcfLeads.filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed').length,
     dcfGMV: dcfLeads.reduce((acc, l) => acc + (l.loanAmount || 0), 0) / 100000,
     i2siPercent: 0,
     inputScore: 0,

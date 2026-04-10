@@ -616,8 +616,8 @@ export function DealerDetailPageV2({
                     </div>
                     {dcfLeads.length > 0 && (
                       <div className="flex items-center gap-4 mt-3 text-[12px]">
-                        <span className="text-slate-500">Disbursals: <span className="font-bold text-slate-800">{dcfLeads.filter((l: any) => l.overallStatus === 'DISBURSED').length}</span></span>
-                        <span className="text-slate-500">Amount: <span className="font-bold text-emerald-700">{formatAmount(dcfLeads.filter((l: any) => l.overallStatus === 'DISBURSED').reduce((s: number, l: any) => s + (l.loanAmount || 0), 0))}</span></span>
+                        <span className="text-slate-500">Disbursals: <span className="font-bold text-slate-800">{dcfLeads.filter((l: any) => (l.overallStatus || '').toLowerCase() === 'disbursed').length}</span></span>
+                        <span className="text-slate-500">Amount: <span className="font-bold text-emerald-700">{formatAmount(dcfLeads.filter((l: any) => (l.overallStatus || '').toLowerCase() === 'disbursed').reduce((s: number, l: any) => s + (l.loanAmount || 0), 0))}</span></span>
                       </div>
                     )}
                   </div>

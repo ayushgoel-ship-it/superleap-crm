@@ -1,18 +1,22 @@
 /**
- * useKamScope — Single source of truth for KAM data scoping.
+ * useKamScope — DEPRECATED in Wave 1A. Prefer `useActorScope()`.
  *
- * Returns the KAM userId that the current view should be scoped to:
- *   - KAM role (or impersonating a KAM): returns the active actor's userId
- *   - TL / Admin / others: returns undefined (no KAM filter — full team/global rollup)
+ * This hook returns a KAM userId ONLY when the current actor is a KAM
+ * (real or impersonated). For TL / Admin it returns undefined, which the
+ * caller must interpret as "no KAM-level filter" — which is correct ONLY
+ * when the caller also applies a TL-team filter via `useActorScope().kamIds`.
  *
- * Pages and selectors should pass this value as the `kamId` filter to ensure
- * a KAM only ever sees their own data, never global aggregates.
+ * The legacy risk (documented in AC-2) is that pages which relied on this
+ * hook alone fell through to unfiltered selectors under TL impersonation.
+ * The fix is to migrate pages to `useActorScope()` and pass both `kamId`
+ * and `kamIds` to selectors. New code MUST use `useActorScope()`.
  */
-import { useAuth } from '../../components/auth/AuthProvider';
+import { useActorScope } from './useActorScope';
 
 export function useKamScope(): string | undefined {
-  const { activeActor } = useAuth();
-  if (!activeActor) return undefined;
-  const role = (activeActor.role || '').toUpperCase();
-  return role === 'KAM' ? activeActor.userId : undefined;
+  const scope = useActorScope();
+  if (scope.role === 'KAM' && scope.effectiveKamIds && scope.effectiveKamIds.length === 1) {
+    return scope.effectiveKamIds[0];
+  }
+  return undefined;
 }

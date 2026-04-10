@@ -50,7 +50,7 @@ export function DCFDealersListPage({ onBack, filterType, dateRange, customFrom, 
 
     const rows: DealerRow[] = allDealers.map(d => {
       const dcfLeads = allDCFLeads.filter(l => l.dealerId === d.id);
-      const disbursed = dcfLeads.filter(l => l.overallStatus === 'DISBURSED');
+      const disbursed = dcfLeads.filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed');
       const metrics = getDealerLeadMetrics(d.id, { period, customFrom, customTo, kamIds: effectiveKamIds });
       const stage = deriveDealerActivityStage(metrics, d.status);
       return {
