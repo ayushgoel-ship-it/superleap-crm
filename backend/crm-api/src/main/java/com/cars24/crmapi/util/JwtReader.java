@@ -54,10 +54,18 @@ public class JwtReader {
             throw new JwtException("JWT secret is not configured");
         }
 
+        byte[] keyBytes;
         try {
-            return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
+            keyBytes = Decoders.BASE64.decode(secret);
         } catch (IllegalArgumentException | DecodingException ignored) {
-            return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         }
+
+        if (keyBytes.length < 32) {
+            throw new JwtException(
+                    "JWT secret is too short: HMAC-SHA256 requires at least 32 bytes, got " + keyBytes.length);
+        }
+
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 }

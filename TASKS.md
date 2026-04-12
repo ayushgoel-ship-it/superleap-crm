@@ -354,11 +354,11 @@ public FilterRegistrationBean<JwtTokenFilter> jwtFilterRegistration(JwtTokenFilt
 **Description:** Decide which data the CRM owns and which data it projects or references from company systems.
 
 **Subtasks:**
-- [ ] Mark CRM-owned operational entities: visits, calls, notifications, audit logs, upload metadata, workflow state
-- [ ] Mark read-only/reference entities coming from company data
-- [ ] Define app-owned schema and naming conventions
-- [ ] Define what must remain source-of-truth elsewhere
-- [ ] Document write boundaries and forbidden direct writes to source systems
+- [x] Mark CRM-owned operational entities: visits, calls, notifications, audit logs, upload metadata, workflow state
+- [x] Mark read-only/reference entities coming from company data
+- [x] Define app-owned schema and naming conventions
+- [x] Define what must remain source-of-truth elsewhere
+- [x] Document write boundaries and forbidden direct writes to source systems
 
 **Owner:** Backend  
 **Priority:** High  
@@ -369,11 +369,11 @@ public FilterRegistrationBean<JwtTokenFilter> jwtFilterRegistration(JwtTokenFilt
 **Description:** Introduce managed schema evolution so the backend can be deployed and upgraded safely.
 
 **Subtasks:**
-- [ ] Add Flyway or Liquibase to `crm-core`
-- [ ] Create baseline migrations for CRM-owned tables
-- [ ] Add indexes for primary list/detail query paths
-- [ ] Add audit columns and soft-delete conventions where needed
-- [ ] Add local/dev bootstrap instructions
+- [x] Add Flyway or Liquibase to `crm-core`
+- [x] Create baseline migrations for CRM-owned tables
+- [x] Add indexes for primary list/detail query paths
+- [x] Add audit columns and soft-delete conventions where needed
+- [x] Add local/dev bootstrap instructions
 
 **Owner:** Backend  
 **Priority:** High  
@@ -384,13 +384,13 @@ public FilterRegistrationBean<JwtTokenFilter> jwtFilterRegistration(JwtTokenFilt
 **Description:** Replace client-side dataset hydration with backend-owned read models designed around the actual UI.
 
 **Subtasks:**
-- [ ] Define dealer list/detail queries
-- [ ] Define lead list/detail queries
-- [ ] Define call/visit list/detail queries
-- [ ] Define dashboard aggregate queries
-- [ ] Define notifications query model
-- [ ] Add repository contracts and implementations
-- [ ] Add integration tests for each read model
+- [x] Define dealer list/detail queries
+- [x] Define lead list/detail queries
+- [x] Define call/visit list/detail queries
+- [x] Define dashboard aggregate queries
+- [x] Define notifications query model
+- [x] Add repository contracts and implementations
+- [x] Add integration tests for each read model
 
 **Owner:** Backend  
 **Priority:** High  
@@ -401,11 +401,11 @@ public FilterRegistrationBean<JwtTokenFilter> jwtFilterRegistration(JwtTokenFilt
 **Description:** Use caching selectively, following `viz-core` patterns, only where the read load or query cost justifies it.
 
 **Subtasks:**
-- [ ] Identify expensive read paths
-- [ ] Add Redis configuration and typed cache wrappers
-- [ ] Cache immutable or slowly changing reference data
-- [ ] Add TTL strategy per cache category
-- [ ] Add cache invalidation rules for writes
+- [x] Identify expensive read paths
+- [x] Add Redis configuration and typed cache wrappers
+- [x] Cache immutable or slowly changing reference data
+- [x] Add TTL strategy per cache category
+- [x] Add cache invalidation rules for writes
 
 **Owner:** Backend  
 **Priority:** Medium  
@@ -416,12 +416,12 @@ public FilterRegistrationBean<JwtTokenFilter> jwtFilterRegistration(JwtTokenFilt
 **Description:** Replace Supabase storage with backend-owned object storage flows.
 
 **Subtasks:**
-- [ ] Add upload metadata table(s)
-- [ ] Add object storage configuration and client wrapper
-- [ ] Implement signed upload URL generation
-- [ ] Implement signed read URL generation where needed
-- [ ] Add file validation rules for type, size, ownership, and lifecycle
-- [ ] Add integration tests for upload metadata flow
+- [x] Add upload metadata table(s)
+- [x] Add object storage configuration and client wrapper
+- [x] Implement signed upload URL generation
+- [x] Implement signed read URL generation where needed
+- [x] Add file validation rules for type, size, ownership, and lifecycle
+- [x] Add integration tests for upload metadata flow
 
 **Owner:** Backend  
 **Priority:** High  

@@ -142,6 +142,45 @@ class AuthFilterIntegrationTest {
     }
 
     @Test
+    void rejectsNonAdminJwtImpersonation() throws Exception {
+        String token = buildJwt(
+                Instant.now().plusSeconds(900),
+                Map.of(
+                        "user_id", "kam-01",
+                        "role", "KAM",
+                        "effective_user_id", "kam-02",
+                        "effective_role", "KAM"
+                )
+        );
+
+        mockMvc.perform(get("/web/v1/test/auth-context")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void acceptsAdminJwtImpersonation() throws Exception {
+        String token = buildJwt(
+                Instant.now().plusSeconds(900),
+                Map.of(
+                        "user_id", "admin-01",
+                        "role", "ADMIN",
+                        "effective_user_id", "kam-02",
+                        "effective_role", "KAM",
+                        "team_id", "team-a"
+                )
+        );
+
+        mockMvc.perform(get("/web/v1/test/auth-context")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authenticatedUserId").value("admin-01"))
+                .andExpect(jsonPath("$.effectiveUserId").value("kam-02"))
+                .andExpect(jsonPath("$.scope").value("IMPERSONATED"));
+    }
+
+    @Test
     void publicHealthBypassesAuthFilters() throws Exception {
         mockMvc.perform(get("/public/health"))
                 .andExpect(status().isOk());

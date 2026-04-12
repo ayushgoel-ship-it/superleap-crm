@@ -3,6 +3,7 @@ package com.cars24.crmapi.exception;
 import com.cars24.crmapi.dto.common.ApiErrorEnvelope;
 import com.cars24.crmcore.exception.ExternalDependencyException;
 import com.cars24.crmcore.exception.ForbiddenException;
+import com.cars24.crmcore.exception.IllegalStateTransitionException;
 import com.cars24.crmcore.exception.InvalidRequestException;
 import com.cars24.crmcore.exception.OptimisticConflictException;
 import com.cars24.crmcore.exception.ResourceNotFoundException;
@@ -67,6 +68,11 @@ public class GlobalControllerAdvice {
     @ExceptionHandler(OptimisticConflictException.class)
     public ResponseEntity<ApiErrorEnvelope> handleOptimisticConflict(Exception exception, HttpServletRequest request) {
         return buildWarningResponse(request, HttpStatus.CONFLICT, "OPTIMISTIC_CONFLICT", exception.getMessage());
+    }
+
+    @ExceptionHandler(IllegalStateTransitionException.class)
+    public ResponseEntity<ApiErrorEnvelope> handleIllegalStateTransition(Exception exception, HttpServletRequest request) {
+        return buildWarningResponse(request, HttpStatus.CONFLICT, "ILLEGAL_STATE_TRANSITION", exception.getMessage());
     }
 
     @ExceptionHandler({ExternalDependencyException.class, RestClientException.class})

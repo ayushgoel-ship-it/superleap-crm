@@ -15,6 +15,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -54,6 +55,7 @@ public class JwtTokenFilter extends OncePerRequestFilter {
             if (requestContext != null) {
                 request.setAttribute(CrmRequestContextHolder.REQUEST_CONTEXT_ATTRIBUTE, requestContext);
                 CrmRequestContextHolder.set(requestContext);
+                enrichMdc(requestContext);
             }
 
             filterChain.doFilter(request, response);
@@ -187,6 +189,11 @@ public class JwtTokenFilter extends OncePerRequestFilter {
             return authenticatedActor;
         }
 
+        if (!Objects.equals(authenticatedActor.getUserId(), effectiveUserId)
+                && !authenticatedActor.getRoles().contains("ADMIN")) {
+            throw new IllegalArgumentException("Only ADMIN can impersonate another user via JWT");
+        }
+
         return ActorContext.builder()
                 .userId(effectiveUserId)
                 .roles(extractRoles(claims, "effective_roles", "effective_role"))
@@ -287,5 +294,18 @@ public class JwtTokenFilter extends OncePerRequestFilter {
 
     private String defaultString(String value, String fallback) {
         return isBlank(value) ? fallback : value;
+    }
+
+    private void enrichMdc(RequestContext ctx) {
+        ActorContext actor = ctx.getEffectiveActor();
+        if (actor != null) {
+            MDC.put("userId", actor.getUserId());
+            if (actor.getRoles() != null && !actor.getRoles().isEmpty()) {
+                MDC.put("role", actor.getRoles().get(0));
+            }
+        }
+        if (ctx.getActorScope() != null) {
+            MDC.put("scope", ctx.getActorScope().name());
+        }
     }
 }

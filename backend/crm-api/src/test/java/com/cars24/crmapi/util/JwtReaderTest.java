@@ -61,6 +61,16 @@ class JwtReaderTest {
         assertThrows(JwtException.class, () -> jwtReader.parseJwtToken(token));
     }
 
+    @Test
+    void rejectsWeakSecret() {
+        JwtReader jwtReader = new JwtReader(jwtConfig("short", "test-issuer", "crm-api"));
+        String token = buildJwt("short-but-padded-to-be-32-bytes!", "test-issuer", "crm-api",
+                Instant.now().plusSeconds(900));
+
+        assertThrows(JwtException.class, () -> jwtReader.parseJwtToken(token),
+                "Should reject secrets shorter than 32 bytes");
+    }
+
     private JwtConfig jwtConfig(String secret, String issuer, String audience) {
         JwtConfig jwtConfig = new JwtConfig();
         jwtConfig.setEnabled(true);

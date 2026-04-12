@@ -1,6 +1,22 @@
 server:
   port: 0
 
+spring:
+  datasource:
+    url: jdbc:h2:mem:crm_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+
 crm:
   db:
     host: localhost
@@ -8,7 +24,7 @@ crm:
     database: crm_test
     username: crm_test
     password: crm_test
-    schema: crm
+    schema: public
     ssl-enabled: false
   cache:
     enabled: false
