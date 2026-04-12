@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="JSON_CONSOLE_APPENDER" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>{"timestamp":"%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,UTC}","level":"%level","logger":"%logger{36}","thread":"%thread","message":"%replace(%msg){'"','\\"'}","mdc":"%mdc"}%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="LINE_CONSOLE_APPENDER" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <springProfile name="dev,test">
+        <root level="INFO">
+            <appender-ref ref="LINE_CONSOLE_APPENDER"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="default,stage,prod">
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE_APPENDER"/>
+        </root>
+    </springProfile>
+</configuration>

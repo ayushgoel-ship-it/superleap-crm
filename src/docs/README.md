@@ -1,6 +1,6 @@
 # SuperLeap CRM - Documentation Index
 
-**Last Updated:** April 4, 2026
+**Last Updated:** April 10, 2026
 
 ---
 
@@ -20,6 +20,11 @@ src/docs/
 ├── 09_DATA_BOUNDARY_MAP.md            — Data boundaries
 ├── 10_FLOW_INVARIANTS.md              — Flow invariants
 ├── 11_DEV_READY_VERIFICATION.md       — Verification checklist
+├── 12_SUPABASE_COUPLING_INVENTORY.md  — Phase 1 D1 migration inventory
+├── 13_BUSINESS_API_FLOW_MAP.md        — Phase 1 D2 workflow to capability map
+├── 14_LEGACY_BACKEND_REFERENCE_CONTRACTS.md — Phase 1 D3 legacy backend contract sheet
+├── 15_VIZ_SERVICE_BACKEND_PRINCIPLES.md — Phase 1 D4 backend architecture standards
+├── 16_CONTROL_ROOM_FRONTEND_PRINCIPLES.md — Phase 1 D5 frontend architecture standards
 ├── API_CONTRACTS.md                   — API contracts
 ├── APP_FLOWS.md                       — Application workflows
 ├── DAG_DESIGN.md                      — DAG design
@@ -65,10 +70,15 @@ src/docs/
 17. **[07_UNUSED_CODE_IMPORT_GRAPH.md](./07_UNUSED_CODE_IMPORT_GRAPH.md)** — Import graph analysis
 18. **[08_ARCHIVE_ACTIONS_LOG.md](./08_ARCHIVE_ACTIONS_LOG.md)** — Archive action log
 19. **[11_DEV_READY_VERIFICATION.md](./11_DEV_READY_VERIFICATION.md)** — Dev-ready verification checklist
+20. **[13_BUSINESS_API_FLOW_MAP.md](./13_BUSINESS_API_FLOW_MAP.md)** — Workflow-first mapping from mounted UI flows to target business APIs
+21. **[14_LEGACY_BACKEND_REFERENCE_CONTRACTS.md](./14_LEGACY_BACKEND_REFERENCE_CONTRACTS.md)** — Legacy backend route behavior to preserve or redesign during migration
+22. **[15_VIZ_SERVICE_BACKEND_PRINCIPLES.md](./15_VIZ_SERVICE_BACKEND_PRINCIPLES.md)** — `viz-service` patterns translated into CRM backend standards
+23. **[16_CONTROL_ROOM_FRONTEND_PRINCIPLES.md](./16_CONTROL_ROOM_FRONTEND_PRINCIPLES.md)** — `control-room` shell and frontend organization patterns translated into CRM standards
 
 ## Verification
 
-20. **[VERIFICATION/](./VERIFICATION/)** — Verification records
+24. **[VERIFICATION/](./VERIFICATION/)** — Verification records
+25. **[12_SUPABASE_COUPLING_INVENTORY.md](./12_SUPABASE_COUPLING_INVENTORY.md)** — Authoritative Supabase dependency inventory for migration planning
 
 ---
 
