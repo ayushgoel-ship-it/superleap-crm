@@ -362,11 +362,21 @@ export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
     const funnelStage = funnelParts[0] || 'SOURCING';
     const funnelSubStage = funnelParts[1] || funnelParts[0] || 'LEAD_CREATION';
 
-    // Derive overall status from funnel
+    // Derive overall status from funnel.
+    // Wave 1A canonical rule (from data contract):
+    //   disbursed iff funnel_loan_state IN ('DISBURSAL', 'COMPLETED')
+    //   (disbursal_datetime is guaranteed non-null in that case)
+    // Keeping disbursal_datetime as a defensive fallback for rows where the
+    // funnel string lags the date write.
     let overallStatus = funnelStage.toLowerCase();
-    if (dcf.disbursal_datetime) overallStatus = 'disbursed';
-    else if (dcf.approval_date) overallStatus = 'approved';
-    else if (dcf.login_date) overallStatus = 'in_progress';
+    const stageUpper = funnelStage.toUpperCase();
+    if (stageUpper === 'DISBURSAL' || stageUpper === 'COMPLETED' || dcf.disbursal_datetime) {
+      overallStatus = 'disbursed';
+    } else if (dcf.approval_date) {
+      overallStatus = 'approved';
+    } else if (dcf.login_date) {
+      overallStatus = 'in_progress';
+    }
 
     // RAG from red_flag
     const ragStatus = dcf.red_flag === 1 ? 'red' : (dcf.risk_bucket === 'B' || dcf.risk_bucket === 'C') ? 'amber' : 'green';

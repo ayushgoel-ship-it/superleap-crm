@@ -77,7 +77,7 @@ function buildDCFDealerData(timeScope: TimePeriod, kamId?: string, customFrom?: 
     const approvals = dealerDCFLeads.filter(l =>
       !['REJECTED', 'DELAYED'].includes(l.overallStatus.toUpperCase())
     ).length;
-    const disbursals = dealerDCFLeads.filter(l => l.overallStatus === 'DISBURSED').length;
+    const disbursals = dealerDCFLeads.filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed').length;
 
     return {
       id: d.id,

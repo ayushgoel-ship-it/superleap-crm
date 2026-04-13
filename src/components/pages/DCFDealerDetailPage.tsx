@@ -50,7 +50,7 @@ export function DCFDealerDetailPage({ onBack, dealerId, dateRange, customFrom, c
       : TimePeriod.MTD);
     const rawDealer = getDealerById(dealerId);
     const dcfLeads = getFilteredDCFLeads({ period, customFrom, customTo }).filter(l => l.dealerId === dealerId);
-    const disbursed = dcfLeads.filter(l => l.overallStatus === 'DISBURSED');
+    const disbursed = dcfLeads.filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed');
     const totalDisbursalAmount = disbursed.reduce((s, l) => s + (l.loanAmount ?? 0), 0);
     const metrics = getDealerLeadMetrics(dealerId, { period, customFrom, customTo });
     const activityStage = deriveDealerActivityStage(metrics, rawDealer?.status);

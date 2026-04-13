@@ -192,9 +192,13 @@ export function computeMetrics(
     const allDcfForKam: DCFLead[] = db.dcfLeads.filter((d: DCFLead) => kamId ? d.kamId === kamId : true);
     // DCF leads created in the time period
     const dcfInPeriod = allDcfForKam.filter((d: DCFLead) => isIn(d.createdAt, from, to));
-    // Disbursals: filter by disbursalDate within period (across all DCF leads for KAM, not just created in period)
+    // Disbursals: CANONICAL predicate (Wave 1A).
+    // Previously: `overallStatus === 'disbursed' || !!disbursalDate` — which
+    // over-counted any row that had a stray disbursal date regardless of
+    // status, and drifted from KAMIncentiveSimulator's strict status-only
+    // filter. Aligning on status === 'disbursed' AND disbursalDate ∈ period.
     const dcfDisbursed = allDcfForKam.filter((d: DCFLead) =>
-        (d.overallStatus === 'disbursed' || !!d.disbursalDate) && isIn(d.disbursalDate, from, to)
+        d.overallStatus === 'disbursed' && !!d.disbursalDate && isIn(d.disbursalDate, from, to)
     );
     // Status breakdowns for leads created in period
     const dcfInProgress = dcfInPeriod.filter((d: DCFLead) => d.overallStatus === 'in_progress');
