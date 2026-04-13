@@ -13,6 +13,8 @@ import { TimePeriod } from '../../lib/domain/constants';
 import { Region, getAggregatedRegionMetrics, getTLsByRegions } from '../../data/adminOrgData';
 import { scaleTLMetrics, scaleMetric, scalePercent } from '../../data/adminFilterHelpers';
 import { computeMetrics, computeKAMMetrics } from '../../lib/metrics/metricsFromDB';
+import { getRuntimeDBSync } from '../../data/runtimeDB';
+import { isDateInRange } from '../../lib/date/range';
 import { AdminCommonFilters } from './AdminCommonFilters';
 import { useFilterScope } from '../../contexts/FilterContext';
 import { resolveTimePeriodToRange, type DateRange } from '../../lib/time/resolveTimePeriodToRange';
@@ -216,8 +218,8 @@ export function AdminHomePage({ onNavigate, onViewTLDetail }: AdminHomePageProps
       totalVisits: filtered.reduce((s, km) => s + km.totalVisits, 0),
       completedVisits: filtered.reduce((s, km) => s + km.completedVisits, 0),
       scheduledVisits: filtered.reduce((s, km) => s + km.scheduledVisits, 0),
-      i2si: (() => { const si = filtered.reduce((s, km) => s + km.stockIns, 0); const insp = filtered.reduce((s, km) => s + km.inspections, 0); return insp > 0 ? Math.round((si / insp) * 100) : 0; })(),
-      conversionRate: (() => { const si = filtered.reduce((s, km) => s + km.stockIns, 0); const insp = filtered.reduce((s, km) => s + km.inspections, 0); return insp > 0 ? Math.round((si / insp) * 100) : 0; })(),
+      i2si: (() => { const si = filtered.reduce((s, km) => s + km.stockIns, 0); const insp = filtered.reduce((s, km) => s + km.inspections, 0); return insp > 0 ? Math.round((si / insp) * 1000) / 10 : 0; })(),
+      conversionRate: (() => { const si = filtered.reduce((s, km) => s + km.stockIns, 0); const insp = filtered.reduce((s, km) => s + km.inspections, 0); return insp > 0 ? Math.round((si / insp) * 1000) / 10 : 0; })(),
       callConnectRate: (() => { const t = filtered.reduce((s, km) => s + km.totalCalls, 0); const c = filtered.reduce((s, km) => s + km.connectedCalls, 0); return t > 0 ? Math.round((c / t) * 100) : 0; })(),
       totalDealers: filtered.reduce((s, km) => s + km.totalDealers, 0),
       activeDealers: filtered.reduce((s, km) => s + km.activeDealers, 0),
@@ -232,23 +234,42 @@ export function AdminHomePage({ onNavigate, onViewTLDetail }: AdminHomePageProps
   const lastMonthMetrics = useMemo(() => computeMetrics(TimePeriod.LAST_MONTH), []);
 
   // Scale metrics by time period - MEMOIZED
-  const metrics = useMemo(() => ({
-    si: currentMetrics.stockIns,
-    siTarget: getSITarget('TL'),
-    i2si: currentMetrics.i2si,
-    ngs: currentMetrics.conversionRate,
-    dcfLeads: currentMetrics.dcfTotal,
-    dcfOnb: currentMetrics.dcfOnboarded,
-    dcfDisb: currentMetrics.dcfDisbursals,
-    dcfGMV: currentMetrics.dcfDisbursedValue * 100000,
-  }), [currentMetrics]);
+  const metrics = useMemo(() => {
+    // NGS% = NGS stock-ins / NGS inspections (rank-based, NGS channel only)
+    const db = getRuntimeDBSync();
+    const { fromISO, toISO } = dateRange;
+    const from = new Date(fromISO);
+    const to = new Date(toISO);
+    const allLeads = scopedKamIds
+      ? db.leads.filter(l => scopedKamIds.has(l.kamId))
+      : db.leads;
+    const ngsLeads = allLeads.filter(l => l.channel === 'NGS');
+    const ngsSI = ngsLeads.filter(l =>
+      l.regStockinRank === 1 && (l.finalSiDate || l.stockinDate) && isDateInRange(l.finalSiDate || l.stockinDate, from, to)
+    ).length;
+    const ngsInsp = ngsLeads.filter(l =>
+      l.regInspRank === 1 && l.inspectionDate && isDateInRange(l.inspectionDate, from, to)
+    ).length;
+    const ngs = ngsInsp > 0 ? Math.round((ngsSI / ngsInsp) * 1000) / 10 : 0;
+
+    return {
+      si: currentMetrics.stockIns,
+      siTarget: getSITarget('TL'),
+      i2si: currentMetrics.i2si,
+      ngs,
+      dcfLeads: currentMetrics.dcfTotal,
+      dcfOnb: currentMetrics.dcfOnboarded,
+      dcfDisb: currentMetrics.dcfDisbursals,
+      dcfGMV: currentMetrics.dcfDisbursedValue,
+    };
+  }, [currentMetrics, dateRange, scopedKamIds]);
 
   // Calculate trends using real LMTD data
   const trends = useMemo(() => ({
     si: calculateTrend(metrics.si, lastMonthMetrics.stockIns),
     i2si: calculateTrend(metrics.i2si, lastMonthMetrics.i2si),
     ngs: calculateTrend(metrics.ngs, lastMonthMetrics.conversionRate),
-    gmv: calculateTrend(metrics.dcfGMV, lastMonthMetrics.dcfDisbursedValue * 100000),
+    gmv: calculateTrend(metrics.dcfGMV, lastMonthMetrics.dcfDisbursedValue),
     onb: calculateTrend(metrics.dcfOnb, lastMonthMetrics.dcfOnboarded),
     disb: calculateTrend(metrics.dcfDisb, lastMonthMetrics.dcfDisbursals),
   }), [metrics, lastMonthMetrics]);
@@ -264,8 +285,8 @@ export function AdminHomePage({ onNavigate, onViewTLDetail }: AdminHomePageProps
       );
       const siAch = tlKamMetrics.reduce((sum, km) => sum + km.stockIns, 0);
       const inspections = tlKamMetrics.reduce((sum, km) => sum + km.inspections, 0);
-      const i2si = inspections > 0 ? Math.round((siAch / inspections) * 100) : 0;
-      const gmv = tlKamMetrics.reduce((sum, km) => sum + km.dcfDisbursedValue * 100000, 0);
+      const i2si = inspections > 0 ? Math.round((siAch / inspections) * 1000) / 10 : 0;
+      const gmv = tlKamMetrics.reduce((sum, km) => sum + km.dcfDisbursedValue, 0);
       return {
         tlId: tl.tlId,
         tlName: tl.tlName,
@@ -394,7 +415,7 @@ export function AdminHomePage({ onNavigate, onViewTLDetail }: AdminHomePageProps
             />
             <PremiumMetricCard
               title="GMV"
-              value={formatCurrency(metrics.dcfGMV)}
+              value={`₹${metrics.dcfGMV.toFixed(1)}L`}
               trend={trends.gmv}
               accentColor="green"
               delay={300}
@@ -480,7 +501,7 @@ export function AdminHomePage({ onNavigate, onViewTLDetail }: AdminHomePageProps
                           </div>
                           <div className="text-right">
                             <div className="text-slate-500">GMV</div>
-                            <div className="font-bold text-slate-900 whitespace-nowrap">{formatCurrency(tl.dcfDisbValueAch)}</div>
+                            <div className="font-bold text-slate-900 whitespace-nowrap">{`₹${tl.dcfDisbValueAch.toFixed(1)}L`}</div>
                           </div>
                         </div>
 

@@ -164,7 +164,7 @@ export function computeMetrics(
     const openLeads = allLeadsForKam.filter((l: Lead) => l.status === 'Active');
 
     // I2SI = stock-ins / inspections * 100
-    const i2si = inspections > 0 ? Math.round((stockIns / inspections) * 100) : 0;
+    const i2si = inspections > 0 ? Math.round((stockIns / inspections) * 1000) / 10 : 0;
     const conversionRate = inspections > 0 ? Math.round((stockIns / inspections) * 100) : 0;
 
     // ── CALLS ──

@@ -122,7 +122,7 @@ function LmtdMarker({ direction, label, variant = 'dark' }: { direction: Momentu
     <span className={`inline-flex items-center gap-0.5 ${textColor}`}>
       <Arrow className={`w-2.5 h-2.5 ${color}`} />
       <span className="text-[10px] tabular-nums">{direction === 'up' ? '+' : '-'}{label}</span>
-      <span className="text-[9px] ml-0.5">LMTD</span>
+      <span className="text-[9px] ml-0.5">vs Last Month</span>
     </span>
   );
 }
@@ -615,7 +615,7 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
               >
                 <TrendingDown className="w-3 h-3 text-rose-400 flex-shrink-0" />
                 <span className="text-[10px] font-semibold text-rose-700 flex-1 text-left">
-                  {momentumRiskKams.length} KAM{momentumRiskKams.length > 1 ? 's' : ''} declining vs LMTD
+                  {momentumRiskKams.length} KAM{momentumRiskKams.length > 1 ? 's' : ''} declining vs last month same period
                 </span>
                 {momentumExpanded
                   ? <ChevronUp className="w-3 h-3 text-rose-300" />
@@ -709,11 +709,11 @@ export function TLHomeView({ selectedPeriod, onPeriodChange, onKAMClick }: TLHom
                 <div className="grid grid-cols-4 gap-1.5">
                   {[
                     { label: 'I2SI%', value: `${kam.i2si}%`, bad: kam.i2si < kam.i2siTarget },
-                    { label: 'Score', value: String(kam.inputScore), bad: kam.inputScore < 70 },
+                    { label: 'Score', value: String(kam.inputScore), bad: kam.inputScore < 70, title: 'Score capped at 95. Formula: min(95, 60 + SI \u00D7 1.5)' },
                     { label: 'SI', value: `${kam.stockIns}/${kam.stockInsTarget}`, bad: siPct < 80 },
                     { label: 'DCF', value: String(kam.dcfDisbursals), bad: false },
                   ].map((m) => (
-                    <div key={m.label} className={`text-center px-1.5 py-1.5 rounded-lg ${m.bad ? 'bg-rose-50/60' : 'bg-slate-50'}`}>
+                    <div key={m.label} className={`text-center px-1.5 py-1.5 rounded-lg ${m.bad ? 'bg-rose-50/60' : 'bg-slate-50'}`} title={(m as any).title || undefined}>
                       <div className="text-[9px] text-slate-400 font-medium uppercase">{m.label}</div>
                       <div className={`text-[13px] font-bold ${m.bad ? 'text-rose-600' : 'text-slate-800'}`}>{m.value}</div>
                     </div>
