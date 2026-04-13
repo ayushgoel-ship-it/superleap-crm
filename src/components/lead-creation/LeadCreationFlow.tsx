@@ -46,6 +46,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import * as c24 from '../../lib/api/c24Api';
+import { hasC24SessionToken } from '../../lib/api/c24Api';
 import type {
   SelectOption,
   LeadFormValues,
@@ -56,6 +57,7 @@ import {
   EMPTY_OPTION,
   getInitialLeadFormValues,
 } from '../../lib/api/c24Types';
+import { C24SessionSetup } from './C24SessionSetup';
 
 // ============================================================================
 // Props
@@ -120,6 +122,9 @@ export function LeadCreationFlow({
   onLeadCreated,
   onBookAppointment,
 }: LeadCreationFlowProps) {
+  // ── Session token ──
+  const [isSessionConfigured, setIsSessionConfigured] = useState(hasC24SessionToken());
+
   // ── Step state ──
   const [step, setStep] = useState(0);
   const [leadStatus, setLeadStatus] = useState<'ACCEPTED' | 'DUPLICATE' | null>(null);
@@ -157,6 +162,7 @@ export function LeadCreationFlow({
   // ── Reset on open/close ──
   useEffect(() => {
     if (open) {
+      setIsSessionConfigured(hasC24SessionToken());
       setStep(0);
       setLeadStatus(null);
       setCreatedLeadId(null);
@@ -169,7 +175,7 @@ export function LeadCreationFlow({
 
   // ── Load makes, states, cities on mount ──
   useEffect(() => {
-    if (!open) return;
+    if (!open || !isSessionConfigured) return;
     c24.getCarMakes().then((res) => {
       setMakes(
         (res.detail || []).map((m) => ({ label: m.make_display, value: m.make_id })),
@@ -188,7 +194,7 @@ export function LeadCreationFlow({
         (res.detail || []).map((c) => ({ label: c.city_name, value: c.city_id })),
       );
     }).catch((err) => console.error('[LeadCreation] Failed to load cities:', err));
-  }, [open]);
+  }, [open, isSessionConfigured]);
 
   // ── Load years when brand changes ──
   useEffect(() => {
@@ -734,18 +740,32 @@ export function LeadCreationFlow({
           )}
         </SheetHeader>
 
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-4">
-          {leadStatus
-            ? renderLeadStatus()
-            : step === 0
-            ? renderLeadDetails()
-            : step === 1
-            ? renderCarDetails()
-            : renderPriceRange()}
-        </div>
+        {/* Session token gate */}
+        {!isSessionConfigured ? (
+          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+            <C24SessionSetup onConfigured={() => setIsSessionConfigured(true)} />
+            <p className="text-xs text-gray-500 text-center leading-relaxed">
+              To create leads, you need a valid Cars24 KAM panel session token.
+              Log into the KAM panel in your browser, then copy the session token
+              from Developer Tools → Application → Cookies → <code className="bg-gray-100 px-1 rounded">session_token</code>.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto px-4">
+              {leadStatus
+                ? renderLeadStatus()
+                : step === 0
+                ? renderLeadDetails()
+                : step === 1
+                ? renderCarDetails()
+                : renderPriceRange()}
+            </div>
 
-        {renderFooter()}
+            {renderFooter()}
+          </>
+        )}
       </SheetContent>
     </Sheet>
   );
