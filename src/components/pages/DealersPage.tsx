@@ -361,6 +361,7 @@ export function DealersPage({
           setSelectedDealerRaw(null);
           toast.info(`Opening DCF loan ${loanId}...`);
         }}
+        onNavigateToDCFOnboarding={onNavigateToDCFOnboarding}
         onOpenLeadCreationFlow={onOpenLeadCreationFlow}
         onOpenBookAppointment={onOpenBookAppointment}
       />

@@ -74,6 +74,8 @@ interface DealerDetailPageV2Props {
   onNavigateToCallDetail?: (callId: string) => void;
   onNavigateToVisitDetail?: (visitId: string) => void;
   onNavigateToDCFDetail?: (loanId: string) => void;
+  /** Navigate to the DCF onboarding form for this dealer */
+  onNavigateToDCFOnboarding?: (dealerId: string) => void;
   /** Open the Cars24 API lead creation flow (Sheet overlay) */
   onOpenLeadCreationFlow?: (dealerCode: string, dealerName: string) => void;
   /** Open the appointment booking flow (Sheet overlay) */
@@ -153,6 +155,7 @@ export function DealerDetailPageV2({
   onNavigateToLeads, onNavigateToActivity,
   onNavigateToLeadDetail, onNavigateToCallDetail,
   onNavigateToVisitDetail, onNavigateToDCFDetail,
+  onNavigateToDCFOnboarding,
   onOpenLeadCreationFlow, onOpenBookAppointment,
 }: DealerDetailPageV2Props) {
   const [activeSection, setActiveSection] = useState<Section>('overview');
@@ -622,22 +625,47 @@ export function DealerDetailPageV2({
                   </div>
                 )}
 
-                {/* DCF snapshot */}
-                {(tags.includes('DCF Onboarded') || dcfLeads.length > 0) && (
-                  <div className="card-premium p-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-[13px] font-semibold text-slate-800">DCF Status</h3>
-                      <StatusChip label={tags.includes('DCF Onboarded') ? 'Onboarded' : 'Not Onboarded'}
-                        variant={tags.includes('DCF Onboarded') ? 'success' : 'warning'} dot size="sm" />
-                    </div>
-                    {dcfLeads.length > 0 && (
-                      <div className="flex items-center gap-4 mt-3 text-[12px]">
-                        <span className="text-slate-500">Disbursals: <span className="font-bold text-slate-800">{dcfLeads.filter((l: any) => l.overallStatus === 'DISBURSED').length}</span></span>
-                        <span className="text-slate-500">Amount: <span className="font-bold text-emerald-700">{formatAmount(dcfLeads.filter((l: any) => l.overallStatus === 'DISBURSED').reduce((s: number, l: any) => s + (l.loanAmount || 0), 0))}</span></span>
-                      </div>
-                    )}
+                {/* DCF Status Card — always shown */}
+                <div className="card-premium p-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[13px] font-semibold text-slate-800">DCF Status</h3>
+                    <StatusChip
+                      label={dealer?.dcfOnboarded === 'Y' ? 'Onboarded' : 'Not Onboarded'}
+                      variant={dealer?.dcfOnboarded === 'Y' ? 'success' : 'warning'}
+                      dot
+                      size="sm"
+                    />
                   </div>
-                )}
+
+                  {/* Onboarded: show disbursal stats */}
+                  {dealer?.dcfOnboarded === 'Y' && dcfLeads.length > 0 && (
+                    <div className="flex items-center gap-4 mt-3 text-[12px]">
+                      <span className="text-slate-500">Disbursals: <span className="font-bold text-slate-800">{dcfLeads.filter((l: any) => l.overallStatus === 'DISBURSED').length}</span></span>
+                      <span className="text-slate-500">Amount: <span className="font-bold text-emerald-700">{formatAmount(dcfLeads.filter((l: any) => l.overallStatus === 'DISBURSED').reduce((s: number, l: any) => s + (l.loanAmount || 0), 0))}</span></span>
+                    </div>
+                  )}
+
+                  {dealer?.dcfOnboarded === 'Y' && dcfLeads.length === 0 && (
+                    <p className="text-[11px] text-slate-400 mt-2">No DCF disbursals yet</p>
+                  )}
+
+                  {/* Not Onboarded: show initiate button */}
+                  {dealer?.dcfOnboarded !== 'Y' && (
+                    <div className="mt-3">
+                      <p className="text-[11px] text-slate-500 mb-3">
+                        Onboard this dealer to unlock DCF loans and earn additional commissions.
+                      </p>
+                      <button
+                        onClick={() => dealer && onNavigateToDCFOnboarding?.(dealer.id)}
+                        className="w-full px-3 py-2.5 bg-indigo-600 text-white rounded-xl text-[12px] font-semibold
+                                   hover:bg-indigo-700 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        Start DCF Onboarding
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Recent activity preview */}
                 {mergedTimeline.length > 0 && (

@@ -265,6 +265,7 @@ function DealerInfoStep({
               <option value="">Select...</option>
               <option value="Growth Dealer">Growth Dealer</option>
               <option value="Growth Freelancer">Growth Freelancer</option>
+              <option value="B2B">B2B</option>
             </select>
           </div>
 
@@ -283,6 +284,7 @@ function DealerInfoStep({
               <option value="DR South">DR South</option>
               <option value="OSS">OSS</option>
               <option value="SM">SM</option>
+              <option value="B2B">B2B</option>
             </select>
           </div>
 
@@ -360,7 +362,9 @@ function OwnerDetailsStep({
           </div>
 
           <div>
-            <label className="block text-sm text-gray-700 mb-1">Owner Email</label>
+            <label className="block text-sm text-gray-700 mb-1">
+              Owner Email <span className="text-red-500">*</span>
+            </label>
             <input
               type="email"
               value={formData.ownerEmail}
@@ -379,9 +383,9 @@ function OwnerDetailsStep({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
             >
               <option value="">Select...</option>
-              <option value="Proprietor/Individual">Proprietor/Individual</option>
-              <option value="Partnership">Partnership</option>
-              <option value="Pvt Ltd">Pvt Ltd</option>
+              <option value="Proprietor / Individual">Proprietor / Individual</option>
+              <option value="Partnership Firm">Partnership Firm</option>
+              <option value="Pvt. Ltd. Company">Pvt. Ltd. Company</option>
             </select>
           </div>
 
@@ -396,13 +400,15 @@ function OwnerDetailsStep({
             >
               <option value="">Select...</option>
               <option value="Counter Dealer">Counter Dealer</option>
-              <option value="Freelancer">Freelancer</option>
-              <option value="NGS DSA">NGS DSA</option>
+              <option value="Free Lancer">Free Lancer</option>
+              <option value="C2B DSA">C2B DSA</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-sm text-gray-700 mb-1">CIBIL Consent (UCD ID)</label>
+            <label className="block text-sm text-gray-700 mb-1">
+              CIBIL Consent (UCD ID) <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={formData.cibilConsent}
