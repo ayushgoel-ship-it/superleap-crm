@@ -1,97 +1,163 @@
 -- ============================================================================
 -- V1: Drop unused columns and tables
 -- Date: 2026-04-13
--- Source: Data Architecture Audit (docs/data-audit.xlsx)
+-- Source: Data Architecture Audit — actual Supabase schema cross-referenced
+--         against frontend adapter (supabaseRaw.ts) select statements.
 -- ============================================================================
--- This migration drops columns and tables that are confirmed unused by the
--- frontend adapter layer (supabaseRaw.ts). All select('*') calls have been
--- replaced with explicit column lists, so these columns are no longer fetched.
+-- This migration drops columns and tables confirmed unused by the frontend
+-- adapter layer. All select('*') calls were replaced with explicit column
+-- lists, so these columns are no longer fetched.
 --
--- Columns marked "Keep" by the user (even though unused) are NOT dropped here.
--- Those are: gst_number, pan_number, bank_account (dealers_master),
---            refund_*, c2d_status/date/amount, duplicate_of (sell_leads_master),
---            device_id, sim_slot (call_events),
---            last_login_at, avatar_url (users),
---            stretch_value (targets),
---            ip_address, user_agent (audit_log)
+-- Columns kept (per user decision, even though not in adapter):
+--   sell_leads_master: refunded, refunded_at, refund_time (future refund workflow)
+--   sell_leads_master: c2d_stockin_date, c2d_ocb_flag, latest_c2d_ocb_raise_date,
+--                      c2d_offline_token, c2d_offline_stockin, final_c2dtoken_date,
+--                      final_c2d_si_date (future C2D flow)
 -- ============================================================================
 
 -- ────────────────────────────────────────────────────────────────────────────
--- 1. dealers_master — drop 4 columns
+-- 1. dealers_master — drop 2 columns
 -- ────────────────────────────────────────────────────────────────────────────
-ALTER TABLE dealers_master DROP COLUMN IF EXISTS ifsc;
-ALTER TABLE dealers_master DROP COLUMN IF EXISTS tier;
-ALTER TABLE dealers_master DROP COLUMN IF EXISTS tier_updated_at;
-ALTER TABLE dealers_master DROP COLUMN IF EXISTS legacy_code;
+ALTER TABLE dealers_master DROP COLUMN IF EXISTS growth_dealer_region;
+ALTER TABLE dealers_master DROP COLUMN IF EXISTS source;
 
 -- ────────────────────────────────────────────────────────────────────────────
--- 2. sell_leads_master — drop 23 columns
+-- 2. sell_leads_master — drop 36 columns
 -- ────────────────────────────────────────────────────────────────────────────
--- Payment cluster (5 cols — payment_status kept by user as "Keep")
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS sub_source;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS payment_status;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS payment_amount;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS payment_date;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS payment_mode;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS payment_reference;
+-- Status/rank artefacts
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS dl_status;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS dl_rank;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS growth_dealer_region;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS inspection_store;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS growth_inspecting_region;
 
--- C2D cluster (1 col — c2d_status/date/amount kept by user)
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS c2d_remarks;
+-- Cancellation cluster
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS first_cancellation_date;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS first_cancellation_flag;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS cancellation_losses;
 
--- Quote / Offer / Price cluster
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS customer_email;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS quote_amount;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS quote_date;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS offer_amount;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS offer_date;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS final_price;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS negotiation_notes;
+-- Flag columns (vertical, ans, b2b, elite, sof, self_bought, c2b)
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS vertical;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS ans_flag;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS b2b_flag;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS elite_flag;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS sof_flag;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS self_bought_flag;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS c2b_eligible_insp;
 
--- Rejection cluster
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS rejection_reason;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS rejection_date;
+-- Lead purchase/expiry cluster
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS lead_purchased_date;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS lead_purchased;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS lead_expired;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS leadpurchase_price;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS lead_purchase_time;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS leadprice;
 
--- Dedup (duplicate_of kept by user)
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS is_duplicate;
+-- Seller token cluster
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS seller_token;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS seller_token_date;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS seller_token_time;
 
--- Assignment / Priority / Tags / Lost
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS assigned_to;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS assigned_at;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS priority;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS tags;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS lost_reason;
-ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS lost_date;
+-- Inspection/payment operational columns
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS inspection_done;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS inspection_done_time;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS im_raised;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS payment_initiated;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS payment_option_selected;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS payment_done;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS self_pay;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS full_assist;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS create_offer;
+
+-- Other unused
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS stockins;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS gfd;
+ALTER TABLE sell_leads_master DROP COLUMN IF EXISTS nego_leads;
 
 -- ────────────────────────────────────────────────────────────────────────────
--- 3. dcf_leads_master — drop 20 columns
+-- 3. dcf_leads_master — drop 60 columns
 -- ────────────────────────────────────────────────────────────────────────────
--- _clean cluster (5)
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS kam_id_clean;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS tl_id_clean;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS dealer_id_clean;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS region_clean;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS status_clean;
+-- Mapping/org hierarchy columns
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS channel;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS fos_mapping;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS sm_mapping;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS asm_mapping;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS rsm_mapping;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS tl_mapping;
 
--- _2 cluster (7)
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS kam_id_2;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS tl_id_2;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS dealer_id_2;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS region_2;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS status_2;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS disbursal_amount_2;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS sanction_amount_2;
+-- Compliance/TnC/status columns
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS red_channel_reason;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS tnc_generated_date;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS tnc_accepted_timestamp;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS case_status;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS unnati;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS banking_required;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS rm_flow;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS hpa_status;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS case_status_2;
 
--- mapping cluster (4)
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS mapping_source;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS mapping_confidence;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS mapping_version;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS mapping_notes;
+-- CC (collection center) columns
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS cc_fos;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS cc_sm;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS cc_fos_2;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS cc_sm_2;
 
--- raw import artefacts (4)
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS raw_kam;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS raw_tl;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS raw_dealer;
-ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS raw_region;
+-- Source/platform/entry metadata
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS fuel_type;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS source;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS platform_type;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS entry_point;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS region;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS onboard;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS tl_head;
+
+-- Loan sub-components
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS loan_for_chm;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS loan_for_li;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS loan_for_mi;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS li_tenure;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS pf_amount;
+
+-- TLA/ROI/VAS columns
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS tla;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS ds_roi_tla;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS roi_loan_amount;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS vas_income_own;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS vas_income_pmax;
+
+-- Text/notes/misc
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS lead_text;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS lead_date_2;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS disbursal_revised;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS rsa;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS buyback;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS franchise_type;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS channel_revised;
+
+-- BI/region flags
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS mapping_bi_city;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS delhi_flag_diy;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS refinance_dealer;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS nbfc_channel;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS disbursal_timestamp;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS revised_region;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS is_lead;
+
+-- _clean date artefacts (ingestion preprocessing)
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS lead_date_clean;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS login_date_clean;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS approval_date_clean;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS disbursal_date_clean;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS login_date_month;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS month_col;
+
+-- Duplicate/derived amounts
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS gross_disbursal_amount;
+
+-- Status/remarks
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS rejection_reason;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS final_remarks;
+ALTER TABLE dcf_leads_master DROP COLUMN IF EXISTS current_status;
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- 4. Drop 3 unused tables
@@ -101,10 +167,10 @@ DROP TABLE IF EXISTS metric_definitions;
 DROP TABLE IF EXISTS dashboard_layouts;
 
 -- ────────────────────────────────────────────────────────────────────────────
--- Summary:
---   dealers_master:    -4 columns (ifsc, tier, tier_updated_at, legacy_code)
---   sell_leads_master: -23 columns (payment cluster, quote/offer, assignment, etc.)
---   dcf_leads_master:  -20 columns (_clean, _2, mapping, raw clusters)
+-- Summary (verified against live Supabase 2026-04-13):
+--   dealers_master:    22 -> 20 columns (-2: growth_dealer_region, source)
+--   sell_leads_master: 86 -> 50 columns (-36 unused columns)
+--   dcf_leads_master:  91 -> 31 columns (-60 unused columns)
 --   Dropped tables:    kpi_targets, metric_definitions, dashboard_layouts
---   Total:             47 columns dropped + 3 tables dropped
+--   Total:             98 columns dropped + 3 tables dropped
 -- ────────────────────────────────────────────────────────────────────────────

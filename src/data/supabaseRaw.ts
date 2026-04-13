@@ -114,7 +114,7 @@ function getUserTeamId(userId: string | null): string {
 
 export async function fetchDealersRaw(): Promise<Dealer[]> {
   await ensureUserMap();
-  const data = await fetchAll('dealers_master', 'dealer_code,dealer_name,dealer_city,dealer_region,kam_id,tl_id,phone,email,latitude,longitude,segment,status,sell_onboarded,dcf_onboarded,sell_onboarding_date,dcf_onboarding_date,onboarding_status,bank_account_status,is_top,gst_number,pan_number,bank_account,pincode');
+  const data = await fetchAll('dealers_master', 'dealer_code,dealer_name,dealer_city,dealer_region,kam_id,tl_id,phone,email,latitude,longitude,segment,status,sell_onboarded,dcf_onboarded,sell_onboarding_date,dcf_onboarding_date,onboarding_status,bank_account_status,is_top');
   if (data.length === 0) return [];
 
   const emptyMetric: DealerMetricPeriod = { leads: 0, inspections: 0, sis: 0, dcf: 0 };
@@ -177,7 +177,7 @@ export async function fetchDealersRaw(): Promise<Dealer[]> {
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchLeadsRaw(): Promise<Lead[]> {
-  const data = await fetchAll('sell_leads_master', 'lead_id,dealer_code,year,make,model,variant,cx_reg_no,gs_flag,dl_type,appointment_id,product_appt_id,app_id,appointment_status,target_price,selleragreedprice,latest_c24q,max_c24_quote,bid_amount,lead_date,deal_creation_date,original_appt_date,current_appt_date,inspection_date,inspection_city,inspection_region,token_date,stockin_date,stock_out_date,final_token_date,final_si_date,latest_ocb_raisedat,franchise_flag,ocb_run_count,verified,dealer_region,growth_zone,reg_appt_rank,reg_insp_rank,reg_token_rank,reg_stockin_rank,refund_status,refund_amount,refund_date,refund_reason,c2d_status,c2d_date,c2d_amount,duplicate_of');
+  const data = await fetchAll('sell_leads_master', 'lead_id,dealer_code,year,make,model,variant,cx_reg_no,gs_flag,dl_type,appointment_id,product_appt_id,appointment_status,target_price,selleragreedprice,latest_c24q,max_c24_quote,bid_amount,lead_date,deal_creation_date,original_appt_date,current_appt_date,inspection_date,inspection_city,inspection_region,token_date,stockin_date,stock_out_date,final_token_date,final_si_date,latest_ocb_raisedat,franchise_flag,ocb_run_count,verified,dealer_region,growth_zone,reg_appt_rank,reg_insp_rank,reg_token_rank,reg_stockin_rank');
   if (data.length === 0) return [];
 
   const mapped = data.map((l: any) => {
@@ -347,7 +347,7 @@ export async function fetchVisitsRaw(): Promise<VisitLog[]> {
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
-  const data = await fetchAll('dcf_leads_master', 'lead_id,id,dealer_code,dealer_name,dealer_city,kam_id,tl_id,applicant_name,borrower_name,cust_name,customer_name,customer_mobile,mobile_no,valuation_price,gross_disbursal,total_loan_sanction,loan_tenure,ds_tenure,roi_per_annum,ds_roi,funnel_loan_state,disbursal_datetime,approval_date,login_date,red_flag,risk_bucket,rm_mapping,ds_channel,banking_flag,lead_creation_date,year,make,model,variant,vehicle_model,registration_no,final_offer_ltv,system_ltv,cibil_score,employment_details');
+  const data = await fetchAll('dcf_leads_master', 'lead_id,id,dealer_code,dealer_name,dealer_city,customer_name,valuation_price,gross_disbursal,total_loan_sanction,loan_tenure,ds_tenure,roi_per_annum,ds_roi,funnel_loan_state,disbursal_datetime,approval_date,login_date,red_flag,risk_bucket,rm_mapping,ds_channel,banking_flag,lead_creation_date,year,make,model,registration_no,final_offer_ltv,system_ltv,cibil_score,employment_details');
   if (data.length === 0) return [];
 
   return data.map((dcf: any) => {
@@ -376,7 +376,8 @@ export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
     //   1. try real name fields in priority order
     //   2. recover any numeric content as the phone
     //   3. derive a stable display name from loan id last digits as final fallback
-    const nameCandidates = [dcf.applicant_name, dcf.borrower_name, dcf.cust_name, dcf.customer_name];
+    // applicant_name, borrower_name, cust_name don't exist in actual schema — only customer_name does
+    const nameCandidates = [dcf.customer_name];
     let resolvedName = '';
     let recoveredPhone = '';
     for (const raw of nameCandidates) {
@@ -404,13 +405,15 @@ export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
 
     // Vehicle derivation. Fall back through model-only, variant, registration, then 'Vehicle TBD'.
     const carParts = [dcf.year, dcf.make, dcf.model].filter(Boolean).join(' ');
-    const carFallback = dcf.vehicle_model || dcf.variant || dcf.model || dcf.registration_no || 'Vehicle TBD';
+    // vehicle_model and variant don't exist in actual schema
+    const carFallback = dcf.model || dcf.registration_no || 'Vehicle TBD';
     const carDisplay = carParts || carFallback;
 
     return {
       id: dcf.lead_id || `dcf-${dcf.id}`,
       customerName: resolvedName,
-      customerPhone: recoveredPhone || dcf.customer_mobile || dcf.mobile_no || '',
+      // customer_mobile and mobile_no don't exist in actual schema
+      customerPhone: recoveredPhone || '',
       city: dcf.dealer_city || 'Unknown',
       regNo: dcf.registration_no || '',
       car: carDisplay,
