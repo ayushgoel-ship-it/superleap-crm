@@ -58,6 +58,9 @@ import {
   getInitialLeadFormValues,
 } from '../../lib/api/c24Types';
 import { C24SessionSetup } from './C24SessionSetup';
+import { useActorScope } from '../../lib/auth/useActorScope';
+import { getDealersByKAM, getAllDealers } from '../../data/selectors';
+import type { Dealer } from '../../data/types';
 
 // ============================================================================
 // Props
@@ -125,6 +128,18 @@ export function LeadCreationFlow({
   // ── Session token ──
   const [isSessionConfigured, setIsSessionConfigured] = useState(hasC24SessionToken());
 
+  // ── Actor scope for dealer list ──
+  const { effectiveKamIds, role: actorRole } = useActorScope();
+
+  // ── KAM's dealer list ──
+  const kamDealers = useMemo(() => {
+    if (actorRole === 'Admin') return getAllDealers();
+    if (effectiveKamIds && effectiveKamIds.length > 0) {
+      return effectiveKamIds.flatMap((kamId) => getDealersByKAM(kamId));
+    }
+    return getAllDealers();
+  }, [effectiveKamIds, actorRole]);
+
   // ── Step state ──
   const [step, setStep] = useState(0);
   const [leadStatus, setLeadStatus] = useState<'ACCEPTED' | 'DUPLICATE' | null>(null);
@@ -132,6 +147,8 @@ export function LeadCreationFlow({
 
   // ── Dealer ──
   const [dealerCode, setDealerCode] = useState(initialDealerCode || '');
+  const [dealerName, setDealerName] = useState(initialDealerName || '');
+  const [dealerSearch, setDealerSearch] = useState('');
 
   // ── Form values ──
   const [form, setForm] = useState<LeadFormValues>(getInitialLeadFormValues);
@@ -170,8 +187,10 @@ export function LeadCreationFlow({
       setPriceRange(null);
       setExpectedPrice('');
       setDealerCode(initialDealerCode || '');
+      setDealerName(initialDealerName || '');
+      setDealerSearch('');
     }
-  }, [open, initialDealerCode]);
+  }, [open, initialDealerCode, initialDealerName]);
 
   // ── Load makes, states, cities on mount ──
   useEffect(() => {
@@ -455,15 +474,82 @@ export function LeadCreationFlow({
   // ── STEP 0: Lead Details ──
   const renderLeadDetails = () => (
     <div className="space-y-4 p-1">
-      {/* Dealer Code (if not pre-filled) */}
+      {/* Dealer selection (if not pre-filled) */}
       {!initialDealerCode && (
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium">Dealer Code <span className="text-red-500">*</span></Label>
-          <Input
-            value={dealerCode}
-            onChange={(e) => setDealerCode(e.target.value)}
-            placeholder="Enter dealer code"
-          />
+          <Label className="text-sm font-medium">Select Dealer <span className="text-red-500">*</span></Label>
+          {dealerCode ? (
+            /* Selected dealer chip */
+            <Card className="p-3 bg-blue-50 border-blue-200 flex items-center justify-between">
+              <div className="text-sm text-blue-800">
+                <span className="font-medium">{dealerName || dealerCode}</span>
+                <span className="ml-2 text-blue-600">({dealerCode})</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs text-blue-600 hover:text-blue-800"
+                onClick={() => { setDealerCode(''); setDealerName(''); setDealerSearch(''); }}
+              >
+                Change
+              </Button>
+            </Card>
+          ) : (
+            /* Searchable dealer list */
+            <div className="space-y-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                <Input
+                  value={dealerSearch}
+                  onChange={(e) => setDealerSearch(e.target.value)}
+                  placeholder="Search by dealer name, code, or city…"
+                  className="pl-9"
+                />
+              </div>
+              <div className="max-h-48 overflow-y-auto border rounded-md bg-white divide-y">
+                {kamDealers.length === 0 ? (
+                  <div className="p-3 text-sm text-gray-500 text-center">No dealers found</div>
+                ) : (
+                  kamDealers
+                    .filter((d) => {
+                      if (!dealerSearch) return true;
+                      const q = dealerSearch.toLowerCase();
+                      return (
+                        d.name.toLowerCase().includes(q) ||
+                        d.code.toLowerCase().includes(q) ||
+                        d.city.toLowerCase().includes(q)
+                      );
+                    })
+                    .slice(0, 50)
+                    .map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors"
+                        onClick={() => {
+                          setDealerCode(d.code);
+                          setDealerName(d.name);
+                          setDealerSearch('');
+                        }}
+                      >
+                        <div className="text-sm font-medium text-gray-900">{d.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {d.code} · {d.city} · {d.region}
+                        </div>
+                      </button>
+                    ))
+                )}
+                {kamDealers.length > 0 &&
+                  dealerSearch &&
+                  kamDealers.filter((d) => {
+                    const q = dealerSearch.toLowerCase();
+                    return d.name.toLowerCase().includes(q) || d.code.toLowerCase().includes(q) || d.city.toLowerCase().includes(q);
+                  }).length === 0 && (
+                    <div className="p-3 text-sm text-gray-500 text-center">No dealers match "{dealerSearch}"</div>
+                  )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -564,7 +650,7 @@ export function LeadCreationFlow({
       <Card className="p-4 bg-gray-50">
         <h4 className="text-sm font-semibold text-gray-900 mb-2">Lead Summary</h4>
         <div className="grid grid-cols-2 gap-2 text-sm">
-          <div><span className="text-gray-500">Dealer:</span> <span className="font-medium">{dealerCode}</span></div>
+          <div><span className="text-gray-500">Dealer:</span> <span className="font-medium">{dealerName || dealerCode}</span> <span className="text-gray-400">({dealerCode})</span></div>
           <div><span className="text-gray-500">Type:</span> <span className="font-medium">{form.leadType.label}</span></div>
           <div><span className="text-gray-500">Owner:</span> <span className="font-medium">{form.ownerName}</span></div>
           <div><span className="text-gray-500">Phone:</span> <span className="font-medium">{form.ownerPhoneNumber}</span></div>
