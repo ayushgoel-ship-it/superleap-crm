@@ -57,5 +57,28 @@
     server: {
       port: 3000,
       open: true,
+      proxy: {
+        // Proxy Cars24 vehicle service to bypass CORS
+        '/c24-vehicle': {
+          target: 'https://gateway.24c.in/vehicle',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/c24-vehicle/, ''),
+          secure: true,
+        },
+        // Proxy Cars24 partners-lead service to bypass CORS
+        '/c24-partners': {
+          target: 'https://gateway.24c.in/partners-lead',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/c24-partners/, ''),
+          secure: true,
+        },
+        // Proxy Ola Maps API to bypass CORS
+        '/ola-maps': {
+          target: 'https://api.olamaps.io/places/v1',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/ola-maps/, ''),
+          secure: true,
+        },
+      },
     },
   });

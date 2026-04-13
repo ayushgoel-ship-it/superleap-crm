@@ -32,10 +32,16 @@ import type {
 // Configuration
 // ============================================================================
 
+// In dev mode, use Vite proxy paths to bypass CORS.
+// In production, use the direct URLs (or env overrides).
+const IS_DEV = import.meta.env.DEV;
+
 const VEHICLE_BASE =
-  import.meta.env.VITE_C24_VEHICLE_URL || 'https://gateway.24c.in/vehicle';
+  import.meta.env.VITE_C24_VEHICLE_URL || (IS_DEV ? '/c24-vehicle' : 'https://gateway.24c.in/vehicle');
 const PARTNERS_LEAD_BASE =
-  import.meta.env.VITE_C24_PARTNERS_LEAD_URL || 'https://gateway.24c.in/partners-lead';
+  import.meta.env.VITE_C24_PARTNERS_LEAD_URL || (IS_DEV ? '/c24-partners' : 'https://gateway.24c.in/partners-lead');
+const OLA_MAPS_BASE =
+  IS_DEV ? '/ola-maps' : 'https://api.olamaps.io/places/v1';
 const OLA_MAPS_API_KEY =
   import.meta.env.VITE_OLA_MAPS_API_KEY || '';
 
@@ -272,7 +278,7 @@ export async function searchLocation(
     return [];
   }
   const res = await fetch(
-    `https://api.olamaps.io/places/v1/autocomplete?input=${encodeURIComponent(query)}&api_key=${OLA_MAPS_API_KEY}`,
+    `${OLA_MAPS_BASE}/autocomplete?input=${encodeURIComponent(query)}&api_key=${OLA_MAPS_API_KEY}`,
   );
   if (!res.ok) return [];
   const data = await res.json();
@@ -285,7 +291,7 @@ export async function reverseGeocode(
 ): Promise<OlaMapsReverseGeocodeResult | null> {
   if (!OLA_MAPS_API_KEY) return null;
   const res = await fetch(
-    `https://api.olamaps.io/places/v1/reverse-geocode?latlng=${lat},${lng}&api_key=${OLA_MAPS_API_KEY}`,
+    `${OLA_MAPS_BASE}/reverse-geocode?latlng=${lat},${lng}&api_key=${OLA_MAPS_API_KEY}`,
   );
   if (!res.ok) return null;
   const data = await res.json();

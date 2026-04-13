@@ -174,17 +174,20 @@ export function LeadCreationFlow({
       setMakes(
         (res.detail || []).map((m) => ({ label: m.make_display, value: m.make_id })),
       );
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error('[LeadCreation] Failed to load car makes:', err);
+      toast.error('Failed to load car brands. Check session token.');
+    });
     c24.getStates().then((res) => {
       setStates(
         (res.detail || []).map((s) => ({ label: s.state_name, value: s.state_id })),
       );
-    }).catch(() => {});
+    }).catch((err) => console.error('[LeadCreation] Failed to load states:', err));
     c24.getCities().then((res) => {
       setCities(
         (res.detail || []).map((c) => ({ label: c.city_name, value: c.city_id })),
       );
-    }).catch(() => {});
+    }).catch((err) => console.error('[LeadCreation] Failed to load cities:', err));
   }, [open]);
 
   // ── Load years when brand changes ──
