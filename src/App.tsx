@@ -33,6 +33,8 @@ import { IncentiveSimulator } from "./components/pages/IncentiveSimulator";
 import { LeadDetailPageV2 } from "./components/pages/LeadDetailPageV2";
 import { getAnyLeadById } from "./data/selectors";
 import { LeadCreatePage } from "./components/pages/LeadCreatePage";
+import { LeadCreationFlow } from "./components/lead-creation/LeadCreationFlow";
+import { BookAppointmentFlow } from "./components/appointment-booking/BookAppointmentFlow";
 import { DCFOnboardingPage } from "./components/pages/DCFOnboardingPage";
 import { DealerLocationUpdatePage } from "./components/pages/DealerLocationUpdatePage";
 import { Monitor, Smartphone } from "lucide-react";
@@ -200,6 +202,18 @@ function AppContent() {
     selectedDealerForLeadCreate,
     setSelectedDealerForLeadCreate,
   ] = useState<string | null>(null);
+  const [selectedDealerNameForLeadCreate, setSelectedDealerNameForLeadCreate] = useState<string>('');
+
+  // Lead Creation Flow (Sheet overlay — new Cars24 API flow)
+  const [showLeadCreationFlow, setShowLeadCreationFlow] = useState(false);
+  const [leadCreationDealerCode, setLeadCreationDealerCode] = useState<string>('');
+  const [leadCreationDealerName, setLeadCreationDealerName] = useState<string>('');
+
+  // Appointment Booking Flow (Sheet overlay)
+  const [showBookAppointment, setShowBookAppointment] = useState(false);
+  const [bookAppointmentLeadId, setBookAppointmentLeadId] = useState<string>('');
+  const [bookAppointmentDealerCode, setBookAppointmentDealerCode] = useState<string>('');
+  const [bookAppointmentIsReschedule, setBookAppointmentIsReschedule] = useState(false);
 
   // Dealer-specific navigation states
   const [
@@ -374,6 +388,31 @@ function AppContent() {
     setSelectedDealerForLeadCreate(null);
     // Navigate to the newly created lead detail
     navigateToLeadDetail(leadId);
+  };
+
+  // New Lead Creation Flow (Cars24 API) handlers
+  const openLeadCreationFlow = (dealerCode?: string, dealerName?: string) => {
+    setLeadCreationDealerCode(dealerCode || '');
+    setLeadCreationDealerName(dealerName || '');
+    setShowLeadCreationFlow(true);
+  };
+
+  const handleLeadCreated = (_leadId: string, _dealerCode: string) => {
+    // Lead was created via Cars24 API — refresh data if needed
+  };
+
+  const handleBookAppointmentFromLead = (leadId: string, dealerCode: string) => {
+    setBookAppointmentLeadId(leadId);
+    setBookAppointmentDealerCode(dealerCode);
+    setBookAppointmentIsReschedule(false);
+    setShowBookAppointment(true);
+  };
+
+  const openBookAppointment = (leadId: string, dealerCode: string, isReschedule = false) => {
+    setBookAppointmentLeadId(leadId);
+    setBookAppointmentDealerCode(dealerCode);
+    setBookAppointmentIsReschedule(isReschedule);
+    setShowBookAppointment(true);
   };
 
   // DCF Onboarding navigation handlers
@@ -701,6 +740,8 @@ function AppContent() {
                           onNavigateToLeadCreate={
                             navigateToLeadCreate
                           }
+                          onOpenLeadCreationFlow={openLeadCreationFlow}
+                          onOpenBookAppointment={openBookAppointment}
                           onNavigateToDCFOnboarding={
                             navigateToDCFOnboarding
                           }
@@ -716,6 +757,7 @@ function AppContent() {
                           filterContext={leadsFilterContext}
                           onClearContext={clearLeadsContext}
                           onLeadClick={navigateToLeadDetail}
+                          onOpenLeadCreationFlow={openLeadCreationFlow}
                         />
                       );
                     case "visits":
@@ -1073,6 +1115,25 @@ function AppContent() {
               )}
 
               <Toaster position="top-center" />
+
+              {/* Lead Creation Flow — Sheet overlay */}
+              <LeadCreationFlow
+                open={showLeadCreationFlow}
+                onOpenChange={setShowLeadCreationFlow}
+                dealerCode={leadCreationDealerCode || undefined}
+                dealerName={leadCreationDealerName || undefined}
+                onLeadCreated={handleLeadCreated}
+                onBookAppointment={handleBookAppointmentFromLead}
+              />
+
+              {/* Appointment Booking Flow — Sheet overlay */}
+              <BookAppointmentFlow
+                open={showBookAppointment}
+                onOpenChange={setShowBookAppointment}
+                leadId={bookAppointmentLeadId}
+                dealerCode={bookAppointmentDealerCode}
+                isReschedule={bookAppointmentIsReschedule}
+              />
             </div>
           )}
         </>

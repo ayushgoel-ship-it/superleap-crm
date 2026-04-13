@@ -61,6 +61,10 @@ interface DealersPageProps {
   onNavigateToVisitFeedback?: (visitId: string) => void;
   onNavigateToLeadDetail?: (leadId: string) => void;
   onNavigateToLeadCreate?: (dealerId: string) => void;
+  /** New Cars24 API-based lead creation flow (Sheet overlay) */
+  onOpenLeadCreationFlow?: (dealerCode: string, dealerName: string) => void;
+  /** Appointment booking flow (Sheet overlay) */
+  onOpenBookAppointment?: (leadId: string, dealerCode: string, isReschedule?: boolean) => void;
   onNavigateToDCFOnboarding?: (dealerId: string) => void;
   onNavigateToLocationUpdate?: (dealerId: string) => void;
 }
@@ -163,6 +167,8 @@ export function DealersPage({
   onNavigateToVisitFeedback,
   onNavigateToLeadDetail,
   onNavigateToLeadCreate,
+  onOpenLeadCreationFlow,
+  onOpenBookAppointment,
   onNavigateToDCFOnboarding,
   onNavigateToLocationUpdate,
 }: DealersPageProps) {
@@ -355,6 +361,8 @@ export function DealersPage({
           setSelectedDealerRaw(null);
           toast.info(`Opening DCF loan ${loanId}...`);
         }}
+        onOpenLeadCreationFlow={onOpenLeadCreationFlow}
+        onOpenBookAppointment={onOpenBookAppointment}
       />
     );
   }

@@ -36,7 +36,7 @@ import {
   Clock, TrendingUp, FileText, Users,
   MessageCircle, CheckCircle2, AlertCircle, Send, Mic,
   Calendar, Activity, MoreHorizontal, Star,
-  IndianRupee, Eye,
+  IndianRupee, Eye, PlusCircle,
 } from 'lucide-react';
 import {
   getDealerByCode, getLeadsByDealerId, getCallsByDealerId,
@@ -74,6 +74,10 @@ interface DealerDetailPageV2Props {
   onNavigateToCallDetail?: (callId: string) => void;
   onNavigateToVisitDetail?: (visitId: string) => void;
   onNavigateToDCFDetail?: (loanId: string) => void;
+  /** Open the Cars24 API lead creation flow (Sheet overlay) */
+  onOpenLeadCreationFlow?: (dealerCode: string, dealerName: string) => void;
+  /** Open the appointment booking flow (Sheet overlay) */
+  onOpenBookAppointment?: (leadId: string, dealerCode: string, isReschedule?: boolean) => void;
 }
 
 // ── Helpers ──
@@ -149,6 +153,7 @@ export function DealerDetailPageV2({
   onNavigateToLeads, onNavigateToActivity,
   onNavigateToLeadDetail, onNavigateToCallDetail,
   onNavigateToVisitDetail, onNavigateToDCFDetail,
+  onOpenLeadCreationFlow, onOpenBookAppointment,
 }: DealerDetailPageV2Props) {
   const [activeSection, setActiveSection] = useState<Section>('overview');
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(TimePeriod.MTD);
@@ -411,7 +416,7 @@ export function DealerDetailPageV2({
           </button>
         </div>
 
-        {/* Primary Actions — Call + Note only (visits are started via Activity page) */}
+        {/* Primary Actions — Call + Note + Create Lead */}
         <div className="flex gap-2">
           <button
             onClick={handleInitiateCall}
@@ -436,6 +441,17 @@ export function DealerDetailPageV2({
             <StickyNote className="w-3.5 h-3.5" />
             Note
           </button>
+          {onOpenLeadCreationFlow && (
+            <button
+              onClick={() => onOpenLeadCreationFlow(dealerCode, dealerName)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold
+                         rounded-xl active:scale-95 transition-all min-h-[44px]
+                         bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              Lead
+            </button>
+          )}
         </div>
 
         {/* Section tabs */}
