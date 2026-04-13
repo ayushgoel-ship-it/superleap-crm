@@ -157,6 +157,31 @@ public class LeadEntity {
     @Column(name = "ocb_run_count")
     private Integer ocbRunCount;
 
+    // ── C24 integration fields ──
+
+    @Column(name = "c24_lead_id")
+    private String c24LeadId;
+
+    @Column(name = "c24_lead_status")
+    private String c24LeadStatus;
+
+    @Column(name = "external_source")
+    private String externalSource;
+
+    @Column(name = "fuel_type")
+    private String fuelType;
+
+    @Column(name = "transmission")
+    private String transmission;
+
+    @Column(name = "ownership")
+    private String ownership;
+
+    @Column(name = "kilometers")
+    private String kilometers;
+
+    // ── Ownership ──
+
     @Column(name = "kam_id")
     private String kamId;
 

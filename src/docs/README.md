@@ -1,6 +1,6 @@
 # SuperLeap CRM - Documentation Index
 
-**Last Updated:** April 10, 2026
+**Last Updated:** April 13, 2026
 
 ---
 
@@ -74,6 +74,7 @@ src/docs/
 21. **[14_LEGACY_BACKEND_REFERENCE_CONTRACTS.md](./14_LEGACY_BACKEND_REFERENCE_CONTRACTS.md)** — Legacy backend route behavior to preserve or redesign during migration
 22. **[15_VIZ_SERVICE_BACKEND_PRINCIPLES.md](./15_VIZ_SERVICE_BACKEND_PRINCIPLES.md)** — `viz-service` patterns translated into CRM backend standards
 23. **[16_CONTROL_ROOM_FRONTEND_PRINCIPLES.md](./16_CONTROL_ROOM_FRONTEND_PRINCIPLES.md)** — `control-room` shell and frontend organization patterns translated into CRM standards
+24. **[19_C24_INTEGRATION_ARCHITECTURE.md](./19_C24_INTEGRATION_ARCHITECTURE.md)** — Cars24 API integration architecture: proxy layer, appointments table, lead extensions
 
 ## Verification
 

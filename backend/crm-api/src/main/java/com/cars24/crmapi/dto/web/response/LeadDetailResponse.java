@@ -50,6 +50,19 @@ public class LeadDetailResponse {
     BigDecimal expectedRevenue;
     @JsonProperty("actual_revenue")
     BigDecimal actualRevenue;
+    // ── C24 integration ──
+    @JsonProperty("c24_lead_id")
+    String c24LeadId;
+    @JsonProperty("c24_lead_status")
+    String c24LeadStatus;
+    @JsonProperty("external_source")
+    String externalSource;
+    @JsonProperty("fuel_type")
+    String fuelType;
+    String transmission;
+    String ownership;
+    String kilometers;
+
     @JsonProperty("kam_id")
     String kamId;
     @JsonProperty("tl_id")
@@ -97,6 +110,13 @@ public class LeadDetailResponse {
                 .targetPrice(e.getTargetPrice())
                 .expectedRevenue(e.getExpectedRevenue())
                 .actualRevenue(e.getActualRevenue())
+                .c24LeadId(e.getC24LeadId())
+                .c24LeadStatus(e.getC24LeadStatus())
+                .externalSource(e.getExternalSource())
+                .fuelType(e.getFuelType())
+                .transmission(e.getTransmission())
+                .ownership(e.getOwnership())
+                .kilometers(e.getKilometers())
                 .kamId(e.getKamId())
                 .tlId(e.getTlId())
                 .createdAt(e.getCreatedAt())

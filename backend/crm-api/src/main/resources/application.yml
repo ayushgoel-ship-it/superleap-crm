@@ -86,3 +86,24 @@ crm:
     allowed-origins: ${CRM_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
   services:
     endpoints: {}
+  cars24:
+    vehicle-service:
+      base-url: ${C24_VEHICLE_URL:https://gateway.24c.in/vehicle}
+      basic-auth: ${C24_BASIC_AUTH:}
+      session-token: ${C24_SESSION_TOKEN:}
+      connect-timeout-ms: 5000
+      read-timeout-ms: 10000
+      enabled: ${C24_VEHICLE_ENABLED:true}
+    partners-lead-service:
+      base-url: ${C24_PARTNERS_LEAD_URL:https://gateway.24c.in/partners-lead}
+      basic-auth: ${C24_BASIC_AUTH:}
+      session-token: ${C24_SESSION_TOKEN:}
+      connect-timeout-ms: 5000
+      read-timeout-ms: 15000
+      enabled: ${C24_PARTNERS_LEAD_ENABLED:true}
+    ola-maps:
+      base-url: ${OLA_MAPS_URL:https://api.olamaps.io/places/v1}
+      api-key: ${OLA_MAPS_API_KEY:}
+      connect-timeout-ms: 3000
+      read-timeout-ms: 5000
+      enabled: ${OLA_MAPS_ENABLED:true}
