@@ -503,7 +503,13 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
 
             {/* Create */}
             <button
-              onClick={() => setShowCreateLead(true)}
+              onClick={() => {
+                if (onOpenLeadCreationFlow) {
+                  onOpenLeadCreationFlow(); // Opens C24 lead creation sheet with dealer picker
+                } else {
+                  setShowCreateLead(true); // Fallback to legacy flow
+                }
+              }}
               className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-medium
                          hover:bg-indigo-700 active:scale-[0.97] transition-all duration-150 min-h-[40px] shadow-sm shadow-indigo-200"
             >
