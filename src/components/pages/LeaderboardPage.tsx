@@ -20,7 +20,7 @@ import {
 import type { UserRole } from '../../lib/shared/appTypes';
 import type { LeaderboardResponse, LeaderboardEntry } from '../../lib/api/crmApi';
 import { TimePeriod } from '../../lib/domain/constants';
-import { getFilteredLeads, getFilteredDCFLeads, isStockIn, isInspection } from '../../data/canonicalMetrics';
+import { getFilteredLeads, getFilteredDCFLeads } from '../../data/canonicalMetrics';
 import { getAllTLs } from '../../data/selectors';
 import { getSITarget } from '../../lib/metricsEngine';
 import { useActorScope } from '../../lib/auth/useActorScope';
@@ -122,14 +122,14 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
       });
 
       const entries = Array.from(tlMap.entries()).map(([tlId, d]) => {
-        const si = d.leads.filter(l => isStockIn(l.stage)).length;
-        const insp = d.leads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
+        const si = d.leads.filter(l => l.regStockinRank === 1 && (l.finalSiDate || l.stockinDate)).length;
+        const insp = d.leads.filter(l => l.regInspRank === 1 && l.inspectionDate).length;
         const dcfDisb = d.dcf.filter(dc => dc.overallStatus === 'DISBURSED').length;
         const i2si = insp > 0 ? Math.round((si / insp) * 1000) / 10 : 0;
         const stockinEquiv = si + 3 * dcfDisb;
 
         const lmtdTLLeads = lmtdLeads.filter(l => l.tlId === tlId);
-        const lmtdSI = lmtdTLLeads.filter(l => isStockIn(l.stage)).length;
+        const lmtdSI = lmtdTLLeads.filter(l => l.regStockinRank === 1 && (l.finalSiDate || l.stockinDate)).length;
         const delta = lmtdSI > 0 ? Math.round(((si - lmtdSI) / lmtdSI) * 100) : 0;
 
         return {
@@ -178,7 +178,7 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
         },
         top3: fullList.slice(0, 3),
         full_list: fullList,
-        notes: `Rank = ${SI_WEIGHT}% SI-equiv (SI + 3\u00D7DCF) + ${DCF_WEIGHT}% projected achievement%. Period: ${period}.`,
+        notes: `Ranked by SI-equivalent (SI + 3\u00D7DCF disbursals). Period: ${period}.`,
       };
     }
 
@@ -195,15 +195,15 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
 
     // Build entries sorted by stock-in-equiv score
     const entries = Array.from(kamMap.entries()).map(([kamId, d]) => {
-      const si = d.leads.filter(l => isStockIn(l.stage)).length;
-      const insp = d.leads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
+      const si = d.leads.filter(l => l.regStockinRank === 1 && (l.finalSiDate || l.stockinDate)).length;
+      const insp = d.leads.filter(l => l.regInspRank === 1 && l.inspectionDate).length;
       const dcfDisb = d.dcf.filter(dc => dc.overallStatus === 'DISBURSED').length;
       const i2si = insp > 0 ? Math.round((si / insp) * 1000) / 10 : 0;
       const stockinEquiv = si + 3 * dcfDisb;
 
       // LMTD comparison
       const lmtdKamLeads = lmtdLeads.filter(l => l.kamId === kamId);
-      const lmtdSI = lmtdKamLeads.filter(l => isStockIn(l.stage)).length;
+      const lmtdSI = lmtdKamLeads.filter(l => l.regStockinRank === 1 && (l.finalSiDate || l.stockinDate)).length;
       const delta = lmtdSI > 0 ? Math.round(((si - lmtdSI) / lmtdSI) * 100) : 0;
 
       return {
@@ -254,7 +254,7 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
       },
       top3: fullList.slice(0, 3),
       full_list: fullList,
-      notes: `Rank = ${SI_WEIGHT}% SI-equiv (SI + 3\u00D7DCF) + ${DCF_WEIGHT}% projected achievement%. Period: ${period}.`,
+      notes: `Ranked by SI-equivalent (SI + 3\u00D7DCF disbursals). Period: ${period}.`,
     };
   }, [period, scope, customFrom, customTo, effectiveKamIds]);
 

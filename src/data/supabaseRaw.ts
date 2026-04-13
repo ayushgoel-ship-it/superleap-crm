@@ -114,7 +114,7 @@ function getUserTeamId(userId: string | null): string {
 
 export async function fetchDealersRaw(): Promise<Dealer[]> {
   await ensureUserMap();
-  const data = await fetchAll('dealers_master', '*');
+  const data = await fetchAll('dealers_master', 'dealer_code,dealer_name,dealer_city,dealer_region,kam_id,tl_id,phone,email,latitude,longitude,segment,status,sell_onboarded,dcf_onboarded,sell_onboarding_date,dcf_onboarding_date,onboarding_status,bank_account_status,is_top,gst_number,pan_number,bank_account,pincode');
   if (data.length === 0) return [];
 
   const emptyMetric: DealerMetricPeriod = { leads: 0, inspections: 0, sis: 0, dcf: 0 };
@@ -177,7 +177,7 @@ export async function fetchDealersRaw(): Promise<Dealer[]> {
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchLeadsRaw(): Promise<Lead[]> {
-  const data = await fetchAll('sell_leads_master', '*');
+  const data = await fetchAll('sell_leads_master', 'lead_id,dealer_code,year,make,model,variant,cx_reg_no,gs_flag,dl_type,appointment_id,product_appt_id,app_id,appointment_status,target_price,selleragreedprice,latest_c24q,max_c24_quote,bid_amount,lead_date,deal_creation_date,original_appt_date,current_appt_date,inspection_date,inspection_city,inspection_region,token_date,stockin_date,stock_out_date,final_token_date,final_si_date,latest_ocb_raisedat,franchise_flag,ocb_run_count,verified,dealer_region,growth_zone,reg_appt_rank,reg_insp_rank,reg_token_rank,reg_stockin_rank,refund_status,refund_amount,refund_date,refund_reason,c2d_status,c2d_date,c2d_amount,duplicate_of');
   if (data.length === 0) return [];
 
   const mapped = data.map((l: any) => {
@@ -270,7 +270,7 @@ export async function fetchLeadsRaw(): Promise<Lead[]> {
 
 export async function fetchCallsRaw(): Promise<CallLog[]> {
   await ensureUserMap();
-  const data = await fetchAll('call_events', '*');
+  const data = await fetchAll('call_events', 'call_id,kam_id,dealer_code,dealer_id,start_time,duration,outcome,is_productive,customer_phone,notes,call_direction,recording_url,device_id,sim_slot');
   if (data.length === 0) return [];
 
   return data.map((c: any) => {
@@ -308,7 +308,7 @@ export async function fetchCallsRaw(): Promise<CallLog[]> {
 
 export async function fetchVisitsRaw(): Promise<VisitLog[]> {
   await ensureUserMap();
-  const data = await fetchAll('visits', '*');
+  const data = await fetchAll('visits', 'visit_id,kam_id,dealer_code,dealer_id,untagged_dealer_id,scheduled_at,duration_minutes,geo_lat,geo_lng,is_productive,visit_type,status,check_in_at,check_out_at');
   if (data.length === 0) return [];
 
   return data.map((v: any) => {
@@ -347,7 +347,7 @@ export async function fetchVisitsRaw(): Promise<VisitLog[]> {
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
-  const data = await fetchAll('dcf_leads_master', '*');
+  const data = await fetchAll('dcf_leads_master', 'lead_id,id,dealer_code,dealer_name,dealer_city,kam_id,tl_id,applicant_name,borrower_name,cust_name,customer_name,customer_mobile,mobile_no,valuation_price,gross_disbursal,total_loan_sanction,loan_tenure,ds_tenure,roi_per_annum,ds_roi,funnel_loan_state,disbursal_datetime,approval_date,login_date,red_flag,risk_bucket,rm_mapping,ds_channel,banking_flag,lead_creation_date,year,make,model,variant,vehicle_model,registration_no,final_offer_ltv,system_ltv,cibil_score,employment_details');
   if (data.length === 0) return [];
 
   return data.map((dcf: any) => {
@@ -457,7 +457,7 @@ export async function fetchDcfLeadsRaw(): Promise<DCFLead[]> {
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchUntaggedDealersRaw(): Promise<UntaggedDealer[]> {
-  const { data, error } = await supabase.from('untagged_dealers').select('*');
+  const { data, error } = await supabase.from('untagged_dealers').select('id,phone,name,city,region,address,notes,created_by,created_at');
   if (error) {
     console.error('[SupabaseRaw] Failed to fetch untagged_dealers:', error.message);
     return [];
@@ -482,7 +482,7 @@ export async function fetchUntaggedDealersRaw(): Promise<UntaggedDealer[]> {
 // ════════════════════════════════════════════════════════════════════
 
 export async function fetchLocationRequestsRaw(): Promise<LocationChangeRequest[]> {
-  const { data, error } = await supabase.from('location_requests').select('*');
+  const { data, error } = await supabase.from('location_requests').select('request_id,dealer_id,requested_by,old_lat,old_lng,new_lat,new_lng,reason,status,decided_at,decided_by,rejection_reason,created_at');
   if (error) {
     console.error('[SupabaseRaw] Failed to fetch location_requests:', error.message);
     return [];
@@ -513,8 +513,8 @@ export async function fetchLocationRequestsRaw(): Promise<LocationChangeRequest[
 export async function fetchOrgRaw(): Promise<AdminOrg | null> {
   await ensureUserMap();
   const [usersData, teamsData] = await Promise.all([
-    fetchAll('users', '*'),
-    fetchAll('teams', '*'),
+    fetchAll('users', 'user_id,name,role,region,team_id,phone,email,city,is_active,last_login_at,avatar_url'),
+    fetchAll('teams', 'team_id,tl_user_id'),
   ]);
 
   if (usersData.length === 0 && teamsData.length === 0) return null;
@@ -604,7 +604,7 @@ export interface IncentiveRuleRow {
 
 export async function fetchTargetsRaw(): Promise<TargetRow[]> {
   try {
-    return await fetchAll<TargetRow>('targets', '*');
+    return await fetchAll<TargetRow>('targets', 'target_id,user_id,role,month,si_target,call_target,visit_target,i2si_target,input_score_gate,quality_score_gate,stretch_value');
   } catch (e) {
     console.warn('[SupabaseRaw] Failed to fetch targets:', e);
     return [];
@@ -613,7 +613,7 @@ export async function fetchTargetsRaw(): Promise<TargetRow[]> {
 
 export async function fetchIncentiveSlabsRaw(): Promise<IncentiveSlabRow[]> {
   try {
-    return await fetchAll<IncentiveSlabRow>('incentive_slabs', '*');
+    return await fetchAll<IncentiveSlabRow>('incentive_slabs', 'slab_id,role,slab_name,min_percent,max_percent,rate_per_si,description,effective_from,effective_to');
   } catch (e) {
     console.warn('[SupabaseRaw] Failed to fetch incentive_slabs:', e);
     return [];
@@ -622,7 +622,7 @@ export async function fetchIncentiveSlabsRaw(): Promise<IncentiveSlabRow[]> {
 
 export async function fetchIncentiveRulesRaw(): Promise<IncentiveRuleRow[]> {
   try {
-    return await fetchAll<IncentiveRuleRow>('incentive_rules', '*');
+    return await fetchAll<IncentiveRuleRow>('incentive_rules', 'rule_id,scope,metric_key,threshold,payout,effective_from,effective_to');
   } catch (e) {
     console.warn('[SupabaseRaw] Failed to fetch incentive_rules:', e);
     return [];
