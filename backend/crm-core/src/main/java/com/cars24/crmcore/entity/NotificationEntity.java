@@ -39,7 +39,8 @@ public class NotificationEntity {
     @Column(name = "is_read")
     private Boolean isRead;
 
-    @Column(name = "metadata")
+    @Column(name = "metadata", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String metadata;
 
     @Column(name = "created_at")

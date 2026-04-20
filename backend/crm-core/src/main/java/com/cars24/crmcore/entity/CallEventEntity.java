@@ -74,13 +74,15 @@ public class CallEventEntity {
     @Column(name = "productivity_source")
     private String productivitySource;
 
-    @Column(name = "auto_tags")
+    @Column(name = "auto_tags", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String autoTags;
 
     @Column(name = "kam_comments")
     private String kamComments;
 
-    @Column(name = "follow_up_tasks")
+    @Column(name = "follow_up_tasks", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String followUpTasks;
 
     @Column(name = "recording_url")
@@ -98,10 +100,12 @@ public class CallEventEntity {
     @Column(name = "sentiment_label")
     private String sentimentLabel;
 
-    @Column(name = "feedback")
+    @Column(name = "feedback", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String feedback;
 
-    @Column(name = "tl_review")
+    @Column(name = "tl_review", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String tlReview;
 
     @Column(name = "notes")

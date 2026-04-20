@@ -24,7 +24,8 @@ public class DcfTimelineEventEntity {
     @Column(name = "event_type")
     private String eventType;
 
-    @Column(name = "event_payload")
+    @Column(name = "event_payload", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String eventPayload;
 
     @Column(name = "actor_user_id")

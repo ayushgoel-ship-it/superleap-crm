@@ -80,16 +80,19 @@ public class VisitEntity {
     @Column(name = "productivity_source")
     private String productivitySource;
 
-    @Column(name = "outcomes")
+    @Column(name = "outcomes", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String outcomes;
 
     @Column(name = "kam_comments")
     private String kamComments;
 
-    @Column(name = "follow_up_tasks")
+    @Column(name = "follow_up_tasks", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String followUpTasks;
 
-    @Column(name = "feedback")
+    @Column(name = "feedback", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String feedback;
 
     @Column(name = "notes")

@@ -60,7 +60,8 @@ public class DealerEntity {
     @Column(name = "is_top")
     private Boolean isTop;
 
-    @Column(name = "metadata")
+    @Column(name = "metadata", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String metadata;
 
     @Column(name = "created_at")

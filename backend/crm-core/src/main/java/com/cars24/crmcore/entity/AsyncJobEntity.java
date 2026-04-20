@@ -25,9 +25,11 @@ public class AsyncJobEntity {
     private String status;
 
     @Column(name = "input_payload", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String inputPayload;
 
     @Column(name = "result_summary", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String resultSummary;
 
     @Column(name = "error_message")

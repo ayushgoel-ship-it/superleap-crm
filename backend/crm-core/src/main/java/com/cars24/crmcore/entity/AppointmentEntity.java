@@ -97,6 +97,7 @@ public class AppointmentEntity {
     private String tlId;
 
     @Column(name = "metadata", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String metadata;
 
     @Column(name = "created_at")
