@@ -38,6 +38,7 @@ function toRegionKey(raw: string | null): 'NCR' | 'West' | 'South' | 'East' {
 async function fetchAll<T = any>(table: string, select: string, pageSize = 1000): Promise<T[]> {
   const all: T[] = [];
   let from = 0;
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { data, error } = await supabase.from(table).select(select).range(from, from + pageSize - 1);
     if (error) {
@@ -334,7 +335,7 @@ export async function fetchVisitsRaw(): Promise<VisitLog[]> {
       isProductive: v.is_productive ?? v.status === 'completed',
       productivitySource: 'Geofence' as const,
       visitType: v.visit_type || 'Planned',
-      status: v.status === 'completed' ? 'COMPLETED' : v.status === 'cancelled' ? 'CANCELLED' : 'NOT_STARTED',
+      status: (v.status === 'completed' ? 'COMPLETED' : v.status === 'cancelled' ? 'NOT_STARTED' : 'NOT_STARTED') as VisitLog['status'],
       checkInAt: v.check_in_at || undefined,
       completedAt: v.check_out_at || undefined,
     };

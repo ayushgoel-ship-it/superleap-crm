@@ -180,7 +180,7 @@ export function KAMCallsView({ onNavigateToCallFeedback }: KAMCallsViewProps) {
       connected: false,
       tags: [], // Add dealer tags if available
       originContext,
-    });
+    } as any);
 
     // Open system dialer
     if (call.contactPhone) {

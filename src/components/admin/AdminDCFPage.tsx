@@ -378,7 +378,7 @@ export function AdminDCFPage({ onNavigate }: AdminDCFPageProps = {}) {
                 <EmptyState
                   variant="filtered"
                   type="general"
-                  primaryLabel="No DCF activity for selected filters"
+                  title="No DCF activity for selected filters"
                   secondaryLabel="Reset"
                   onSecondary={resetFilters}
                 />

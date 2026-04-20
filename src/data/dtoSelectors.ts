@@ -84,16 +84,16 @@ export function getDealerDTO(dealerId: string): DealerDTO | null {
     city: dealer.city,
     region: dealer.region,
     segment: dealer.segment,
-    tags: dealer.tags,
-    status: dealer.status,
-    
+    tags: dealer.tags as any,
+    status: (dealer.status === 'churned' ? 'dormant' : dealer.status) as 'active' | 'inactive' | 'dormant',
+
     kamId: dealer.kamId,
     kamName: dealer.kamName,
     tlId: dealer.tlId,
-    
+
     phone: dealer.phone,
     email: dealer.email,
-    address: dealer.address,
+    address: (dealer as any).address,
     
     latitude: dealer.latitude,
     longitude: dealer.longitude,
@@ -215,7 +215,7 @@ export function getDealerListItemDTO(dealerId: string): DealerListItemDTO | null
     city: dealer.city,
     region: dealer.region,
     segment: dealer.segment,
-    tags: dealer.tags,
+    tags: dealer.tags as any,
     kamName: dealer.kamName,
     stockIns: dealer.metrics.mtd.sis,
     i2si: dealer.metrics.mtd.inspections > 0
@@ -379,7 +379,7 @@ export function getVisitDetailDTO(visitId: string): VisitDetailDTO | null {
       code: dealer.code,
       city: dealer.city,
       segment: dealer.segment,
-      address: dealer.address,
+      address: (dealer as any).address,
       latitude: dealer.latitude,
       longitude: dealer.longitude
     },
@@ -422,7 +422,7 @@ export function getDCFLeadDTO(leadId: string): DCFLeadDTO | null {
     id: lead.id,
     customerName: lead.customerName,
     customerPhone: lead.customerPhone,
-    pan: lead.pan,
+    pan: lead.pan ?? '',
     city: lead.city,
     regNo: lead.regNo,
     car: lead.car,
@@ -436,13 +436,13 @@ export function getDCFLeadDTO(leadId: string): DCFLeadDTO | null {
     dealerName: lead.dealerName,
     dealerCode: lead.dealerCode,
     dealerCity: lead.dealerCity,
-    channel: lead.channel,
+    channel: lead.channel as 'Dealer Shared' | 'Walk-in' | 'Online',
     kamId: lead.kamId,
     kamName: lead.kamName,
     tlId: lead.tlId,
     ragStatus: lead.ragStatus,
-    bookFlag: lead.bookFlag,
-    carDocsFlag: lead.carDocsFlag,
+    bookFlag: lead.bookFlag as 'Own Book' | 'Pmax',
+    carDocsFlag: lead.carDocsFlag as 'Received' | 'Pending',
     conversionOwner: lead.conversionOwner,
     conversionEmail: lead.conversionEmail,
     conversionPhone: lead.conversionPhone,
@@ -504,7 +504,7 @@ export function getKAMCallDTOs(kamId: string): CallDTO[] {
  */
 export function getKAMVisitDTOs(kamId: string): VisitDTO[] {
   const visits = getVisitsByKAM(kamId);
-  return visits.map(v => getVisitDTO(v.id)).filter((v): d is VisitDTO => v !== null);
+  return visits.map(v => getVisitDTO(v.id)).filter((v): v is VisitDTO => v !== null);
 }
 
 /**

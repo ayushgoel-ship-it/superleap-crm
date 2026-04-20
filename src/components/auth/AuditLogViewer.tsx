@@ -31,10 +31,20 @@ import { toast } from 'sonner@2.0.3';
 export function AuditLogViewer() {
   const { profile, session } = useAuth();
   const authRole = profile?.role ?? null;
-  const activeRole = (session?.activeRole as string) ?? authRole;
+  const activeRole = ((session as any)?.activeRole as typeof authRole) ?? authRole;
   const [filterType, setFilterType] = useState<AuditEventType | 'ALL'>('ALL');
   const [refreshKey, setRefreshKey] = useState(0);
-  
+
+  // Get events — hooks must run before any conditional return.
+  const allEvents = useMemo(() => getAuditEvents(), [refreshKey]);
+  const summary = useMemo(() => getAuditSummary(), [refreshKey]);
+
+  // Filter events
+  const filteredEvents = useMemo(() => {
+    if (filterType === 'ALL') return allEvents;
+    return allEvents.filter(e => e.type === filterType);
+  }, [allEvents, filterType]);
+
   // Check permission
   if (!canPerformAction(authRole, activeRole, 'VIEW_AUDIT_LOG')) {
     return (
@@ -44,16 +54,6 @@ export function AuditLogViewer() {
       </div>
     );
   }
-  
-  // Get events
-  const allEvents = useMemo(() => getAuditEvents(), [refreshKey]);
-  const summary = useMemo(() => getAuditSummary(), [refreshKey]);
-  
-  // Filter events
-  const filteredEvents = useMemo(() => {
-    if (filterType === 'ALL') return allEvents;
-    return allEvents.filter(e => e.type === filterType);
-  }, [allEvents, filterType]);
   
   // Handle export
   const handleExport = () => {

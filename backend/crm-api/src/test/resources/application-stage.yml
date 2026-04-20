@@ -1,0 +1,49 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:crm_stage_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+
+crm:
+  db:
+    host: localhost
+    port: 5432
+    database: crm_stage_test
+    username: sa
+    password:
+    schema: public
+    ssl-enabled: false
+  cache:
+    enabled: false
+    provider: none
+    default-ttl-seconds: 300
+    key-prefix: crm:stage-test
+  storage:
+    enabled: false
+    provider: s3
+    bucket: crm-test-bucket
+    region: ap-south-1
+    presigned-url-expiration-seconds: 300
+  jwt:
+    enabled: true
+    issuer: test-issuer
+    audience: crm-api
+    secret: test-secret-key-with-at-least-32-bytes
+    dev-header-fallback-enabled: false
+  services:
+    endpoints: {}
+
+logging:
+  level:
+    com.cars24: INFO
+    org.springframework.web: INFO

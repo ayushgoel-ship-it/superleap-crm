@@ -73,7 +73,7 @@ export function DealerLocationUpdatePage({
         // Create location change request for TL approval
         const { error } = await supabase.from('location_change_requests').insert({
           dealer_id: dealerId,
-          requested_by: profile?.id || '',
+          requested_by: profile?.userId || '',
           latitude: currentLocation.lat,
           longitude: currentLocation.lng,
           address: address || null,

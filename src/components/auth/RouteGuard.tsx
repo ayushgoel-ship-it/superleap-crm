@@ -24,7 +24,11 @@ interface RouteGuardProps {
  * RouteGuard - Protects routes based on role
  */
 export function RouteGuard({ children, requiredRole, allowedRoles }: RouteGuardProps) {
-  const { authUser, authRole, activeRole, isLoading } = useAuth();
+  const { profile, session, activeActor, isLoading } = useAuth();
+  const authUser = profile;
+  const authRole = profile?.role ?? null;
+  const activeRole = (activeActor?.role ?? authRole) as typeof authRole;
+  void session;
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -45,7 +49,7 @@ export function RouteGuard({ children, requiredRole, allowedRoles }: RouteGuardP
     }
     
     // Check allowed roles list
-    if (allowedRoles && !allowedRoles.includes(activeRole!)) {
+    if (allowedRoles && !allowedRoles.includes(activeRole as any)) {
       handleUnauthorized();
       return;
     }

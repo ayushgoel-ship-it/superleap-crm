@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: crm
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  crm-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      CRM_DB_HOST: postgres
+      CRM_DB_PORT: 5432
+      CRM_DB_NAME: crm
+      CRM_DB_USERNAME: crm
+      CRM_DB_PASSWORD: crm
+      CRM_DB_SCHEMA: public
+      CRM_JWT_DEV_HEADER_FALLBACK_ENABLED: "true"
+      CRM_JWT_SECRET: "docker-dev-secret-key-at-least-32-bytes-long"
+      CRM_JWT_ISSUER: superleap-crm
+      CRM_JWT_AUDIENCE: crm-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

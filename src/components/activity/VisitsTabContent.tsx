@@ -980,7 +980,7 @@ export function VisitsTabContent({
 
   // ── Geolocation ──
   const requestLocation = useCallback(() => {
-    const useFallback = () => {
+    const applyFallback = () => {
       // Expected in preview/iframe environments where permissions policy blocks geolocation
       setUserLocation({ ...FALLBACK_LOCATION, accuracy: 10 });
       setLocationEnabled(true);
@@ -990,7 +990,7 @@ export function VisitsTabContent({
 
     // Skip geolocation entirely when blocked by permissions policy (iframe/preview)
     if (!navigator.geolocation || !window.isSecureContext) {
-      useFallback();
+      applyFallback();
       return;
     }
 
@@ -999,7 +999,7 @@ export function VisitsTabContent({
       navigator.permissions.query({ name: 'geolocation' }).then((result) => {
         if (result.state === 'denied') {
           setLocationStatus('denied');
-          useFallback();
+          applyFallback();
           return;
         }
         doGeoRequest();
@@ -1028,7 +1028,7 @@ export function VisitsTabContent({
         },
         () => {
           // Silently fall back — permissions policy block is expected in preview
-          useFallback();
+          applyFallback();
         },
         { enableHighAccuracy: true, timeout: 5000 },
       );

@@ -60,6 +60,20 @@ export const ENV = {
   ENABLE_DEV_WARNINGS: MODE === 'dev',
   ENABLE_MOCK_CREDENTIALS: false, // Disabled — using Supabase Auth
   ENABLE_AUDIT_LOG: true,
+  ENABLE_PERFORMANCE_MONITORING: MODE !== 'dev',
+  ENABLE_CALL_INTENTS: true,
+  ENABLE_WHATSAPP_DEEP_LINKS: true,
+  ENABLE_MAPS_INTEGRATION: true,
+  ENABLE_MOCK_LOCATION: MODE === 'dev',
+
+  // Client storage
+  STORAGE_PREFIX: 'superleap_crm_',
+
+  // Geofencing (meters)
+  GEOFENCE_RADIUS_METERS: 200,
+
+  // HTTP
+  API_TIMEOUT: 30_000,
 
   // API (future backend usage)
   API_BASE_URL:

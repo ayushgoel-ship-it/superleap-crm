@@ -51,6 +51,12 @@ export const ROUTES = {
   ADMIN_LEADS: AppRoute.ADMIN_LEADS,
   ADMIN_VC: AppRoute.ADMIN_VC,
   ADMIN_DCF: AppRoute.ADMIN_DCF,
+  ADMIN_USERS: AppRoute.ADMIN_USERS,
+  ADMIN_TARGETS: AppRoute.ADMIN_TARGETS,
+  ADMIN_HIERARCHY: AppRoute.ADMIN_HIERARCHY,
+  ADMIN_REPORTS: AppRoute.ADMIN_REPORTS,
+  ADMIN_SETTINGS: AppRoute.ADMIN_SETTINGS,
+  ADMIN_APPROVALS: AppRoute.ADMIN_APPROVALS,
   ADMIN_DASHBOARD: AppRoute.ADMIN_DASHBOARD,
   ADMIN_TL_LEADERBOARD: AppRoute.ADMIN_TL_LEADERBOARD,
   ADMIN_TL_DETAIL: AppRoute.ADMIN_TL_DETAIL,
@@ -64,7 +70,18 @@ export const ROUTES = {
  * Admin bottom-nav page subset — backward compatibility alias for Route.
  * @see ROUTES.ADMIN_HOME, ROUTES.ADMIN_DEALERS, ROUTES.ADMIN_LEADS, ROUTES.ADMIN_VC, ROUTES.ADMIN_DCF
  */
-export type AdminPage = 'admin-home' | 'admin-dealers' | 'admin-leads' | 'admin-vc' | 'admin-dcf';
+export type AdminPage =
+  | 'admin-home'
+  | 'admin-dealers'
+  | 'admin-leads'
+  | 'admin-vc'
+  | 'admin-dcf'
+  | 'admin-users'
+  | 'admin-targets'
+  | 'admin-hierarchy'
+  | 'admin-reports'
+  | 'admin-settings'
+  | 'admin-approvals';
 
 /**
  * Type for route values
@@ -87,7 +104,7 @@ export function isValidRoute(route: string): route is Route {
  * Helper to check if a route is an admin route
  */
 export function isAdminRoute(route: Route | string): boolean {
-  const adminRoutes = [
+  const adminRoutes: Route[] = [
     ROUTES.ADMIN_HOME,
     ROUTES.ADMIN_DEALERS,
     ROUTES.ADMIN_LEADS,
@@ -104,7 +121,7 @@ export function isAdminRoute(route: Route | string): boolean {
  * Helper to check if a route is a DCF route
  */
 export function isDCFRoute(route: Route | string): boolean {
-  const dcfRoutes = [
+  const dcfRoutes: Route[] = [
     ROUTES.DCF,
     ROUTES.DCF_DEALERS,
     ROUTES.DCF_LEADS,
@@ -121,7 +138,7 @@ export function isDCFRoute(route: Route | string): boolean {
  * Helper to check if a route is an auth route
  */
 export function isAuthRoute(route: Route | string): boolean {
-  const authRoutes = [
+  const authRoutes: Route[] = [
     ROUTES.AUTH_LOGIN,
     ROUTES.AUTH_FORGOT_PASSWORD,
     ROUTES.PROFILE_COMPLETE,

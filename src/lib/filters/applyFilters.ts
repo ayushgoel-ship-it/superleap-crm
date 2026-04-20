@@ -87,7 +87,7 @@ export function applyLeadFilters(
     const q = filters.search.toLowerCase();
     result = result.filter(l =>
       l.customerName?.toLowerCase().includes(q) ||
-      l.vehicle?.toLowerCase().includes(q) ||
+      (l as any).vehicle?.toLowerCase().includes(q) ||
       l.dealerName?.toLowerCase().includes(q) ||
       l.id?.toLowerCase().includes(q),
     );

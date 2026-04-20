@@ -127,21 +127,6 @@ export function NotificationCenterPage({ userRole }: NotificationCenterPageProps
     }
   }, [markRead]);
 
-  // ── Lead detail sub-page ──
-  if (selectedLead) {
-    return (
-      <LeadDetailV2AdapterForNotifications
-        regNo={selectedLead.regNo}
-        customer={selectedLead.customer}
-        channel={selectedLead.channel}
-        leadType={selectedLead.leadType}
-        currentStage={selectedLead.currentStage}
-        onBack={() => setSelectedLead(null)}
-        userRole={userRole}
-      />
-    );
-  }
-
   // ── Dynamic notifications from canonical data ──
   const notifications: Notification[] = useMemo(() => {
     const items: Notification[] = [];
@@ -334,6 +319,21 @@ export function NotificationCenterPage({ userRole }: NotificationCenterPageProps
       return next;
     });
   };
+
+  // ── Lead detail sub-page (routed AFTER hooks so rules-of-hooks holds) ──
+  if (selectedLead) {
+    return (
+      <LeadDetailV2AdapterForNotifications
+        regNo={selectedLead.regNo}
+        customer={selectedLead.customer}
+        channel={selectedLead.channel as 'NGS' | 'GS' | 'DCF'}
+        leadType={selectedLead.leadType}
+        currentStage={selectedLead.currentStage}
+        onBack={() => setSelectedLead(null)}
+        userRole={userRole}
+      />
+    );
+  }
 
   // ── Time helpers ──
   function timeAgo(dateStr: string): string {

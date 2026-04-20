@@ -2,17 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Typecheck & Build
+  frontend:
+    name: Frontend — Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,7 +27,78 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Type-check (blocking — baseline is clean, see TS_STRICT_DEBT.md)
+        run: npm run type-check
+
+      - name: Lint (errors blocking; warnings allowed)
+        # Baseline is 0 errors. Warnings (~490) are tolerated and will
+        # be burned down separately — `--max-warnings=0` is intentionally
+        # bypassed with a dedicated invocation until the warning budget
+        # is settled.
+        run: npx eslint "src/**/*.{ts,tsx}"
+
+      - name: Test (smoke)
+        run: npm test
+
       - name: Build
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: build/
+          retention-days: 3
+
+  backend:
+    name: Backend — Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+          cache-dependency-path: backend/pom.xml
+
+      - name: Build & Test
+        run: ./mvnw clean verify -B
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: backend/*/target/surefire-reports/
+          retention-days: 7
+
+  docker-frontend:
+    name: Frontend — Docker build (smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: superleap-crm:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

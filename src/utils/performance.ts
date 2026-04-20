@@ -40,7 +40,7 @@ export function useRenderCount(componentName: string, warnThreshold = 10) {
  * Detect why component re-rendered (dev only)
  */
 export function useWhyDidYouUpdate(name: string, props: Record<string, any>) {
-  const previousProps = useRef<Record<string, any>>();
+  const previousProps = useRef<Record<string, any> | undefined>(undefined);
   
   useEffect(() => {
     if (!ENV.ENABLE_DEV_WARNINGS) return;
@@ -155,7 +155,7 @@ export function memoizeWithLimit<T extends (...args: any[]) => any>(
     // Limit cache size
     if (cache.size >= maxCacheSize) {
       const firstKey = cache.keys().next().value;
-      cache.delete(firstKey);
+      if (firstKey !== undefined) cache.delete(firstKey);
     }
     
     cache.set(key, result);
@@ -267,23 +267,26 @@ export function batchUpdates<T>(updates: Array<() => void>): void {
 }
 
 /**
- * Lazy load heavy computation
+ * Lazy load heavy computation — React custom hook.
+ * Renamed from `lazyCompute` to `useLazyCompute` so it conforms to the
+ * rules-of-hooks naming contract (required for `useRef` calls to be
+ * valid).
  */
-export function lazyCompute<T>(
+export function useLazyCompute<T>(
   computeFn: () => T,
   deps: DependencyList
 ): T | null {
   const resultRef = useRef<T | null>(null);
   const depsRef = useRef<DependencyList>(deps);
-  
+
   // Check if deps changed
   const depsChanged = !depsRef.current.every((dep, i) => dep === deps[i]);
-  
+
   if (depsChanged || resultRef.current === null) {
     resultRef.current = computeFn();
     depsRef.current = deps;
   }
-  
+
   return resultRef.current;
 }
 

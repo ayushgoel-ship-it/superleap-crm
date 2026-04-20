@@ -9,6 +9,7 @@
 import { Component, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { ENV, logger } from '../../config/env';
+import { reportError } from '../../lib/telemetry/errorReporter';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 
@@ -61,16 +62,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       errorInfo
     });
     
-    // In production, send to error tracking service
-    if (ENV.IS_PROD) {
-      // TODO: Send to Sentry/DataDog/etc
-      // sendErrorToTracking({
-      //   error,
-      //   errorInfo,
-      //   errorHash: this.state.errorHash,
-      //   userAgent: navigator.userAgent,
-      //   url: window.location.href
-      // });
+    // Forward to external tracker (no-op until one is registered in main.tsx).
+    if (ENV.IS_PROD || ENV.IS_STAGING) {
+      reportError(error, {
+        errorHash: this.state.errorHash,
+        componentStack: errorInfo?.componentStack,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+        url: typeof window !== 'undefined' ? window.location.href : undefined,
+      });
     }
   }
   
@@ -125,7 +124,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               </div>
               
               {/* Dev-only: Show error details */}
-              {ENV.SHOW_ERROR_DETAILS && this.state.error && (
+              {(ENV.IS_DEV || ENV.IS_STAGING) && this.state.error && (
                 <details className="text-left mb-6">
                   <summary className="cursor-pointer text-sm font-medium text-gray-700 mb-2">
                     Technical Details (Dev Only)

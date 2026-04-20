@@ -235,17 +235,17 @@ export function DCFPageTL({
   };
 
   // Helper function to get step number and label for status line
-  const getStepInfo = (onboarding?: OnboardingStatus) => {
+  const getStepInfo = (onboarding?: OnboardingStatus): { step: number; label: string } => {
     if (!onboarding) return { step: 5, label: 'Onboarded' };
-    
-    const stepMap: Record<OnboardingStep, { number: number; label: string }> = {
-      form_filled: { number: 1, label: 'Form Filled' },
-      docs_cibil: { number: 2, label: 'Docs & CIBIL' },
-      inspection: { number: 3, label: 'Inspection' },
-      finance_approval: { number: 4, label: 'Finance Approval' },
-      onboarded: { number: 5, label: 'Onboarded' },
+
+    const stepMap: Record<OnboardingStep, { step: number; label: string }> = {
+      form_filled: { step: 1, label: 'Form Filled' },
+      docs_cibil: { step: 2, label: 'Docs & CIBIL' },
+      inspection: { step: 3, label: 'Inspection' },
+      finance_approval: { step: 4, label: 'Finance Approval' },
+      onboarded: { step: 5, label: 'Onboarded' },
     };
-    
+
     return stepMap[onboarding.currentStep] || { step: 1, label: 'Form Filled' };
   };
 
@@ -393,8 +393,8 @@ export function DCFPageTL({
         {/* Unified dealer cards - all same height and structure */}
         <div className="space-y-3">
           {filteredDealers.map((dealer) => {
-            const stepInfo = getStepInfo(dealer.onboarding);
-            const isNotOnboarded = !dealer.isOnboarded && dealer.onboarding;
+            const stepInfo = getStepInfo((dealer as any).onboarding);
+            const isNotOnboarded = !dealer.isOnboarded && (dealer as any).onboarding;
             
             return (
               <button

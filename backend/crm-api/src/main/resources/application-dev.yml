@@ -1,0 +1,8 @@
+crm:
+  jwt:
+    dev-header-fallback-enabled: ${CRM_JWT_DEV_HEADER_FALLBACK_ENABLED:true}
+
+logging:
+  level:
+    com.cars24: DEBUG
+    org.springframework.web: INFO

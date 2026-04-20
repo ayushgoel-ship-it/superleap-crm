@@ -143,11 +143,13 @@ interface LeadsPageV3Props {
   filterContext?: LeadsFilterContext | null;
   onClearContext?: () => void;
   onLeadClick?: (leadId: string) => void;
+  /** Open the Cars24 API lead creation flow (Sheet overlay — no dealer pre-selected) */
+  onOpenLeadCreationFlow?: (dealerCode?: string, dealerName?: string) => void;
 }
 
 // ── Component ──
 
-export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadClick }: LeadsPageV3Props) {
+export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadClick, onOpenLeadCreationFlow }: LeadsPageV3Props) {
   // Sub-page state
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [showCreateLead, setShowCreateLead] = useState(false);
@@ -501,7 +503,13 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
 
             {/* Create */}
             <button
-              onClick={() => setShowCreateLead(true)}
+              onClick={() => {
+                if (onOpenLeadCreationFlow) {
+                  onOpenLeadCreationFlow(); // Opens C24 lead creation sheet with dealer picker
+                } else {
+                  setShowCreateLead(true); // Fallback to legacy flow
+                }
+              }}
               className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600 text-white rounded-xl text-[13px] font-medium
                          hover:bg-indigo-700 active:scale-[0.97] transition-all duration-150 min-h-[40px] shadow-sm shadow-indigo-200"
             >
@@ -782,7 +790,13 @@ export function LeadsPageV3({ userRole, filterContext, onClearContext, onLeadCli
               </button>
             ) : (
               <button
-                onClick={() => setShowCreateLead(true)}
+                onClick={() => {
+                  if (onOpenLeadCreationFlow) {
+                    onOpenLeadCreationFlow(); // No dealer pre-selected — user picks in form
+                  } else {
+                    setShowCreateLead(true); // Fallback to old flow
+                  }
+                }}
                 className="px-4 py-2 bg-indigo-600 text-white text-[12px] font-semibold rounded-xl
                            hover:bg-indigo-700 active:scale-95 transition-all"
               >

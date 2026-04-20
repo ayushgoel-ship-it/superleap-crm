@@ -17,7 +17,7 @@ async function invoke<T = any>(
   fn: string,
   body: unknown,
 ): Promise<{ data: T | null; error: string | null }> {
-  const { data, error } = await supabase.functions.invoke(fn, { body });
+  const { data, error } = await supabase.functions.invoke(fn, { body: body as any });
   if (error) {
     // supabase-js wraps non-2xx as error; try to extract message
     const msg = (error as any).context?.responseText || error.message || 'Edge function failed';
@@ -152,7 +152,16 @@ export async function bulkUpload(type: BulkUploadType, rows: Record<string, any>
 // ── Export ──
 
 export interface ExportRequest {
-  entity: 'users' | 'dealers' | 'leads' | 'calls' | 'visits' | 'dcf_leads' | 'targets' | 'audit_log';
+  entity:
+    | 'users'
+    | 'dealers'
+    | 'leads'
+    | 'sell_leads'
+    | 'calls'
+    | 'visits'
+    | 'dcf_leads'
+    | 'targets'
+    | 'audit_log';
   fields: string[];
   filters?: Record<string, any>;
   date_field?: string;

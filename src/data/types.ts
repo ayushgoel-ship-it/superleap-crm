@@ -395,6 +395,16 @@ export interface DCFLead {
   employmentType?: string;
   monthlyIncome?: number;
   dealerAccount?: string;
+
+  // Optional fields read by detail pages / selectors (shape drift — kept optional)
+  status?: string;
+  loanId?: string;
+  carModel?: string;
+  carDocsReceived?: boolean;
+  firstDisbursal?: string;
+  updatedAt?: string;
+  delayMessage?: string;
+  lastDCFDisbursal?: string;
 }
 
 // ============================================================================

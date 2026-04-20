@@ -3,7 +3,7 @@ import { TLIncentiveSimulator } from './TLIncentiveSimulator';
 
 interface IncentiveSimulatorProps {
   onClose: () => void;
-  userRole?: 'KAM' | 'TL' | 'Admin';
+  userRole?: 'KAM' | 'TL' | 'Admin' | 'ADMIN' | 'SUPER_ADMIN';
 }
 
 export function IncentiveSimulator({ onClose, userRole = 'TL' }: IncentiveSimulatorProps) {

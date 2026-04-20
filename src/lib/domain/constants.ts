@@ -339,6 +339,12 @@ export enum AppRoute {
   ADMIN_LEADS = 'admin-leads',
   ADMIN_VC = 'admin-vc',
   ADMIN_DCF = 'admin-dcf',
+  ADMIN_USERS = 'admin-users',
+  ADMIN_TARGETS = 'admin-targets',
+  ADMIN_HIERARCHY = 'admin-hierarchy',
+  ADMIN_REPORTS = 'admin-reports',
+  ADMIN_SETTINGS = 'admin-settings',
+  ADMIN_APPROVALS = 'admin-approvals',
   ADMIN_TL_LEADERBOARD = 'admin-tl-leaderboard',
   ADMIN_TL_DETAIL = 'admin-tl-detail',
   

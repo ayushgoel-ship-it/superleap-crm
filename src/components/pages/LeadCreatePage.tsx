@@ -65,7 +65,7 @@ export function LeadCreatePage({ dealerId, onBack, onSuccess }: LeadCreatePagePr
       const { error } = await supabase.from('leads_raw').insert({
         lead_id: leadId,
         dealer_id: dealerId,
-        kam_id: profile?.id || '',
+        kam_id: profile?.userId || '',
         channel: formData.channel,
         customer_name: formData.customerName,
         customer_phone: formData.customerPhone,
