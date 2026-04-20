@@ -33,10 +33,12 @@ public class AuditLogEntity {
     @Column(name = "entity_id")
     private String entityId;
 
-    @Column(name = "old_values")
+    @Column(name = "old_values", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String oldValues;
 
-    @Column(name = "new_values")
+    @Column(name = "new_values", columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String newValues;
 
     @Column(name = "change_summary")
