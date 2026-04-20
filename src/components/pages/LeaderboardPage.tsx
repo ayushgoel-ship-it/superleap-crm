@@ -124,7 +124,7 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
       const entries = Array.from(tlMap.entries()).map(([tlId, d]) => {
         const si = d.leads.filter(l => isStockIn(l.stage)).length;
         const insp = d.leads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
-        const dcfDisb = d.dcf.filter(dc => dc.overallStatus === 'DISBURSED').length;
+        const dcfDisb = d.dcf.filter(dc => (dc.overallStatus || '').toLowerCase() === 'disbursed').length;
         const i2si = insp > 0 ? Math.round((si / insp) * 1000) / 10 : 0;
         const stockinEquiv = si + 3 * dcfDisb;
 
@@ -197,7 +197,7 @@ export function LeaderboardPage({ userRole }: LeaderboardPageProps) {
     const entries = Array.from(kamMap.entries()).map(([kamId, d]) => {
       const si = d.leads.filter(l => isStockIn(l.stage)).length;
       const insp = d.leads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
-      const dcfDisb = d.dcf.filter(dc => dc.overallStatus === 'DISBURSED').length;
+      const dcfDisb = d.dcf.filter(dc => (dc.overallStatus || '').toLowerCase() === 'disbursed').length;
       const i2si = insp > 0 ? Math.round((si / insp) * 1000) / 10 : 0;
       const stockinEquiv = si + 3 * dcfDisb;
 

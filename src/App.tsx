@@ -22,11 +22,24 @@ import {
   getDefaultRoute,
   shouldResetNavigationStack,
 } from "./navigation";
-import { AdminHomePage } from "./components/admin/AdminHomePage";
-import { AdminDealersPage } from "./components/admin/AdminDealersPage";
-import { AdminLeadsPage } from "./components/admin/AdminLeadsPage";
-import { AdminVCPage } from "./components/admin/AdminVCPage";
-import { AdminDCFPage } from "./components/admin/AdminDCFPage";
+// Wave 1A: admin pages are wrapped in withRoleGuard at the import site so
+// every render path (mobile switch + desktop shell) enforces VIEW_ADMIN_SUMMARY.
+import { AdminHomePage as _AdminHomePage } from "./components/admin/AdminHomePage";
+import { AdminDealersPage as _AdminDealersPage } from "./components/admin/AdminDealersPage";
+import { AdminLeadsPage as _AdminLeadsPage } from "./components/admin/AdminLeadsPage";
+import { AdminVCPage as _AdminVCPage } from "./components/admin/AdminVCPage";
+import { AdminDCFPage as _AdminDCFPage } from "./components/admin/AdminDCFPage";
+import { RoleGuard, withRoleGuard } from "./components/auth/RoleGuard";
+// Explicit prop generics: the underlying components use a `{ ... } = {}`
+// default-arg pattern that defeats inference through the HOC, collapsing
+// P to `object` and erasing the prop signature at call sites.
+type AdminHomeProps = { onNavigate?: (page: AdminPage) => void; onViewTLDetail?: (tlId: string) => void };
+type AdminPageNavProps = { onNavigate?: (page: AdminPage) => void };
+const AdminHomePage = withRoleGuard<AdminHomeProps>(_AdminHomePage, 'VIEW_ADMIN_SUMMARY');
+const AdminDealersPage = withRoleGuard<AdminPageNavProps>(_AdminDealersPage, 'VIEW_ADMIN_SUMMARY');
+const AdminLeadsPage = withRoleGuard<AdminPageNavProps>(_AdminLeadsPage, 'VIEW_ADMIN_SUMMARY');
+const AdminVCPage = withRoleGuard<AdminPageNavProps>(_AdminVCPage, 'VIEW_ADMIN_SUMMARY');
+const AdminDCFPage = withRoleGuard<AdminPageNavProps>(_AdminDCFPage, 'VIEW_ADMIN_SUMMARY');
 import { CallFeedbackPage } from "./components/pages/CallFeedbackPage";
 import { VisitFeedbackPage } from "./components/pages/VisitFeedbackPage";
 import { IncentiveSimulator } from "./components/pages/IncentiveSimulator";
@@ -645,8 +658,9 @@ function AppContent() {
             </>
           )}
 
-          {/* Desktop Admin Console */}
+          {/* Desktop Admin Console (Wave 1A: RoleGuard-enforced) */}
           {!showTLIncentive && adminViewMode === 'desktop' && currentPage.startsWith('admin') && (
+            <RoleGuard action="VIEW_ADMIN_SUMMARY">
             <AdminDesktopShell
               currentPage={currentPage}
               onNavigate={(page) => setCurrentPage(page as PageView)}
@@ -684,6 +698,7 @@ function AppContent() {
               })()}
               <Toaster position="top-center" />
             </AdminDesktopShell>
+            </RoleGuard>
           )}
 
           {/* Main App (Mobile) */}

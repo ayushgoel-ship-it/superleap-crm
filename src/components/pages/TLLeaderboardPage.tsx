@@ -49,8 +49,8 @@ export function TLLeaderboardPage({ onViewTLDetail, onBack }: TLLeaderboardPageP
       const i2si = insp > 0 ? Math.round((si / insp) * 100) : 0;
       const kamCount = tl.kams.length;
       const siTarget = kamCount * siPerKAM;
-      const dcfDisb = tlDCF.filter(d => d.overallStatus === 'DISBURSED').length;
-      const dcfValue = tlDCF.filter(d => d.overallStatus === 'DISBURSED').reduce((s, d) => s + (d.loanAmount || 0), 0);
+      const dcfDisb = tlDCF.filter(d => (d.overallStatus || '').toLowerCase() === 'disbursed').length;
+      const dcfValue = tlDCF.filter(d => (d.overallStatus || '').toLowerCase() === 'disbursed').reduce((s, d) => s + (d.loanAmount || 0), 0);
       const productiveVisits = tlVisits.filter(v => v.isProductive).length;
       const productiveCalls = tlCalls.filter(c => c.isProductive).length;
 

@@ -166,8 +166,8 @@ function getTLData(
     const si = data.leads.filter(l => isStockIn(l.stage)).length;
     const insp = data.leads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
     const i2si = insp > 0 ? Math.round((si / insp) * 100) / 10 : 0;
-    const dcfDisb = data.dcf.filter(d => d.overallStatus === 'DISBURSED').length;
-    const dcfGMV = data.dcf.filter(d => d.overallStatus === 'DISBURSED').reduce((s, d) => s + ((d.loanAmount || 0) / 100000), 0);
+    const dcfDisb = data.dcf.filter(d => (d.overallStatus || '').toLowerCase() === 'disbursed').length;
+    const dcfGMV = data.dcf.filter(d => (d.overallStatus || '').toLowerCase() === 'disbursed').reduce((s, d) => s + ((d.loanAmount || 0) / 100000), 0);
 
     // LMTD comparison for this KAM
     const lmtdKamLeads = lmtdLeads.filter(l => l.kamId === kamId);
@@ -197,14 +197,14 @@ function getTLData(
   const teamI2SI = teamInsp > 0 ? Math.round((teamSI / teamInsp) * 100) / 10 : 0;
   const teamAvgScore = kamData.length > 0 ? Math.round(kamData.reduce((s, k) => s + k.inputScore, 0) / kamData.length) : 0;
   const teamDCFOnboardings = dcfLeads.filter(d => d.firstDisbursalForDealer).length;
-  const teamDCFGMV = dcfLeads.filter(d => d.overallStatus === 'DISBURSED').reduce((s, d) => s + ((d.loanAmount || 0) / 100000), 0);
+  const teamDCFGMV = dcfLeads.filter(d => (d.overallStatus || '').toLowerCase() === 'disbursed').reduce((s, d) => s + ((d.loanAmount || 0) / 100000), 0);
   const teamSITarget = siTargetPerKAM * kamData.length;
 
   // LMTD totals
   const lmtdTotalSI = lmtdLeads.filter(l => isStockIn(l.stage)).length;
   const lmtdTotalInsp = lmtdLeads.filter(l => isInspection(l.stage) || isStockIn(l.stage)).length;
   const lmtdTeamI2SI = lmtdTotalInsp > 0 ? Math.round((lmtdTotalSI / lmtdTotalInsp) * 100) / 10 : 0;
-  const lmtdDCFGMV = lmtdDCF.filter(d => d.overallStatus === 'DISBURSED').reduce((s, d) => s + ((d.loanAmount || 0) / 100000), 0);
+  const lmtdDCFGMV = lmtdDCF.filter(d => (d.overallStatus || '').toLowerCase() === 'disbursed').reduce((s, d) => s + ((d.loanAmount || 0) / 100000), 0);
   const lmtdOnboardings = lmtdDCF.filter(d => d.firstDisbursalForDealer).length;
 
   const achievementPct = teamSITarget > 0 ? Math.round((teamSI / teamSITarget) * 100) : 0;

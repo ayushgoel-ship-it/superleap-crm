@@ -81,8 +81,9 @@ export function DCFPageTL({
       .filter(d => dealerDCFMap.has(d.id) || d.tags.includes('DCF Onboarded'))
       .map(d => {
         const dLeads = dealerDCFMap.get(d.id) || [];
-        const disbursed = dLeads.filter(l => l.overallStatus === 'DISBURSED');
-        const approved = dLeads.filter(l => ['DISBURSED', 'IN_PROGRESS', 'APPROVAL_PENDING'].includes(l.overallStatus));
+        const disbursed = dLeads.filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed');
+        // Wave 1A: normalize to lowercase since DB stores lowercase.
+        const approved = dLeads.filter(l => ['disbursed', 'in_progress', 'approval_pending'].includes((l.overallStatus || '').toLowerCase()));
         const disbursalAmount = disbursed.reduce((s, l) => s + ((l.loanAmount || 0) / 100000), 0);
         // Find KAM for this dealer from DCF leads
         const kamLead = dLeads[0];

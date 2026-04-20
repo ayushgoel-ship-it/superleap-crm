@@ -21,7 +21,7 @@ export function DCFDisbursalsListPage({ onBack, dateRange, customFrom, customTo 
     const period = (Object.values(TimePeriod).includes(dateRange as TimePeriod)
       ? dateRange as TimePeriod
       : TimePeriod.MTD);
-    const raw = getFilteredDCFLeads({ period, kamId: kamScopeId, kamIds: effectiveKamIds, customFrom, customTo }).filter(l => l.overallStatus === 'DISBURSED');
+    const raw = getFilteredDCFLeads({ period, kamId: kamScopeId, kamIds: effectiveKamIds, customFrom, customTo }).filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed');
     return raw.map(lead => ({
       id: lead.id,
       loanId: lead.id,

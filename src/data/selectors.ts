@@ -509,7 +509,7 @@ export function getDCFLeadsByFunnel(funnel: string): DCFLead[] {
 }
 
 export function getDisbursedDCFLeads(): DCFLead[] {
-  return DCF_LEADS().filter(l => l.overallStatus === 'DISBURSED');
+  return DCF_LEADS().filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed');
 }
 
 export function searchDCFLeads(query: string): DCFLead[] {
@@ -586,7 +586,7 @@ export function getDealerMetrics(dealerId: string) {
     totalVisits: visits.length,
     productiveVisits: visits.filter(v => v.isProductive).length,
     totalDCFLeads: dcfLeads.length,
-    disbursedDCFLeads: dcfLeads.filter(l => l.overallStatus === 'DISBURSED').length,
+    disbursedDCFLeads: dcfLeads.filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed').length,
   };
 }
 
@@ -608,7 +608,7 @@ export function getKAMMetrics(kamId: string) {
     totalVisits: visits.length,
     productiveVisits: visits.filter(v => v.isProductive).length,
     totalDCFLeads: dcfLeads.length,
-    disbursedDCFLeads: dcfLeads.filter(l => l.overallStatus === 'DISBURSED').length,
+    disbursedDCFLeads: dcfLeads.filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed').length,
   };
 }
 
@@ -630,7 +630,7 @@ export function getTLMetrics(tlId: string) {
     totalVisits: visits.length,
     productiveVisits: visits.filter(v => v.isProductive).length,
     totalDCFLeads: dcfLeads.length,
-    disbursedDCFLeads: dcfLeads.filter(l => l.overallStatus === 'DISBURSED').length,
+    disbursedDCFLeads: dcfLeads.filter(l => (l.overallStatus || '').toLowerCase() === 'disbursed').length,
   };
 }
 

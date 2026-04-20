@@ -74,6 +74,7 @@ export function mapChannelToCanonical(raw: string): CanonicalChannel {
 // Thin wrapper around canonical isDateInRange that resolves a TimePeriod
 // to a concrete [from, to) range.
 import { isDateInRange } from '../lib/date/range';
+import { isDisbursed } from '../lib/domain/dcfStatus';
 
 function isInTimeRange(dateStr: string | undefined, period: TimePeriod, customFrom?: string, customTo?: string): boolean {
   if (!dateStr) return false;
@@ -272,9 +273,11 @@ export function computeDashboardMetrics(filters: MetricFilters): DashboardMetric
   });
 
   // DCF
-  const dcfDisbursals = dcfLeads.filter(l => l.overallStatus === 'DISBURSED').length;
+  // Wave 1A: DB stores lowercase 'disbursed'; legacy uppercase silently
+  // matched zero rows. Routed through isDisbursed() for tolerance.
+  const dcfDisbursals = dcfLeads.filter(l => isDisbursed(l)).length;
   const dcfDisbursedValue = dcfLeads
-    .filter(l => l.overallStatus === 'DISBURSED')
+    .filter(l => isDisbursed(l))
     .reduce((sum, l) => sum + ((l as any).loanAmount || 0), 0) / 100000; // to lakhs
 
   // Activity

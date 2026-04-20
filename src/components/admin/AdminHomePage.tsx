@@ -194,8 +194,8 @@ export function AdminHomePage({ onNavigate, onViewTLDetail }: AdminHomePageProps
     // Aggregate metrics for all KAMs in scope
     const kamMetricsAll = computeKAMMetrics(timePeriod);
     const filtered = kamMetricsAll.filter(km => scopedKamIds.has(km.kamId));
-    if (filtered.length === 0) return computeMetrics(timePeriod); // fallback to global if empty scope
-    // Sum key metrics
+    // Sum key metrics (no global fallback — an empty scope must show zeros, not
+    // silently fall back to unfiltered data which made the filter look broken)
     return {
       stockIns: filtered.reduce((s, km) => s + km.stockIns, 0),
       inspections: filtered.reduce((s, km) => s + km.inspections, 0),

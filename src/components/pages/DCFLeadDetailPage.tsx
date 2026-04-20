@@ -188,7 +188,9 @@ function getDCFLeadFromDB(loanId: string): DCFLeadData | null {
     total_commission: dcfLead.totalCommission ?? commission.perDisbursal,
     current_funnel: dcfLead.currentFunnel || 'SOURCING',
     current_sub_stage: dcfLead.currentSubStage || 'LEAD_CREATION',
-    overall_status: (dcfLead.overallStatus || (isDisbursed ? 'disbursed' : 'pending')).toString().toUpperCase(),
+    // Wave 1A: write lowercase (DB convention). Previously .toUpperCase()
+    // desynced from every reader comparing against lowercase 'disbursed'.
+    overall_status: (dcfLead.overallStatus || (isDisbursed ? 'disbursed' : 'pending')).toString().toLowerCase(),
     created_at: dcfLead.createdAt || new Date().toISOString(),
     last_updated_at: dcfLead.updatedAt || new Date().toISOString(),
     utr: dcfLead.utr,
