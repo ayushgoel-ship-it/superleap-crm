@@ -25,12 +25,12 @@ public interface LeadRepository extends JpaRepository<LeadEntity, UUID> {
                                     @Param("cutoff") Instant cutoff);
 
     @Query("SELECT l FROM LeadEntity l WHERE " +
-            "(:dealerCode IS NULL OR l.dealerCode = :dealerCode) AND " +
-            "(:kamId IS NULL OR l.kamId = :kamId) AND " +
-            "(:channel IS NULL OR l.channel = :channel) AND " +
-            "(:status IS NULL OR l.status = :status) AND " +
-            "(:stage IS NULL OR l.stage = :stage) AND " +
-            "(:search IS NULL OR LOWER(l.customerName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.leadId) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(cast(:dealerCode as string) IS NULL OR l.dealerCode = cast(:dealerCode as string)) AND " +
+            "(cast(:kamId as string) IS NULL OR l.kamId = cast(:kamId as string)) AND " +
+            "(cast(:channel as string) IS NULL OR l.channel = cast(:channel as string)) AND " +
+            "(cast(:status as string) IS NULL OR l.status = cast(:status as string)) AND " +
+            "(cast(:stage as string) IS NULL OR l.stage = cast(:stage as string)) AND " +
+            "(cast(:search as string) IS NULL OR LOWER(l.customerName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR LOWER(l.leadId) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<LeadEntity> findFiltered(@Param("dealerCode") String dealerCode,
                                   @Param("kamId") String kamId,
                                   @Param("channel") String channel,
