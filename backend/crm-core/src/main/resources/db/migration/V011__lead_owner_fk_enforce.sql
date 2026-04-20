@@ -105,7 +105,7 @@ WHERE tl_id IS NOT NULL
 
 -- dcf_leads_master.kam_id
 INSERT INTO lead_owner_quarantine_v011 (source_table, lead_id, column_name, raw_value, reason)
-SELECT 'dcf_leads_master', lead_id::text, 'kam_id', kam_id,
+SELECT 'dcf_leads_master', COALESCE(dcf_id, id::text), 'kam_id', kam_id,
        CASE
            WHEN kam_id !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
                THEN 'not_a_uuid'
@@ -134,7 +134,7 @@ WHERE kam_id IS NOT NULL
 
 -- dcf_leads_master.tl_id
 INSERT INTO lead_owner_quarantine_v011 (source_table, lead_id, column_name, raw_value, reason)
-SELECT 'dcf_leads_master', lead_id::text, 'tl_id', tl_id,
+SELECT 'dcf_leads_master', COALESCE(dcf_id, id::text), 'tl_id', tl_id,
        CASE
            WHEN tl_id !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
                THEN 'not_a_uuid'
