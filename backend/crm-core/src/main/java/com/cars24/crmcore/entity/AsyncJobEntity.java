@@ -24,10 +24,10 @@ public class AsyncJobEntity {
     @Column(name = "status")
     private String status;
 
-    @Column(name = "input_payload")
+    @Column(name = "input_payload", columnDefinition = "jsonb")
     private String inputPayload;
 
-    @Column(name = "result_summary")
+    @Column(name = "result_summary", columnDefinition = "jsonb")
     private String resultSummary;
 
     @Column(name = "error_message")

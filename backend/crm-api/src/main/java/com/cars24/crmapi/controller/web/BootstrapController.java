@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/web/v1/bootstrap")
 @Tag(name = "Bootstrap", description = "Session initialization — user profile and org hierarchy")
-public class BootstrapController {
+public class BootstrapController extends BaseController {
 
     private final OrgQueryService orgQueryService;
     private final ActorScopeResolver actorScopeResolver;

@@ -23,7 +23,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/web/v1/notifications")
 @Tag(name = "Notifications", description = "User notifications — list, unread count, mark read")
-public class NotificationController {
+public class NotificationController extends BaseController {
 
     private final NotificationQueryService notificationQueryService;
     private final NotificationCommandService notificationCommandService;

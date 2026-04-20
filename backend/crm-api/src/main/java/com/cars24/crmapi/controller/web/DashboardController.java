@@ -20,7 +20,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/web/v1/dashboard")
 @Tag(name = "Dashboard", description = "Home dashboard aggregates")
-public class DashboardController {
+public class DashboardController extends BaseController {
 
     private final DashboardQueryService dashboardQueryService;
     private final ActorScopeResolver actorScopeResolver;
