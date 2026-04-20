@@ -47,9 +47,9 @@ class LeadApiIntegrationTest extends AbstractContainerTest {
         MvcResult createResult = mockMvc.perform(post("/web/v1/leads")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createJson)
-                        .header("X-User-Id", "kam-e2e-01")
+                        .header("X-User-Id", "b3000000-0000-0000-0000-000000000001")
                         .header("X-User-Role", "KAM")
-                        .header("X-Team-Id", "team-e2e"))
+                        .header("X-Team-Id", "a1000000-0000-0000-0000-000000000001"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.leadId").exists())
@@ -67,18 +67,18 @@ class LeadApiIntegrationTest extends AbstractContainerTest {
 
         // GET detail
         mockMvc.perform(get("/web/v1/leads/{leadId}", leadId)
-                        .header("X-User-Id", "kam-e2e-01")
+                        .header("X-User-Id", "b3000000-0000-0000-0000-000000000001")
                         .header("X-User-Role", "KAM")
-                        .header("X-Team-Id", "team-e2e"))
+                        .header("X-Team-Id", "a1000000-0000-0000-0000-000000000001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.lead_id").value(leadId))
                 .andExpect(jsonPath("$.data.customer_name").value("Jane Doe"));
 
         // GET list
         mockMvc.perform(get("/web/v1/leads")
-                        .header("X-User-Id", "kam-e2e-01")
+                        .header("X-User-Id", "b3000000-0000-0000-0000-000000000001")
                         .header("X-User-Role", "KAM")
-                        .header("X-Team-Id", "team-e2e"))
+                        .header("X-Team-Id", "a1000000-0000-0000-0000-000000000001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data.length()").value(1));
@@ -96,18 +96,18 @@ class LeadApiIntegrationTest extends AbstractContainerTest {
         mockMvc.perform(post("/web/v1/leads")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json)
-                        .header("X-User-Id", "kam-e2e-01")
+                        .header("X-User-Id", "b3000000-0000-0000-0000-000000000001")
                         .header("X-User-Role", "KAM")
-                        .header("X-Team-Id", "team-e2e"))
+                        .header("X-Team-Id", "a1000000-0000-0000-0000-000000000001"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void getLeadDetail_notFound_returns404() throws Exception {
         mockMvc.perform(get("/web/v1/leads/{leadId}", "LEAD-NONEXISTENT")
-                        .header("X-User-Id", "kam-e2e-01")
+                        .header("X-User-Id", "b3000000-0000-0000-0000-000000000001")
                         .header("X-User-Role", "KAM")
-                        .header("X-Team-Id", "team-e2e"))
+                        .header("X-Team-Id", "a1000000-0000-0000-0000-000000000001"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));

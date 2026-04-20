@@ -36,7 +36,10 @@ class FlywayMigrationTest extends AbstractContainerTest {
 
         List<String> versions = new ArrayList<>();
         for (var migration : applied) {
-            versions.add(migration.getVersion().getVersion());
+            // Repeatable migrations (R__) have a null version — skip them.
+            if (migration.getVersion() != null) {
+                versions.add(migration.getVersion().getVersion());
+            }
             assertThat(migration.getState().isApplied()).isTrue();
         }
 
