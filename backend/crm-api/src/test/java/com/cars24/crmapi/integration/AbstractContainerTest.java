@@ -7,13 +7,17 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Base class for integration tests that need a real PostgreSQL instance.
- * Starts a single shared container for all subclasses — Flyway runs
- * once on first context load, then Hibernate validates the schema.
+ *
+ * Uses the singleton-container pattern: one PostgreSQL container is
+ * started on first class load and reused for the lifetime of the JVM.
+ * The JVM exit hook reaps it. This is required because Spring caches
+ * application contexts across test classes — a per-class @Container
+ * lifecycle would tear down Postgres while subsequent test classes
+ * still hold a Hikari pool pointing at it.
  */
 @SpringBootTest(classes = CrmApiApplication.class)
 @AutoConfigureMockMvc
@@ -21,12 +25,16 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 public abstract class AbstractContainerTest {
 
-    @Container
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine")
-                    .withDatabaseName("crm_integration")
-                    .withUsername("crm")
-                    .withPassword("crm");
+    static final PostgreSQLContainer<?> POSTGRES;
+
+    static {
+        POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
+                .withDatabaseName("crm_integration")
+                .withUsername("crm")
+                .withPassword("crm")
+                .withReuse(false);
+        POSTGRES.start();
+    }
 
     @DynamicPropertySource
     static void configureDataSource(DynamicPropertyRegistry registry) {

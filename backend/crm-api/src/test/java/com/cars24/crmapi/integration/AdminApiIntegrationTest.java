@@ -47,7 +47,7 @@ class AdminApiIntegrationTest extends AbstractContainerTest {
         mockMvc.perform(post("/web/v1/admin/teams")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json)
-                        .header("X-User-Id", "admin-e2e-01")
+                        .header("X-User-Id", "00000000-0000-0000-0000-0000000000a1")
                         .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.teamName").value("E2E Team Alpha"));
@@ -59,7 +59,7 @@ class AdminApiIntegrationTest extends AbstractContainerTest {
 
         // List all teams — verify the new one is present (don't assert exact size).
         mockMvc.perform(get("/web/v1/admin/teams")
-                        .header("X-User-Id", "admin-e2e-01")
+                        .header("X-User-Id", "00000000-0000-0000-0000-0000000000a1")
                         .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[?(@.teamName=='E2E Team Alpha')]").exists());
@@ -67,7 +67,7 @@ class AdminApiIntegrationTest extends AbstractContainerTest {
         // List by region — at least our team is present.
         mockMvc.perform(get("/web/v1/admin/teams")
                         .param("region", "North")
-                        .header("X-User-Id", "admin-e2e-01")
+                        .header("X-User-Id", "00000000-0000-0000-0000-0000000000a1")
                         .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[?(@.teamName=='E2E Team Alpha')]").exists());
@@ -76,7 +76,7 @@ class AdminApiIntegrationTest extends AbstractContainerTest {
     @Test
     void adminEndpoint_nonAdmin_returns403() throws Exception {
         mockMvc.perform(get("/web/v1/admin/teams")
-                        .header("X-User-Id", "kam-e2e-01")
+                        .header("X-User-Id", "00000000-0000-0000-0000-0000000000b1")
                         .header("X-User-Role", "KAM")
                         .header("X-Team-Id", "team-e2e"))
                 .andExpect(status().isForbidden());
@@ -85,7 +85,7 @@ class AdminApiIntegrationTest extends AbstractContainerTest {
     @Test
     void internalOrgHierarchy_returns200() throws Exception {
         mockMvc.perform(get("/internal/v1/org/hierarchy")
-                        .header("X-User-Id", "service-e2e")
+                        .header("X-User-Id", "00000000-0000-0000-0000-0000000000c1")
                         .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
