@@ -94,7 +94,7 @@ export function DCFDealerOnboardingDetailPage({ dealerId, onBack }: DCFDealerOnb
   const renderStepStatus = (stepKey: string) => {
     const isCompleted = dealerData.onboarding.completedSteps.includes(stepKey as OnboardingStep);
     const isCurrent = dealerData.onboarding.currentStep === stepKey;
-    const isRejected = stepKey === 'finance_approval' && dealerData.onboarding.rejectionReason;
+    const isRejected = stepKey === 'finance_approval' && (dealerData.onboarding as any).rejectionReason;
 
     if (isCompleted) {
       return <CheckCircle2 className="w-6 h-6 text-green-600" />;

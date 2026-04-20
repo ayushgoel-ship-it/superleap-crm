@@ -100,8 +100,8 @@ export function computeCallProductivity(
   
   // Generate why text
   let whyText = '';
-  let status: ProductivityStatus = 'non_productive';
-  
+  let status: ProductivityStatus = ProductivityStatus.NON_PRODUCTIVE;
+
   if (isProductive) {
     const activities: string[] = [];
     if (activityDelta.leadsDelta > 0) activities.push(`Leads +${activityDelta.leadsDelta}`);
@@ -110,12 +110,12 @@ export function computeCallProductivity(
     if (activityDelta.dcfOnboardingDelta > 0) activities.push(`DCF onboarding +${activityDelta.dcfOnboardingDelta}`);
     if (activityDelta.dcfLeadsDelta > 0) activities.push(`DCF leads +${activityDelta.dcfLeadsDelta}`);
     if (activityDelta.dcfDisbursalDelta > 0) activities.push(`DCF disbursal +${activityDelta.dcfDisbursalDelta}`);
-    
+
     whyText = `Productive because after this call: ${activities.join(', ')}`;
-    status = isWindowComplete ? 'productive' : 'provisional';
+    status = isWindowComplete ? ProductivityStatus.PRODUCTIVE : ProductivityStatus.PROVISIONAL;
   } else {
     whyText = `Non-productive because there was no change in Leads/Inspections/Stock-ins/DCF in the ${windowDays} days after this call.`;
-    status = isWindowComplete ? 'non_productive' : 'provisional';
+    status = isWindowComplete ? ProductivityStatus.NON_PRODUCTIVE : ProductivityStatus.PROVISIONAL;
   }
   
   return {
@@ -168,8 +168,8 @@ export function computeVisitProductivity(
   
   // Generate why text
   let whyText = '';
-  let status: ProductivityStatus = 'non_productive';
-  
+  let status: ProductivityStatus = ProductivityStatus.NON_PRODUCTIVE;
+
   if (isProductive) {
     const activities: string[] = [];
     if (activityDelta.leadsDelta > 0) activities.push(`Leads +${activityDelta.leadsDelta}`);
@@ -178,12 +178,12 @@ export function computeVisitProductivity(
     if (activityDelta.dcfOnboardingDelta > 0) activities.push(`DCF onboarding +${activityDelta.dcfOnboardingDelta}`);
     if (activityDelta.dcfLeadsDelta > 0) activities.push(`DCF leads +${activityDelta.dcfLeadsDelta}`);
     if (activityDelta.dcfDisbursalDelta > 0) activities.push(`DCF disbursal +${activityDelta.dcfDisbursalDelta}`);
-    
+
     whyText = `Productive because after this visit: ${activities.join(', ')}`;
-    status = isWindowComplete ? 'productive' : 'provisional';
+    status = isWindowComplete ? ProductivityStatus.PRODUCTIVE : ProductivityStatus.PROVISIONAL;
   } else {
     whyText = `Non-productive because there was no change in Leads/Inspections/Stock-ins/DCF in the ${windowDays} days after this visit.`;
-    status = isWindowComplete ? 'non_productive' : 'provisional';
+    status = isWindowComplete ? ProductivityStatus.NON_PRODUCTIVE : ProductivityStatus.PROVISIONAL;
   }
   
   return {

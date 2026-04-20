@@ -79,13 +79,13 @@ export function LeadPipelineCard({
   const secondaryLabel = isDCF ? 'LTV' : 'C24 Quote';
 
   // Range status chip config (GS/NGS only)
-  const rangeChip = !isDCF && lead.rangeStatus
+  const rangeChip = !isDCF && (lead as any).rangeStatus
     ? ({
         'Within Range':    { label: 'Within Range',    bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' },
         'Less than Range': { label: 'Below Range',     bg: 'bg-rose-100',    text: 'text-rose-700',    border: 'border-rose-200'    },
         'More than Range': { label: 'Above Range',     bg: 'bg-amber-100',   text: 'text-amber-700',   border: 'border-amber-200'   },
         'C24 Quote Pending': { label: 'Quote Pending', bg: 'bg-slate-100',   text: 'text-slate-500',   border: 'border-slate-200'   },
-      } as const)[lead.rangeStatus]
+      } as const)[(lead as any).rangeStatus as 'Within Range' | 'Less than Range' | 'More than Range' | 'C24 Quote Pending']
     : null;
 
   // Prefer onCallRA, fallback to legacy onCall

@@ -23,7 +23,7 @@ export type ProductiveStatus = 'pending' | 'productive' | 'non_productive';
 
 // Navigation origin context
 export interface OriginContext {
-  origin: 'dealer_detail' | 'lead_detail' | 'dealers_list' | 'leads_list' | 'calls_today' | 'visits_today';
+  origin: 'dealer_detail' | 'lead_detail' | 'dealers_list' | 'leads_list' | 'calls_today' | 'visits_today' | 'suggested_calls' | 'kam_start';
   dealerId?: string;
   dealerName?: string;
   dealerCode?: string;

@@ -7,7 +7,10 @@
 
 import { logger } from '../config/env';
 import { http, ApiResponse } from './client';
-import { IncentiveResultDTO } from '../contracts/incentive.contract';
+import type { IncentiveSummaryDTO } from '../contracts/incentive.contract';
+
+// Legacy alias — IncentiveSummaryDTO replaced IncentiveResultDTO.
+type IncentiveResultDTO = IncentiveSummaryDTO;
 
 /**
  * Calculate incentive for user

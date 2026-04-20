@@ -137,7 +137,7 @@ export interface CallDetailDTO {
   
   // Feedback
   feedbackStatus: 'PENDING' | 'SUBMITTED';
-  feedbackData: CallLog['feedbackData'];
+  feedbackData: CallLog['feedback'];
   feedbackSubmittedAt?: string;
   
   // Productivity (AI/system generated)
@@ -167,7 +167,7 @@ export function getCallDetailDTO(callId: string): CallDetailDTO | null {
     outcome: call.outcome,
     
     feedbackStatus: call.feedbackStatus || 'PENDING',
-    feedbackData: call.feedbackData,
+    feedbackData: call.feedback,
     feedbackSubmittedAt: call.feedbackSubmittedAt,
     
     isProductive: call.isProductive,
@@ -245,11 +245,11 @@ export function getVisitDetailDTO(visitId: string): VisitDetailDTO | null {
  * UPDATE FUNCTIONS (for feedback submission)
  */
 
-export function updateCallFeedback(callId: string, feedbackData: CallLog['feedbackData']): boolean {
+export function updateCallFeedback(callId: string, feedbackData: CallLog['feedback']): boolean {
   const call = CALLS().find(c => c.id === callId);
   if (!call) return false;
 
-  call.feedbackData = feedbackData;
+  call.feedback = feedbackData;
   call.feedbackStatus = 'SUBMITTED';
   call.feedbackSubmittedAt = new Date().toISOString();
 

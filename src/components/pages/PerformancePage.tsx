@@ -106,9 +106,9 @@ export function PerformancePage({ userRole, kamId, onNavigate, onOpenTLIncentive
       : scopeKamId ? dealers.filter(d => d.kamId === scopeKamId) : dealers;
     const leads = db.leads || [];
     const dealerSIs = kamDealers.map(d => {
-      const dealerLeads = leads.filter(l => l.dealerCode === d.dealerCode);
+      const dealerLeads = leads.filter(l => l.dealerCode === d.code);
       const sis = dealerLeads.filter(l => l.regStockinRank === 1 && (l.finalSiDate || l.stockinDate)).length;
-      return { dealer: d.name, code: d.dealerCode, stockIns: sis };
+      return { dealer: d.name, code: d.code, stockIns: sis };
     }).filter(d => d.stockIns > 0).sort((a, b) => b.stockIns - a.stockIns).slice(0, 3);
 
     // Incentive calculation

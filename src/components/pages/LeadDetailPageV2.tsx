@@ -41,7 +41,7 @@ import { updateLeadCEP } from '../../lib/api/crmApi';
 interface LeadDetailPageV2Props {
   leadId: string;
   onBack: () => void;
-  userRole?: 'KAM' | 'TL' | 'Admin';
+  userRole?: 'KAM' | 'TL' | 'Admin' | 'ADMIN' | 'SUPER_ADMIN';
 }
 
 // ── Helpers ──
@@ -111,7 +111,26 @@ function ProgressStrip({ completed, total }: { completed: number; total: number 
 
 // ── Component ──
 
-export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2Props) {
+/**
+ * Public wrapper — resolves the lead (which may be missing) before
+ * handing a guaranteed-non-null `lead` to the inner component. This
+ * keeps the inner component's hooks unconditional (rules-of-hooks).
+ */
+export function LeadDetailPageV2(props: LeadDetailPageV2Props) {
+  const lead = getLeadById(props.leadId);
+  if (!lead) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center bg-[#f7f8fa] gap-4">
+        <div className="text-[14px] text-slate-500">Lead not found</div>
+        <button onClick={props.onBack} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700">Go back</button>
+      </div>
+    );
+  }
+  return <LeadDetailPageV2Inner {...props} lead={lead} />;
+}
+
+function LeadDetailPageV2Inner({ leadId, onBack, userRole, lead }: LeadDetailPageV2Props & { lead: Lead }) {
+  void userRole;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
   const [showMenu, setShowMenu] = useState(false);
@@ -128,18 +147,8 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
   const [localCepNotes, setLocalCepNotes] = useState('');
   const [cepSaving, setCepSaving] = useState(false);
 
-  // ── Lead data ──
-  const lead = getLeadById(leadId);
-  const effectiveCep = localCep ?? lead?.cep ?? null;
-
-  if (!lead) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center bg-[#f7f8fa] gap-4">
-        <div className="text-[14px] text-slate-500">Lead not found</div>
-        <button onClick={onBack} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700">Go back</button>
-      </div>
-    );
-  }
+  // ── Derived from lead ──
+  const effectiveCep = localCep ?? lead.cep ?? null;
 
   // ── Computed values ──
   const daysActive = Math.floor((Date.now() - new Date(lead.createdAt).getTime()) / 86400000);
@@ -163,7 +172,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     },
     {
       id: 'inspection-scheduled', label: 'Inspection Scheduled',
-      status: (lead.stage === 'Inspection Scheduled' ? 'current' : 'completed') as const,
+      status: (lead.stage === 'Inspection Scheduled' ? 'current' : 'completed') as 'current' | 'completed' | 'pending',
       timestamp: '2 Dec 2025',
       details: [
         { label: 'Slot', value: '2 Dec 2025, 3:00\u20134:00 PM' },
@@ -172,7 +181,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     },
     {
       id: 'inspection-done', label: 'Inspection Done',
-      status: (['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
+      status: (['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as 'current' | 'completed' | 'pending',
       timestamp: ['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
       details: ['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? [
         { label: 'LMS link', value: 'APP ID: DL6CAC9999' },
@@ -180,7 +189,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     },
     {
       id: 'hb-discovered', label: 'HB Discovered',
-      status: (['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
+      status: (['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as 'current' | 'completed' | 'pending',
       timestamp: ['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
       details: ['PLL', 'BBNP', 'Stock-in'].includes(lead.stage) ? [
         { label: 'TP (Target Price)', value: '\u20B94,60,000' },
@@ -190,7 +199,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     },
     {
       id: 'ocb-raised', label: 'OCB Raised',
-      status: (['BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
+      status: (['BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as 'current' | 'completed' | 'pending',
       timestamp: ['BBNP', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
       details: ['BBNP', 'Stock-in'].includes(lead.stage) ? [
         { label: 'OCB / Nego Price', value: '\u20B94,50,000' },
@@ -199,7 +208,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     },
     {
       id: 'bbnp', label: 'BBNP',
-      status: (['BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as const,
+      status: (['BBNP', 'Stock-in'].includes(lead.stage) ? 'completed' : 'pending') as 'current' | 'completed' | 'pending',
       timestamp: ['BBNP', 'Stock-in'].includes(lead.stage) ? '2 Dec 2025' : undefined,
       details: ['BBNP', 'Stock-in'].includes(lead.stage) ? [
         { label: 'Customer payout (CP)', value: '\u20B94,05,000' },
@@ -207,12 +216,12 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
     },
     {
       id: 'stock-in', label: 'Stock-in',
-      status: (lead.stage === 'Stock-in' ? 'current' : 'pending') as const,
+      status: (lead.stage === 'Stock-in' ? 'current' : 'pending') as 'current' | 'completed' | 'pending',
       timestamp: lead.stage === 'Stock-in' ? '3 Dec 2025' : undefined,
     },
     {
       id: 'payout', label: 'Payout',
-      status: (lead.actualRevenue > 0 ? 'completed' : 'pending') as const,
+      status: (lead.actualRevenue > 0 ? 'completed' : 'pending') as 'current' | 'completed' | 'pending',
       timestamp: lead.actualRevenue > 0 ? '3 Dec 2025' : undefined,
       details: lead.actualRevenue > 0 ? [
         { label: 'Payout amount', value: formatAmount(lead.actualRevenue) },
@@ -833,7 +842,7 @@ export function LeadDetailPageV2({ leadId, onBack, userRole }: LeadDetailPageV2P
                 ))}
               </div>
             ) : (
-              <InlineEmpty label="No notes yet. Add your first note above." />
+              <InlineEmpty message="No notes yet. Add your first note above." />
             )}
           </>
         )}

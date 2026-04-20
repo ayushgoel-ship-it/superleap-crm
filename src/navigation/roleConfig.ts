@@ -195,6 +195,9 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
 
   // ADMIN alias — data/auth layer stores "ADMIN", UI layer normalizes to "Admin"
   ADMIN: ADMIN_ROLE_CONFIG,
+
+  // SUPER_ADMIN inherits admin navigation until dedicated super-admin shell lands.
+  SUPER_ADMIN: ADMIN_ROLE_CONFIG,
 };
 
 /**

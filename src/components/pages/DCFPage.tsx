@@ -101,21 +101,24 @@ function buildDCFDealerData(timeScope: TimePeriod, kamId?: string, customFrom?: 
 
 // ── Component ──
 
-export function DCFPage({
-  onNavigateToDealers,
-  onNavigateToLeads,
-  onNavigate,
-  onNavigateToDCFDealers,
-  onNavigateToDCFLeads,
-  onNavigateToDCFDisbursals,
-  onNavigateToDCFDealerDetail,
-  onNavigateToDCFOnboardingDetail,
-  onDateRangeChange,
-  userRole,
-}: DCFPageProps) {
-
-  // TL delegates to its own view
-  if (userRole === 'TL') {
+/**
+ * Role dispatcher. Kept as a thin wrapper so the KAM inner component
+ * (`DCFPageKAM`) can run its hooks unconditionally — otherwise we'd
+ * violate rules-of-hooks when the TL branch short-circuits.
+ */
+export function DCFPage(props: DCFPageProps) {
+  if (props.userRole === 'TL') {
+    const {
+      onNavigateToDealers,
+      onNavigateToLeads,
+      onNavigate,
+      onNavigateToDCFDealers,
+      onNavigateToDCFLeads,
+      onNavigateToDCFDisbursals,
+      onNavigateToDCFDealerDetail,
+      onNavigateToDCFOnboardingDetail,
+      onDateRangeChange,
+    } = props;
     return (
       <DCFPageTL
         onNavigateToDealers={onNavigateToDealers}
@@ -130,6 +133,21 @@ export function DCFPage({
       />
     );
   }
+  return <DCFPageKAM {...props} />;
+}
+
+function DCFPageKAM({
+  onNavigateToDealers,
+  onNavigateToLeads,
+  onNavigate,
+  onNavigateToDCFDealers,
+  onNavigateToDCFLeads,
+  onNavigateToDCFDisbursals,
+  onNavigateToDCFDealerDetail,
+  onNavigateToDCFOnboardingDetail,
+  onDateRangeChange,
+  userRole,
+}: DCFPageProps) {
 
   // ── State ──
   const kamScopeId = useKamScope();

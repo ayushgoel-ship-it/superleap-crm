@@ -7,7 +7,10 @@
 
 import { logger } from '../config/env';
 import { http, ApiResponse } from './client';
-import { ActivityDTO } from '../contracts/activity.contract';
+import type { CallDTO, VisitDTO } from '../contracts/activity.contract';
+
+// Legacy alias — activity contract now ships CallDTO/VisitDTO.
+type ActivityDTO = CallDTO | VisitDTO;
 
 /**
  * Fetch all activities

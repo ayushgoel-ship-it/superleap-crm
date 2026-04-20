@@ -342,7 +342,7 @@ export function getAdminHomeMetrics(
  */
 export function getDefaultAdminFilters(): AdminFilters {
   return {
-    timeScope: 'MTD',
+    timeScope: TimePeriod.MTD,
     regions: [], // Empty = All regions
   };
 }

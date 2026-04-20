@@ -170,7 +170,7 @@ export function dcfToLeadCardVM(dcf: {
     stage: dcf.stage,
     status: dcf.overallStatus === 'disbursed' ? 'Won' : 'Active',
     cep: null,
-    secondaryValue: dcf.finalOfferLtv ?? null,
+    secondaryValue: dcf.finalOfferLtv ?? 0,
     revenue: dcf.loanAmount || 0,
     createdAt: dcf.createdAt,
     dealerName: dcf.dealerName,

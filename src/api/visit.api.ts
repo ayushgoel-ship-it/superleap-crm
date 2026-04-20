@@ -401,6 +401,12 @@ export async function listCalls(userId: string, sinceISO?: string): Promise<Call
 // ═══════════════════════════════════════════════════════════════════════════
 // DEALER LOCATION API
 // ═══════════════════════════════════════════════════════════════════════════
+export type LocationUpdateReason =
+  | 'moved'
+  | 'incorrect_pin'
+  | 'new_branch'
+  | 'other';
+
 export async function updateDealerLocation(params: any): Promise<any> {
   return {};
 }

@@ -50,7 +50,7 @@ import { StatusChip, FilterChip } from '../premium/Chip';
 import { TimeFilterControl, CANONICAL_TIME_OPTIONS, CANONICAL_TIME_LABELS } from '../filters/TimeFilterControl';
 import { EmptyState, InlineEmpty } from '../premium/EmptyState';
 import { CardSkeleton } from '../premium/SkeletonLoader';
-import { DCFOnboardingFlow, DCFOnboardingStatus } from '../dcf/DCFOnboardingFlow';
+import type { DCFOnboardingStatus } from '../dcf/DCFOnboardingFlow';
 import { useActivity } from '../../contexts/ActivityContext';
 import { useAuth } from '../auth/AuthProvider';
 import { UnifiedFeedbackModal } from '../activity/VisitModals';
@@ -764,7 +764,7 @@ export function DealerDetailPageV2({
                     </div>
                   </div>
                 ) : (
-                  <InlineEmpty label="No activity recorded yet" />
+                  <InlineEmpty message="No activity recorded yet" />
                 )}
               </>
             )}
@@ -860,7 +860,7 @@ export function DealerDetailPageV2({
                     ))}
                   </div>
                 ) : (
-                  <InlineEmpty label="No notes yet. Add your first note above." />
+                  <InlineEmpty message="No notes yet. Add your first note above." />
                 )}
               </>
             )}

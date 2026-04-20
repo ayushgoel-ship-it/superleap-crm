@@ -805,7 +805,7 @@ function AppContent() {
                             navigateToDCFOnboardingDetail
                           }
                           onDateRangeChange={setDCFDateRange}
-                          userRole={userRole}
+                          userRole={userRole as 'KAM' | 'TL'}
                         />
                       );
                     case "dcf-dealers":
@@ -971,6 +971,16 @@ function AppContent() {
                           }
                         />
                       );
+                    case "admin-users":
+                      return <AdminUsersPage />;
+                    case "admin-targets":
+                      return <AdminTargetsPage />;
+                    case "admin-hierarchy":
+                      return <AdminHierarchyPage />;
+                    case "admin-reports":
+                      return <AdminReportsPage />;
+                    case "admin-settings":
+                      return <AdminSettingsPage />;
                     case "admin-approvals" as any:
                       return (
                         <AdminApprovalPanel

@@ -93,7 +93,7 @@ export function DCFOnboardingPage({ dealerId, onBack, onComplete }: DCFOnboardin
 
       const { error } = await supabase.from('dcf_onboarding').insert({
         dealer_id: dealerId,
-        submitted_by: profile?.id || '',
+        submitted_by: profile?.userId || '',
         lead_source: formData.leadSource,
         department: formData.department,
         owner_name: formData.ownerName,

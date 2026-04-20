@@ -69,7 +69,7 @@ const friendlySubStage = (code: string) => SUBSTAGE_LABEL[code] || code.replace(
 interface DCFLeadDetailPageProps {
   loanId: string;
   onBack: () => void;
-  userRole?: 'KAM' | 'TL' | 'Admin';
+  userRole?: 'KAM' | 'TL' | 'Admin' | 'ADMIN' | 'SUPER_ADMIN';
 }
 
 interface DCFLeadData {
@@ -173,7 +173,7 @@ function getDCFLeadFromDB(loanId: string): DCFLeadData | null {
     dealer_city: dcfLead.dealerCity || dcfLead.city || 'NCR',
     channel: dcfLead.channel || 'DCF',
     rag_status: ragStatus,
-    book_flag: dcfLead.bookFlag || 'Own Book',
+    book_flag: (dcfLead.bookFlag || 'Own Book') as 'Own Book' | 'Pmax',
     car_docs_flag: dcfLead.carDocsReceived ? 'Received' : 'Pending',
     conversion_owner: dcfLead.conversionOwner || 'Not assigned',
     conversion_email: dcfLead.conversionEmail || '',
