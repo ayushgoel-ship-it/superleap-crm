@@ -73,13 +73,37 @@ export function isAllowedSsoEmail(email: string | null | undefined): boolean {
 }
 
 /**
+ * Detect environments where same-frame cross-origin navigation is blocked
+ * (in-IDE preview panes, embedded iframes, some sandboxes). When this is
+ * true, we pop the OAuth URL in a new tab/window instead of navigating
+ * the current frame.
+ */
+function isSandboxedPreview(): boolean {
+  try {
+    if (window.top !== window.self) return true;
+  } catch {
+    // Cross-origin access to window.top throws — that itself means we're
+    // inside a sandboxed frame.
+    return true;
+  }
+  return false;
+}
+
+/**
  * Kick off the Google OAuth flow. Supabase redirects the user to Google,
  * then back to `redirectTo` with a session in the URL hash. Our
  * AuthProvider's onAuthStateChange listener picks up the `SIGNED_IN` event
  * and hydrates the profile.
+ *
+ * In sandboxed previews (in-IDE preview, embedded iframes) same-frame
+ * navigation to the Supabase auth host is blocked, so we request the URL
+ * via `skipBrowserRedirect` and open it in a new tab. Supabase's session
+ * syncs back across tabs via storage events.
  */
 export async function signInWithGoogle(): Promise<void> {
-  const { error } = await supabase.auth.signInWithOAuth({
+  const sandboxed = isSandboxedPreview();
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: window.location.origin,
@@ -87,9 +111,22 @@ export async function signInWithGoogle(): Promise<void> {
       // It's a UX hint, not a security boundary — we still enforce
       // `ALLOWED_SSO_DOMAINS` after the redirect lands.
       queryParams: { hd: 'cars24.com', prompt: 'select_account' },
+      // In sandboxed previews we can't navigate the current frame to
+      // the Supabase auth host. Get the URL back and open it ourselves.
+      skipBrowserRedirect: sandboxed,
     },
   });
   if (error) throw new Error(error.message);
+
+  if (sandboxed && data?.url) {
+    const popup = window.open(data.url, '_blank', 'noopener,noreferrer');
+    if (!popup) {
+      throw new Error(
+        'Could not open Google sign-in window. Allow popups for this site, ' +
+        'or open the app in a regular browser tab (not the IDE preview).'
+      );
+    }
+  }
 }
 
 /**
