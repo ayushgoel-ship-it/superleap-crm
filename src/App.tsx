@@ -77,9 +77,9 @@ import { VisitFeedbackDemo } from "./components/visits/VisitFeedbackDemo";
 import { MobileTopBar } from "./components/MobileTopBar";
 import { BottomNav } from "./components/BottomNav";
 import { LoginPage } from "./components/pages/auth/LoginPage";
-import { ForgotPasswordPage } from "./components/pages/auth/ForgotPasswordPage";
-import { ResetPasswordPage } from "./components/pages/auth/ResetPasswordPage";
-import { SignupPage } from "./components/pages/auth/SignupPage";
+// Password / signup flows removed — SSO is the only entry point.
+// ForgotPasswordPage / ResetPasswordPage / SignupPage retained on disk
+// (in case we re-enable password fallback) but no longer routed.
 import { ProfileCompletePage } from "./components/pages/profile/ProfileCompletePage";
 import { ProfilePage } from "./components/pages/profile/ProfilePage";
 import { ForcePasswordResetScreen } from "./components/auth/ForcePasswordResetScreen";
@@ -462,59 +462,25 @@ function AppContent() {
     toast.success("Location update submitted successfully!");
   };
 
-  // AUTH ROUTES - No guards needed
-  if (currentPage === "auth-login") {
+  // AUTH ROUTE — SSO only. Forgot-password / signup / reset routes have
+  // been removed; redirect any stale entry into auth-* back to login.
+  if (
+    currentPage === "auth-login" ||
+    currentPage === ("auth-signup" as any) ||
+    currentPage === "auth-forgot-password" ||
+    currentPage === ("auth-reset-password" as any)
+  ) {
     return (
       <>
-        <LoginPage
-          onLoginSuccess={handleLoginSuccess}
-          onForgotPassword={() =>
-            setCurrentPage("auth-forgot-password")
-          }
-          onSignup={() =>
-            setCurrentPage("auth-signup" as any)
-          }
-        />
+        <LoginPage onLoginSuccess={handleLoginSuccess} />
         <Toaster position="top-center" />
       </>
     );
   }
 
-  if (currentPage === ("auth-signup" as any)) {
-    return (
-      <>
-        <SignupPage
-          onBack={() => setCurrentPage("auth-login")}
-        />
-        <Toaster position="top-center" />
-      </>
-    );
-  }
-
-  if (currentPage === "auth-forgot-password") {
-    return (
-      <>
-        <ForgotPasswordPage
-          onBack={() => setCurrentPage("auth-login")}
-          onSuccess={() => setCurrentPage("auth-login")}
-        />
-        <Toaster position="top-center" />
-      </>
-    );
-  }
-
-  if (currentPage === ("auth-reset-password" as any)) {
-    return (
-      <>
-        <ResetPasswordPage
-          onSuccess={() => setCurrentPage("auth-login")}
-        />
-        <Toaster position="top-center" />
-      </>
-    );
-  }
-
-  // FORCE PASSWORD RESET — must run before any other authed screen
+  // FORCE PASSWORD RESET — dormant under SSO (Supabase sessions never
+  // carry mustResetPassword=true for SSO users), but kept defensively
+  // for any legacy password-based session that survives the migration.
   if (session && profile?.mustResetPassword) {
     return (
       <>
