@@ -12,8 +12,12 @@ import {
   isImpersonating,
   getActiveActorProfile,
   cacheCurrentProfile,
-  clearCachedProfile
+  clearCachedProfile,
+  signInWithGoogle as authSignInWithGoogle,
+  hydrateSessionFromSupabase,
 } from '../../lib/auth/authService';
+import { supabase } from '../../lib/supabase/client';
+import { toast } from 'sonner@2.0.3';
 
 interface AuthContextValue {
   session: AuthSession | null;
@@ -23,6 +27,7 @@ interface AuthContextValue {
   isImpersonating: boolean;
   canImpersonate: boolean;
   login: (credentials: LoginCredentials) => Promise<{ session: AuthSession; profile: UserProfile }>;
+  signInWithGoogle: () => Promise<void>;
   logout: () => void;
   refreshProfile: () => void;
   refreshSession: () => void;
@@ -42,6 +47,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     initializeAuthData();
     loadSession();
+
+    // Listen for Supabase auth state changes — this fires after the
+    // Google OAuth redirect lands back on the app with a session in the
+    // URL hash. We hydrate the CRM profile (users table row) at that
+    // point so the rest of the app sees a fully-formed AuthSession.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sbSession) => {
+      if (event === 'SIGNED_IN' && sbSession) {
+        // Skip if we already have a hydrated profile for this user (e.g.
+        // password login already populated state).
+        const existing = getSession();
+        if (existing && existing.userId === sbSession.user.id && getCurrentUserProfile()) {
+          return;
+        }
+        try {
+          const hydrated = await hydrateSessionFromSupabase();
+          if (hydrated) {
+            cacheCurrentProfile(hydrated.profile);
+            setSession(hydrated.session);
+            setProfile(hydrated.profile);
+            setActiveActor({
+              userId: hydrated.profile.userId,
+              name: hydrated.profile.name,
+              role: hydrated.profile.role,
+            });
+            toast.success(`Welcome, ${hydrated.profile.name}!`);
+          }
+        } catch (err: any) {
+          toast.error(err?.message || 'Sign-in failed');
+          // Make sure we're fully signed out so the user lands back on the login page.
+          await authLogout();
+          clearCachedProfile();
+          setSession(null);
+          setProfile(null);
+          setActiveActor(null);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+      if (event === 'SIGNED_OUT') {
+        clearCachedProfile();
+        setSession(null);
+        setProfile(null);
+        setActiveActor(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loadSession = () => {
@@ -117,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isImpersonating: isImpersonating(),
       canImpersonate: canImpersonate(),
       login,
+      signInWithGoogle: authSignInWithGoogle,
       logout,
       refreshProfile,
       refreshSession,

@@ -59,6 +59,101 @@ export async function login(credentials: LoginCredentials): Promise<{ session: A
   return { session, profile };
 }
 
+// ─── Google SSO ────────────────────────────────────────────────────────────
+// Allowed email domains for SSO. The CRM is an internal Cars24 tool — block
+// any Google account that isn't on a Cars24 domain. Anything not on this list
+// is rejected client-side after the OAuth round-trip (defence in depth on top
+// of Supabase's `hd` hint).
+const ALLOWED_SSO_DOMAINS = ['cars24.com'];
+
+export function isAllowedSsoEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const domain = email.toLowerCase().split('@')[1];
+  return ALLOWED_SSO_DOMAINS.includes(domain);
+}
+
+/**
+ * Kick off the Google OAuth flow. Supabase redirects the user to Google,
+ * then back to `redirectTo` with a session in the URL hash. Our
+ * AuthProvider's onAuthStateChange listener picks up the `SIGNED_IN` event
+ * and hydrates the profile.
+ */
+export async function signInWithGoogle(): Promise<void> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin,
+      // `hd` tells Google to only show accounts on this G-Suite domain.
+      // It's a UX hint, not a security boundary — we still enforce
+      // `ALLOWED_SSO_DOMAINS` after the redirect lands.
+      queryParams: { hd: 'cars24.com', prompt: 'select_account' },
+    },
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Hydrate a UserProfile + AuthSession from a Supabase session that was
+ * established via OAuth redirect (no password). Mirrors the post-login
+ * path in `login()` but starting from an existing session.
+ *
+ * Throws if the user has no row in the `users` table (Admin must
+ * pre-provision the user for the CRM), or if the email is off-domain.
+ */
+export async function hydrateSessionFromSupabase(): Promise<
+  { session: AuthSession; profile: UserProfile } | null
+> {
+  const { data: { session: sbSession } } = await supabase.auth.getSession();
+  if (!sbSession || !sbSession.user) return null;
+
+  const user = sbSession.user;
+
+  if (!isAllowedSsoEmail(user.email)) {
+    await supabase.auth.signOut();
+    localStorage.removeItem(LS_SESSION_KEY);
+    throw new Error(
+      `This email domain is not allowed. Please sign in with your @cars24.com account.`
+    );
+  }
+
+  const { data: userRow, error: profileError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('user_id', user.id)
+    .single();
+
+  if (profileError || !userRow) {
+    await supabase.auth.signOut();
+    localStorage.removeItem(LS_SESSION_KEY);
+    throw new Error(
+      'Your Cars24 account is not provisioned in SuperLeap CRM. Please contact your admin.'
+    );
+  }
+
+  const profile: UserProfile = {
+    userId: user.id,
+    role: (userRow.role || 'KAM') as UserRole,
+    name: userRow.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+    email: user.email || '',
+    phone: userRow.phone || '',
+    city: userRow.city || '',
+    mustResetPassword: false, // SSO users never have a password to reset
+    createdAt: user.created_at || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const session: AuthSession = {
+    userId: user.id,
+    token: sbSession.access_token,
+    createdAt: new Date().toISOString(),
+    activeRole: profile.role,
+    activeActorId: user.id,
+  };
+
+  localStorage.setItem(LS_SESSION_KEY, JSON.stringify(session));
+  return { session, profile };
+}
+
 // ─── Logout ────────────────────────────────────────────────────────────────
 export async function logout() {
   await supabase.auth.signOut();
