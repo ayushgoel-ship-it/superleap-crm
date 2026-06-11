@@ -1,8 +1,52 @@
+# =====================================================================
+# Prod profile — SECURITY HARDENED
+# All values below are LITERAL (no ${...} env overrides) to prevent a
+# single misconfigured env var from weakening the prod posture. Settings
+# that legitimately need operator tuning (CORS origins, JWT secret, DB
+# creds) live in application.yml; this file is for things prod must lock.
+# =====================================================================
+
 crm:
   jwt:
-    dev-header-fallback-enabled: ${CRM_JWT_DEV_HEADER_FALLBACK_ENABLED:false}
+    # JWT auth is mandatory in prod. No env override — flipping this off
+    # in prod would silently disable all authentication.
+    enabled: true
+    # Dev-header auth bypass is HARDCODED off in prod. JwtTokenFilter.java
+    # checks isDevHeaderFallbackEnabled() before trusting X-User-Id /
+    # X-User-Role headers; with this false, only Bearer JWT auth is honored.
+    # JwtConfig.validate() additionally fails fast at boot if the secret
+    # is missing or weak.
+    dev-header-fallback-enabled: false
+
+  db:
+    # SSL to Postgres is mandatory in prod.
+    ssl-enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Drop /actuator/caches and /actuator/info from prod — internal
+        # cache state and build/env metadata don't belong on the public
+        # actuator surface.
+        include: health,metrics
+  endpoint:
+    health:
+      # Don't leak DB / disk-space / connection-pool details to
+      # unauthenticated callers.
+      show-details: never
+
+# Swagger UI / OpenAPI docs are disabled in prod — they're a free
+# attack-surface map. Re-enable only behind a separate authenticated
+# gateway if ops needs them.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 
 logging:
   level:
     com.cars24: INFO
     org.springframework.web: WARN
+    org.hibernate: WARN

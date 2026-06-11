@@ -23,6 +23,9 @@
         <java.version>17</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- TODO(security): bump to 3.3.13 (or 3.4.x LTS) once Maven Central
+             is reachable from build env. 3.2.x is EOL Aug 2025 and carries
+             CVE-2024-38807 / 38816 / 38821. See docs/GOLIVE_READINESS.md B8. -->
         <spring-boot.version>3.2.5</spring-boot.version>
         <lombok.version>1.18.38</lombok.version>
         <testcontainers.version>1.19.7</testcontainers.version>
