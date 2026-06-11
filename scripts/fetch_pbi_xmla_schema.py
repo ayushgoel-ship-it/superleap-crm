@@ -19,6 +19,8 @@ Usage:
 Then I (the assistant) will read the JSON file in the next turn.
 """
 
+from __future__ import annotations  # lazy annotations → str | None works on Python 3.9
+
 import json
 import os
 import sys
@@ -46,9 +48,12 @@ AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 
 SCOPE = ["https://analysis.windows.net/powerbi/api/Dataset.Read.All"]
 
-# Workspace + dataset to enumerate.
-WORKSPACE_NAME = "Sell Analytics"
-DATASET_NAME = "C2B GROWTH - REFERRAL"
+# Dataset to enumerate. We auto-search every workspace you have access to —
+# the original "Sell Analytics" workspace name from the XMLA connection string
+# isn't always the literal display name on every tenant. Override either name
+# at runtime via PBI_WORKSPACE_NAME / PBI_DATASET_NAME env vars if needed.
+DATASET_NAME = os.environ.get("PBI_DATASET_NAME", "C2B GROWTH - REFERRAL")
+WORKSPACE_NAME_HINT = os.environ.get("PBI_WORKSPACE_NAME")  # optional
 
 API = "https://api.powerbi.com/v1.0/myorg"
 
@@ -99,26 +104,46 @@ def auth_headers(token: str) -> dict[str, str]:
 
 # ----- Discovery --------------------------------------------------------------
 
-def find_group_id(token: str, name: str) -> str:
+def list_workspaces(token: str) -> list[dict[str, Any]]:
     r = requests.get(f"{API}/groups", headers=auth_headers(token), timeout=30)
     r.raise_for_status()
-    for g in r.json().get("value", []):
-        if g["name"] == name:
-            return g["id"]
-    raise SystemExit(f"Workspace '{name}' not found. Available: "
-                     f"{[g['name'] for g in r.json().get('value', [])]}")
+    return r.json().get("value", [])
 
 
-def find_dataset_id(token: str, group_id: str, name: str) -> str:
+def list_datasets(token: str, group_id: str) -> list[dict[str, Any]]:
     r = requests.get(
-        f"{API}/groups/{group_id}/datasets", headers=auth_headers(token), timeout=30
+        f"{API}/groups/{group_id}/datasets",
+        headers=auth_headers(token),
+        timeout=30,
     )
-    r.raise_for_status()
-    for d in r.json().get("value", []):
-        if d["name"] == name:
-            return d["id"]
-    raise SystemExit(f"Dataset '{name}' not found. Available: "
-                     f"{[d['name'] for d in r.json().get('value', [])]}")
+    if r.status_code != 200:
+        return []
+    return r.json().get("value", [])
+
+
+def find_dataset(token: str, dataset_name: str, workspace_hint: str | None) -> tuple[str, str, str]:
+    """Search every workspace for the dataset; return (group_id, group_name, dataset_id)."""
+    workspaces = list_workspaces(token)
+    if workspace_hint:
+        workspaces = [w for w in workspaces if w["name"] == workspace_hint] or workspaces
+
+    inventory: dict[str, list[str]] = {}
+    for ws in workspaces:
+        datasets = list_datasets(token, ws["id"])
+        inventory[ws["name"]] = [d["name"] for d in datasets]
+        for d in datasets:
+            if d["name"] == dataset_name:
+                return ws["id"], ws["name"], d["id"]
+
+    print(f"\nDataset '{dataset_name}' not found in any workspace you can read.", file=sys.stderr)
+    print("Searched these workspaces and their datasets:", file=sys.stderr)
+    for ws_name, ds_names in inventory.items():
+        print(f"  - {ws_name}:", file=sys.stderr)
+        for ds in ds_names:
+            print(f"      • {ds}", file=sys.stderr)
+    print("\nTip: re-run with PBI_DATASET_NAME=\"exact name above\" if the name has drifted.",
+          file=sys.stderr)
+    sys.exit(1)
 
 
 # ----- DAX-INFO queries -------------------------------------------------------
@@ -137,7 +162,8 @@ QUERIES: dict[str, str] = {
 }
 
 
-def execute_dax(token: str, group_id: str, dataset_id: str, dax: str) -> list[dict[str, Any]]:
+def execute_dax(token: str, group_id: str, dataset_id: str, dax: str,
+                raise_on_failure: bool = False) -> list[dict[str, Any]] | None:
     body = {
         "queries": [{"query": dax}],
         "serializerSettings": {"includeNulls": True},
@@ -149,9 +175,16 @@ def execute_dax(token: str, group_id: str, dataset_id: str, dax: str) -> list[di
         timeout=120,
     )
     if r.status_code != 200:
-        # Some INFO.* functions are version-gated; tolerate per-query failures.
-        print(f"  ! query failed ({r.status_code}): {r.text[:200]}", file=sys.stderr)
-        return []
+        # Print the FULL error so we can diagnose. Common 400s:
+        #   - INFO.* functions require a recent AS engine compat level
+        #   - executeQueries disabled at tenant level
+        #   - Dataset is DirectQuery (executeQueries supports Import only)
+        #   - Workspace not granted XMLA Read by tenant admin
+        print(f"  ! status={r.status_code}", file=sys.stderr)
+        print(f"  ! full body: {r.text}", file=sys.stderr)
+        if raise_on_failure:
+            sys.exit(1)
+        return None
     try:
         return r.json()["results"][0]["tables"][0]["rows"]
     except (KeyError, IndexError):
@@ -164,22 +197,34 @@ def main() -> None:
     print("Authenticating to Power BI…", file=sys.stderr)
     token = get_token()
 
-    print(f"Resolving workspace '{WORKSPACE_NAME}'…", file=sys.stderr)
-    group_id = find_group_id(token, WORKSPACE_NAME)
+    print(f"Searching workspaces for dataset '{DATASET_NAME}'…", file=sys.stderr)
+    group_id, group_name, dataset_id = find_dataset(token, DATASET_NAME, WORKSPACE_NAME_HINT)
+    print(f"  found in workspace '{group_name}' (group={group_id}, dataset={dataset_id})",
+          file=sys.stderr)
 
-    print(f"Resolving dataset '{DATASET_NAME}'…", file=sys.stderr)
-    dataset_id = find_dataset_id(token, group_id, DATASET_NAME)
-    print(f"  group={group_id}  dataset={dataset_id}", file=sys.stderr)
+    # Sanity check: does executeQueries work at all on this dataset?
+    print("\nSanity check — running a trivial DAX query…", file=sys.stderr)
+    sanity = execute_dax(token, group_id, dataset_id, "EVALUATE ROW(\"ok\", 1)")
+    if sanity is None:
+        print("\n*** Sanity DAX failed. executeQueries is not usable on this dataset. ***",
+              file=sys.stderr)
+        print("Likely causes (look at the error body printed above):", file=sys.stderr)
+        print("  1. Dataset is in DirectQuery mode (executeQueries needs Import).", file=sys.stderr)
+        print("  2. Tenant admin has disabled 'Allow XMLA endpoints' on this workspace.", file=sys.stderr)
+        print("  3. Your account lacks Build permission on this dataset.", file=sys.stderr)
+        print("  4. The dataset uses a sensitivity label that blocks API access.", file=sys.stderr)
+        sys.exit(1)
+    print(f"  OK — got {sanity}\n", file=sys.stderr)
 
     schema: dict[str, Any] = {
-        "workspace": WORKSPACE_NAME,
+        "workspace": group_name,
         "workspace_id": group_id,
         "dataset": DATASET_NAME,
         "dataset_id": dataset_id,
     }
     for name, dax in QUERIES.items():
         print(f"Fetching {name}…", file=sys.stderr)
-        schema[name] = execute_dax(token, group_id, dataset_id, dax)
+        schema[name] = execute_dax(token, group_id, dataset_id, dax) or []
 
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OUT_FILE.write_text(json.dumps(schema, indent=2, default=str))
