@@ -5,7 +5,6 @@
   "server": {
     "androidScheme": "https",
     "allowNavigation": [
-      "fdmlyrgiktljuyuthgki.supabase.co",
       "*.supabase.co",
       "*.supabase.in"
     ]

@@ -4,7 +4,7 @@
     {
       "name": "Vite Dev Server",
       "runtimeExecutable": "/usr/local/bin/node",
-      "runtimeArgs": ["/Users/a30711/superleap-crm/.claude/worktrees/peaceful-wiles/node_modules/.bin/vite", "--port", "3000"],
+      "runtimeArgs": ["/Users/a30711/superleap-crm/node_modules/.bin/vite", "--port", "3000"],
       "port": 3000
     }
   ]
